@@ -239,4 +239,5 @@ def analyze_offer(
         complaint_summary=complaint_summary,
         report_token=report_token,
         reportable_indicators=reportable_indicators,
+        registry_source=gstin_check.get("registry_source"),
     )

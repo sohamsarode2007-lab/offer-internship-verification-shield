@@ -18,6 +18,12 @@ What this module does NOT do:
 Demo mode: DEMO_REGISTRY_FIXTURES may opt specific CINs into the synthetic fixture file.
 A fixture pass is labelled and is never represented as live MCA verification.
 
+Synthetic company-master snapshot (scripts/load_mca_master.py --synthetic): consulted only
+when DEMO_MODE=1. Results read "Company registry match: <name>; status <status>;
+incorporated <date>." (or "CIN belongs to a different company in company registry
+records: ..."), never call the data official, live or MCA data, and carry
+registry_source="synthetic".
+
 Status contract:
   - no identifier found            -> insufficient_information, identifier_present=False
   - any structural/consistency problem -> fail, identifier_present=True
@@ -194,17 +200,20 @@ def _normalized_company_name(value: Optional[str]) -> str:
     return re.sub(r"[^a-z0-9]", "", (value or "").lower())
 
 
-def _date_consistency(record: Dict[str, Any], raw_text: str) -> tuple[int, List[str]]:
+def _parse_registry_date(raw_date: Optional[str]) -> Optional[date]:
+    for fmt in ("%d/%m/%Y", "%Y-%m-%d", "%d-%m-%Y", "%d-%b-%Y"):
+        try:
+            return datetime.strptime(raw_date or "", fmt).date()
+        except ValueError:
+            pass
+    return None
+
+
+def _date_consistency(record: Dict[str, Any], raw_text: str, source_label: str = "MCA") -> tuple[int, List[str]]:
     raw_date = record.get("date_of_registration")
     if not raw_date:
         return 0, []
-    parsed = None
-    for fmt in ("%d/%m/%Y", "%Y-%m-%d", "%d-%m-%Y", "%d-%b-%Y"):
-        try:
-            parsed = datetime.strptime(raw_date, fmt).date()
-            break
-        except ValueError:
-            pass
+    parsed = _parse_registry_date(raw_date)
     if not parsed:
         return 0, []
     claim = re.search(
@@ -212,7 +221,7 @@ def _date_consistency(record: Dict[str, Any], raw_text: str) -> tuple[int, List[
         raw_text, re.IGNORECASE,
     )
     if not claim:
-        return 0, [f"MCA incorporation date {parsed.isoformat()}; no founding-year/age claim to compare (informational only)."]
+        return 0, [f"{source_label} incorporation date {parsed.isoformat()}; no founding-year/age claim to compare (informational only)."]
     if claim.group(1):
         claim_year = int(claim.group(1))
         claim_label = f"founding-year claim {claim_year}"
@@ -222,11 +231,11 @@ def _date_consistency(record: Dict[str, Any], raw_text: str) -> tuple[int, List[
     difference = abs(parsed.year - claim_year)
     if difference > 1:
         return 15, [
-            f"Contradiction: {claim_label}; MCA incorporation date {parsed.isoformat()} "
+            f"Contradiction: {claim_label}; {source_label} incorporation date {parsed.isoformat()} "
             f"(year difference {difference}; +15)"
         ]
     return 0, [
-        f"{claim_label} is within one year of MCA incorporation date {parsed.isoformat()} (no points)."
+        f"{claim_label} is within one year of {source_label} incorporation date {parsed.isoformat()} (no points)."
     ]
 
 
@@ -268,6 +277,49 @@ def lookup_demo_registry_fixture(cin: str, claimed_company: Optional[str]) -> Op
     except OSError:
         return None
     return None
+
+
+INACTIVE_STATUSES = {"struck off", "dissolved", "under liquidation"}
+
+
+def _synthetic_registry_result(record: Dict[str, Any], cin: str, claimed_company: Optional[str],
+                               raw_text: str, identifiers: List[Dict[str, str]],
+                               consistency_points: int, prior_notes: List[str]) -> Dict[str, Any]:
+    """
+    Result for a record from a SYNTHETIC snapshot (only reachable in DEMO_MODE).
+
+    Shown like any registry result: details give only the company name, status and
+    incorporation date, and never call the data official, live or MCA data. The
+    result stays traceable through registry_source="synthetic" in the API response.
+    Point-bearing consistency notes go to consistency_notes (used by scoring).
+    """
+    registered = record.get("company_name") or ""
+    status = (record.get("company_status") or "").strip()
+    parsed = _parse_registry_date(record.get("date_of_registration"))
+    incorporated = parsed.isoformat() if parsed else (record.get("date_of_registration") or "unknown")
+    summary = f"{registered}; status {status}; incorporated {incorporated}."
+    metadata = dict(registry_checked=True, verification_source="company_registry",
+                    registry_source="synthetic", verified_identifier_type="CIN",
+                    registry_company_name=registered, incorporation_date=record.get("date_of_registration"))
+
+    pan_notes = [n for n in prior_notes if "+10" in n]
+    name_matches = True
+    if claimed_company and _normalized_company_name(registered) != _normalized_company_name(claimed_company):
+        from rapidfuzz.fuzz import ratio
+        name_matches = ratio(_normalized_company_name(registered), _normalized_company_name(claimed_company)) >= 90
+    if not name_matches:
+        return _result("fail", True, f"CIN belongs to a different company in company registry records: {summary}",
+                       identifiers, 0.0, consistency_risk_points=consistency_points, consistency_notes=pan_notes,
+                       **metadata)
+    if status.lower() in INACTIVE_STATUSES:
+        return _result("fail", True, f"Company registry match: {summary}", identifiers, 0.0,
+                       consistency_risk_points=consistency_points, consistency_notes=pan_notes, **metadata)
+
+    age_points, age_notes = _date_consistency(record, raw_text, source_label="registry")
+    point_notes = pan_notes + [n for n in age_notes if "+15" in n]
+    return _result("pass", True, f"Company registry match: {summary}", identifiers, 95.0,
+                   consistency_risk_points=consistency_points + age_points,
+                   consistency_notes=point_notes, **metadata)
 
 
 def verify_gstin(facts: Dict[str, Any]) -> Dict[str, Any]:
@@ -342,33 +394,38 @@ def verify_gstin(facts: Dict[str, Any]) -> Dict[str, Any]:
                 demo_registry_fixture=True,
             )
 
-    # A CIN is verified only against the loaded local MCA master data.
+    # A CIN is verified only against the loaded local company-master data.
     if cin:
         record = lookup_registry(cin, "CIN")
+        if record["lookup_status"] == "found" and record.get("registry_source") == "synthetic":
+            return _synthetic_registry_result(record, cin, claimed_company, raw_text, identifiers,
+                                              consistency_points, consistency_notes)
         if record["lookup_status"] == "found":
             status_text = (record.get("company_status") or "").strip().lower()
             if status_text in {"struck off", "dissolved", "under liquidation"}:
                 return _result("fail", True,
                     f"CIN '{cin}' is listed in MCA data as '{record['company_status']}'.",
-                    identifiers, 0.0, registry_checked=True, verification_source="mca_registry")
+                    identifiers, 0.0, registry_checked=True, verification_source="mca_registry", registry_source="mca_csv")
             registered = record.get("company_name") or ""
             if claimed_company and _normalized_company_name(registered) != _normalized_company_name(claimed_company):
                 from rapidfuzz.fuzz import ratio
                 if ratio(_normalized_company_name(registered), _normalized_company_name(claimed_company)) < 90:
                     return _result("fail", True,
                         f"CIN '{cin}' is registered to '{registered}', which does not match claimed company '{claimed_company}'.",
-                        identifiers, 0.0, registry_checked=True, verification_source="mca_registry")
+                        identifiers, 0.0, registry_checked=True, verification_source="mca_registry", registry_source="mca_csv")
             age_points, age_notes = _date_consistency(record, raw_text)
             consistency_points += age_points
             consistency_notes.extend(age_notes)
             return _result("pass", True,
                 f"CIN '{cin}' matched active MCA master data for '{registered}'. " + " ".join(consistency_notes),
-                identifiers, 95.0, registry_checked=True, verification_source="mca_registry",
+                identifiers, 95.0, registry_checked=True, verification_source="mca_registry", registry_source="mca_csv",
                 verified_identifier_type="CIN", registry_company_name=registered,
                 incorporation_date=record.get("date_of_registration"),
                 consistency_risk_points=consistency_points)
         if record["lookup_status"] == "db_missing":
             registry_note = "MCA master database is missing; registry was not checked"
+        elif record.get("registry_source") == "synthetic":
+            registry_note = f"CIN '{cin}' was not found in the company registry records"
         else:
             registry_note = f"CIN '{cin}' was not found in the loaded MCA master data"
     else:

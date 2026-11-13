@@ -47,6 +47,13 @@ with an explanatory factor. In DEMO_MODE only, an explicitly configured and
 labelled synthetic registry fixture may exercise the positive demo path; it is
 not an external verification.
 
+Synthetic company-master snapshot (DEMO_MODE only): a snapshot loaded with
+`load_mca_master.py --synthetic` is consulted only when DEMO_MODE=1. Its results
+use the same weights as a loaded company master (registry match -10 offset,
+satisfies the low-risk guard; inactive status or CIN/name mismatch +25), are worded
+"Company registry match" without calling the data official, live or MCA data, and
+carry registry_source="synthetic" in the API response for traceability.
+
 Bands: 0-30 likely legitimate | 31-60 insufficient evidence, verify manually | 61-100 high risk
 """
 import os
@@ -114,7 +121,16 @@ def calculate_risk_score(
         and reg_status == "pass"
         and reg.get("demo_registry_fixture") is True
     )
-    has_external_signal = registry_verified or sender_authenticated or demo_registry_fixture
+    # A synthetic snapshot is only ever consulted in DEMO_MODE (see gstin_verification);
+    # there it exercises the same registry-match path as a loaded company master.
+    synthetic_registry = (
+        os.getenv("DEMO_MODE") == "1"
+        and reg_status == "pass"
+        and reg.get("registry_checked") is True
+        and reg.get("registry_source") == "synthetic"
+        and reg.get("verified_identifier_type") == "CIN"
+    )
+    has_external_signal = registry_verified or sender_authenticated or demo_registry_fixture or synthetic_registry
 
     factors: List[str] = []
     payment_points = 0.0
@@ -140,7 +156,8 @@ def calculate_risk_score(
     # Registration number
     if reg_status == "fail":
         other_points += W_REG_FAIL
-        factors.append(f"Registration number failed structural checks ({_fmt(W_REG_FAIL)}): {reg.get('details', '')}".rstrip(": "))
+        kind = "company registry checks" if reg.get("registry_checked") is True else "structural checks"
+        factors.append(f"Registration number failed {kind} ({_fmt(W_REG_FAIL)}): {reg.get('details', '')}".rstrip(": "))
     elif reg_present and reg_status != "pass":
         other_points += W_REG_UNVERIFIED
         factors.append(
@@ -153,9 +170,12 @@ def calculate_risk_score(
     consistency_points = float(reg.get("consistency_risk_points", 0) or 0)
     if consistency_points:
         other_points += consistency_points
-        for note in (reg.get("details") or "").split("."):
-            if "+10" in note or "+15" in note:
-                factors.append(note.strip())
+        if "consistency_notes" in reg:
+            factors.extend(note.strip().rstrip(".") for note in reg["consistency_notes"])
+        else:
+            for note in (reg.get("details") or "").split("."):
+                if "+10" in note or "+15" in note:
+                    factors.append(note.strip())
     auth_points = float(auth.get("risk_points", 0) or 0)
     if auth_points:
         other_points += auth_points
@@ -178,12 +198,13 @@ def calculate_risk_score(
             other_points -= reduction
             factors.append(f"Contact domain passed DNS checks ({_fmt(-reduction)}, offsets non-payment points only)")
     if reg_status == "pass" and not demo_registry_fixture:
+        label = "Company registry match" if synthetic_registry else "MCA registry pass"
         reduction = min(G_REGISTRY_PASS, other_points)
         if reduction > 0:
             other_points -= reduction
-            factors.append(f"MCA registry pass ({_fmt(-reduction)})")
+            factors.append(f"{label} ({_fmt(-reduction)})")
         else:
-            factors.append(f"MCA registry pass ({_fmt(-G_REGISTRY_PASS)} offset; score floor is 0)")
+            factors.append(f"{label} ({_fmt(-G_REGISTRY_PASS)} offset; score floor is 0)")
     if auth.get("status") == "pass" and auth.get("dmarc_status") == "pass" and auth.get("dkim_aligned") is True:
         reduction = min(10.0, other_points)
         if reduction > 0:

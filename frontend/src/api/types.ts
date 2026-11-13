@@ -40,6 +40,8 @@ export interface AnalyzeResponse {
   complaint_summary: string
   report_token?: string | null
   reportable_indicators: ReportableIndicator[]
+  /** Traceability only; never displayed. "synthetic" marks demo-only fictional registry data. */
+  registry_source?: string | null
 }
 
 export interface ReportableIndicator {

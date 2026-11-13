@@ -51,3 +51,7 @@ class AnalyzeResponse(BaseModel):
     complaint_summary: str = ""
     report_token: Optional[str] = None
     reportable_indicators: List[dict] = Field(default_factory=list)
+    # Not displayed by the frontend. Which company-master snapshot produced the
+    # registry result: "synthetic" (demo-only fictional data), "mca_csv", or None
+    # when no registry record was consulted. Keeps demo results traceable.
+    registry_source: Optional[str] = None
