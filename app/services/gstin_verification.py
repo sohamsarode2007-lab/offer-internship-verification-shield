@@ -91,8 +91,27 @@ def gstin_checksum_ok(gstin: str) -> bool:
     return gstin_check_char(gstin) == gstin[14]
 
 
+SOURCE_SYNTHETIC = "SYNTHETIC"
+SOURCE_MCA_CSV = "MCA_CSV"
+
+
+def _snapshot_source(db) -> str:
+    """Source label from registry_metadata; legacy DBs without metadata count as MCA_CSV."""
+    import sqlite3
+    try:
+        row = db.execute("SELECT value FROM registry_metadata WHERE key='source'").fetchone()
+    except sqlite3.Error:
+        return SOURCE_MCA_CSV
+    return (row[0] if row else SOURCE_MCA_CSV).upper()
+
+
 def lookup_registry(identifier: str, id_type: str) -> Dict[str, Any]:
-    """Look up a CIN in the loaded local MCA SQLite database (never network)."""
+    """
+    Look up a CIN in the loaded local company-master SQLite database (never network).
+
+    A SYNTHETIC snapshot is used only when DEMO_MODE=1; otherwise the lookup
+    behaves exactly as if no registry database were loaded.
+    """
     if id_type != "CIN":
         return {"lookup_status": "not_supported"}
     db_path = Path(os.getenv("MCA_DB_PATH", "data/mca_master.sqlite3"))
@@ -103,16 +122,21 @@ def lookup_registry(identifier: str, id_type: str) -> Dict[str, Any]:
     import sqlite3
     try:
         with sqlite3.connect(f"file:{db_path.as_posix()}?mode=ro", uri=True, timeout=2) as db:
+            source = _snapshot_source(db)
+            if source == SOURCE_SYNTHETIC and os.getenv("DEMO_MODE") != "1":
+                return {"lookup_status": "db_missing", "db_path": str(db_path)}
             row = db.execute(
                 "SELECT cin, company_name, company_status, date_of_registration "
                 "FROM mca_companies WHERE cin = ?", (identifier.upper(),)
             ).fetchone()
     except sqlite3.Error:
         return {"lookup_status": "db_missing", "db_path": str(db_path)}
+    registry_source = "synthetic" if source == SOURCE_SYNTHETIC else "mca_csv"
     if not row:
-        return {"lookup_status": "not_found", "cin": identifier.upper()}
+        return {"lookup_status": "not_found", "cin": identifier.upper(), "registry_source": registry_source}
     return {"lookup_status": "found", "cin": row[0], "company_name": row[1],
-            "company_status": row[2], "date_of_registration": row[3]}
+            "company_status": row[2], "date_of_registration": row[3],
+            "registry_source": registry_source}
 
 
 def _gstin_problems(gstin: str, company: Optional[str]) -> List[str]:

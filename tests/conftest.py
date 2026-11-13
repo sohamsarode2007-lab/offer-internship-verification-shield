@@ -28,6 +28,12 @@ def no_live_whois(monkeypatch):
     monkeypatch.setattr(dv, "_whois_creation_date", lambda domain: None)
 
 
+@pytest.fixture(autouse=True)
+def no_local_company_registry(monkeypatch, tmp_path):
+    """Never read a developer's data/mca_master.sqlite3; tests that need a registry set MCA_DB_PATH."""
+    monkeypatch.setenv("MCA_DB_PATH", str(tmp_path / "no-registry.sqlite3"))
+
+
 def _nxdomain(name, rtype):
     raise dns.resolver.NXDOMAIN()
 
