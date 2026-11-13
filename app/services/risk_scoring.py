@@ -10,18 +10,30 @@ Risk points (added):
   +30  Contact domain failed (free mailbox, no MX/NXDOMAIN, lookalike, < 30 days old)
   +25  Registration number failed structural checks
   +10  Registration number structurally valid but NOT verified against any registry
+  +10  GSTIN PAN name-initial character conflicts with the claimed company name
+  +15  MCA-verified company incorporated less than one year ago
   +20  No registration number (GSTIN/CIN/LLPIN) in the text
   +20  No usable domain AND no registration number
 
 Offsets (subtracted, only from NON-payment points; never below the payment points):
   -10  Domain check passed
-  -10  Registry match (no registry integration exists today, so this never fires)
+  -10  Registry match
 
-Guard: "likely legitimate" requires the domain check to pass AND a registration
-number that is present and did not fail. Otherwise a score <= 30 is raised to 31.
+Low-risk guard: "likely legitimate" requires ALL of:
+  - contact domain check passed;
+  - registration number is present and did not fail; and
+  - at least one externally verified signal: a registry pass marked as checked
+    against MCA data, or (planned; not implemented until .eml support) an authenticated
+    sender with DMARC pass and aligned DKIM.
+Structural checks alone (including a passing domain and checksum-valid GSTIN)
+do not meet this guard. A score <= 30 without an external signal is raised to 31
+with an explanatory factor. In DEMO_MODE only, an explicitly configured and
+labelled synthetic registry fixture may exercise the positive demo path; it is
+not an external verification.
 
 Bands: 0-30 likely legitimate | 31-60 insufficient evidence, verify manually | 61-100 high risk
 """
+import os
 from typing import List, Dict, Any, Optional
 
 SCORING_MODEL = "rule_based_v2"
@@ -69,6 +81,24 @@ def calculate_risk_score(
     reg_status = reg.get("status", "insufficient_information")
     reg_present = bool(reg.get("identifier_present", reg_status in ("pass", "fail")))
     pay_status = pay.get("status", "not_applicable")
+    auth = by_name.get("sender_authentication", {})
+    registry_verified = (
+        reg_status == "pass"
+        and reg.get("registry_checked") is True
+        and reg.get("verification_source") == "mca_registry"
+        and reg.get("verified_identifier_type") == "CIN"
+    )
+    sender_authenticated = (
+        auth.get("status") == "pass"
+        and auth.get("dmarc_status") == "pass"
+        and auth.get("dkim_aligned") is True
+    )
+    demo_registry_fixture = (
+        os.getenv("DEMO_MODE") == "1"
+        and reg_status == "pass"
+        and reg.get("demo_registry_fixture") is True
+    )
+    has_external_signal = registry_verified or sender_authenticated or demo_registry_fixture
 
     factors: List[str] = []
     payment_points = 0.0
@@ -104,6 +134,12 @@ def calculate_risk_score(
     elif not reg_present:
         other_points += W_REG_MISSING
         factors.append(f"No GSTIN, CIN or LLPIN in the offer ({_fmt(W_REG_MISSING)})")
+    consistency_points = float(reg.get("consistency_risk_points", 0) or 0)
+    if consistency_points:
+        other_points += consistency_points
+        for note in (reg.get("details") or "").split("."):
+            if "+10" in note or "+15" in note:
+                factors.append(note.strip())
 
     no_usable_domain = domain_status in ("not_applicable", "insufficient_information")
     if no_usable_domain and not reg_present:
@@ -116,11 +152,13 @@ def calculate_risk_score(
         if reduction > 0:
             other_points -= reduction
             factors.append(f"Contact domain passed DNS checks ({_fmt(-reduction)}, offsets non-payment points only)")
-    if reg_status == "pass":
+    if reg_status == "pass" and not demo_registry_fixture:
         reduction = min(G_REGISTRY_PASS, other_points)
         if reduction > 0:
             other_points -= reduction
-            factors.append(f"Registration number matched the official registry ({_fmt(-reduction)})")
+            factors.append(f"MCA registry pass ({_fmt(-reduction)})")
+        else:
+            factors.append(f"MCA registry pass ({_fmt(-G_REGISTRY_PASS)} offset; score floor is 0)")
 
     score = payment_points + other_points
     if has_payment and score < PAYMENT_FLOOR:
@@ -128,7 +166,7 @@ def calculate_risk_score(
         factors.append(f"Payment demand override: score raised to {PAYMENT_FLOOR:g} (high risk)")
     score = max(0.0, min(100.0, score))
 
-    # Guard: never call an offer likely legitimate without positive evidence.
+    # Guard: no structural-only or demo-less checks can establish legitimacy.
     if score <= 30:
         missing = []
         if domain_status != "pass":
@@ -137,11 +175,17 @@ def calculate_risk_score(
             missing.append("no registration number was given")
         elif reg_status == "fail":
             missing.append("the registration number failed checks")
+        if not has_external_signal:
+            missing.append("no externally verified registry match or authenticated sender was found")
         if missing:
             score = GUARD_SCORE
             factors.append(
-                f"Raised to {GUARD_SCORE:g}: 'likely legitimate' needs a passing domain and a valid "
-                f"registration number, but {' and '.join(missing)}"
+                f"Raised to {GUARD_SCORE:g}: 'likely legitimate' requires a passing domain, a valid "
+                f"registration number, and an externally verified signal, but {' and '.join(missing)}"
+            )
+        elif demo_registry_fixture:
+            factors.append(
+                "Low-risk demo fixture applied: the configured synthetic registry fixture is not a live verification."
             )
 
     risk_band = band_for(score)

@@ -39,13 +39,13 @@ GOOD = "Acme Data Solutions Pvt Ltd\nGSTIN: 27AAFCA1234B1ZD\nhr@acmedata.example
 
 
 @pytest.mark.parametrize("text,expected", [
-    (GOOD + "Acme does NOT request any security deposit or training fee from candidates.", "likely legitimate"),
+    (GOOD + "Acme does NOT request any security deposit or training fee from candidates.", "insufficient evidence, verify manually"),
     (GOOD + "Kindly pay a refundable security deposit of Rs 5,000 before joining.", "high risk"),
     (GOOD + "No interview needed, just pay a security deposit of Rs 2000.", "high risk"),
-    (GOOD + "Working hours: 10am-7pm. Please report today. No fee is required.", "likely legitimate"),
-    (GOOD + "Your stipend will be transferred to your UPI ID priya@ybl monthly.", "likely legitimate"),
+    (GOOD + "Working hours: 10am-7pm. Please report today. No fee is required.", "insufficient evidence, verify manually"),
+    (GOOD + "Your stipend will be transferred to your UPI ID priya@ybl monthly.", "insufficient evidence, verify manually"),
     ("Nimbus Labs\nRef: OFR-2026\nhr@nimbuslabs.example\nNo fee is required.", "insufficient evidence, verify manually"),
-    ("To: priya.s@gmail.com\n" + GOOD + "No fee is required.", "likely legitimate"),
+    ("To: priya.s@gmail.com\n" + GOOD + "No fee is required.", "insufficient evidence, verify manually"),
     ("Acme Data Solutions Pvt Ltd\nGSTIN: 27AAFCA1234B1ZD\nReply to acme.hr@gmail.com", "insufficient evidence, verify manually"),
     ("Acme Data Solutions Pvt Ltd\nGSTIN: 27AAFCA1234B1Z5\nhr@acmedata.example", "insufficient evidence, verify manually"),
     ("Selected for WFH data entry. Pay registration fee Rs 499 on WhatsApp.", "high risk"),
@@ -64,6 +64,53 @@ def test_gstin_checksum():
 def test_format_valid_gstin_is_never_pass():
     f = fe.extract_facts(GOOD)
     assert gv.verify_gstin(f)["status"] == "insufficient_information"
+
+
+def test_structural_domain_and_gstin_are_capped_at_manual_review():
+    facts = fe.extract_facts(GOOD + "No fee is required.")
+    checks = [dv.verify_domain(facts), gv.verify_gstin(facts), pd.detect_payment_demand(facts)]
+    result = rs.calculate_risk_score(checks, facts=facts)
+    assert result["overall_risk_score"] == 31.0
+    assert result["risk_band"] == "insufficient evidence, verify manually"
+    assert any("externally verified signal" in f for f in result["risk_factors"])
+
+
+def test_external_registry_pass_satisfies_low_risk_verification_gate():
+    checks = [
+        {"check_name": "domain_verification", "status": "pass"},
+        {"check_name": "gstin_verification", "status": "pass", "identifier_present": True,
+         "registry_checked": True, "verification_source": "mca_registry",
+         "verified_identifier_type": "CIN", "identifiers": [{"type": "CIN"}]},
+        {"check_name": "payment_detection", "status": "pass"},
+    ]
+    result = rs.calculate_risk_score(checks)
+    assert result["overall_risk_score"] == 0.0
+    assert result["risk_band"] == "likely legitimate"
+
+
+def test_aligned_authenticated_sender_satisfies_low_risk_verification_gate():
+    checks = [
+        {"check_name": "domain_verification", "status": "pass"},
+        {"check_name": "gstin_verification", "status": "insufficient_information",
+         "identifier_present": True},
+        {"check_name": "sender_authentication", "status": "pass",
+         "dmarc_status": "pass", "dkim_aligned": True},
+        {"check_name": "payment_detection", "status": "pass"},
+    ]
+    result = rs.calculate_risk_score(checks)
+    assert result["overall_risk_score"] == 0.0
+    assert result["risk_band"] == "likely legitimate"
+
+
+def test_demo_registry_fixture_requires_demo_mode(monkeypatch):
+    text = ("Emberlake Analytics Pvt. Ltd.\nCIN: U74999DL2016PTC298345\n"
+            "GSTIN: 07AAFCE4321L1ZO\nhr@emberlakeanalytics.example")
+    facts = fe.extract_facts(text)
+    monkeypatch.setenv("DEMO_REGISTRY_FIXTURES", "U74999DL2016PTC298345")
+    monkeypatch.delenv("DEMO_MODE", raising=False)
+    result = gv.verify_gstin(facts)
+    assert result["status"] == "insufficient_information"
+    assert result.get("demo_registry_fixture") is not True
 
 
 def test_reference_code_is_not_llpin():
