@@ -7,6 +7,9 @@ import pytest
 
 from app.services import domain_verification as dv
 from conftest import DEMO_DIR
+from pathlib import Path
+
+EML_DIR = Path(__file__).parent / "fixtures" / "eml"
 
 
 def analyze(client, stem, path):
@@ -82,3 +85,67 @@ def test_demo_registry_fixture_does_not_match_unrelated_company(demo_client):
     result = verify_gstin(facts)
     assert result["status"] == "insufficient_information"
     assert result.get("demo_registry_fixture") is not True
+
+
+def _upload_eml(client, name):
+    return client.post("/analyze", files={
+        "file": (name, (EML_DIR / name).read_bytes(), "message/rfc822")
+    })
+
+
+@pytest.mark.parametrize(("name", "expected"), [
+    ("authenticated_legit.eml", "likely legitimate"),
+    ("dmarc_fail_spoof.eml", "insufficient evidence, verify manually"),
+    ("reply_to_gmail.eml", "insufficient evidence, verify manually"),
+    ("brand_display_spoof.eml", "insufficient evidence, verify manually"),
+    ("forged_lower_auth_results.eml", "insufficient evidence, verify manually"),
+    ("no_authentication_results.eml", "insufficient evidence, verify manually"),
+    ("authenticated_with_pdf.eml", "high risk"),
+])
+def test_eml_analysis_signals_and_bands(demo_client, monkeypatch, name, expected):
+    monkeypatch.setenv("DEMO_FIXTURE_DOMAINS", "acme.example,attacker.example,imposter.example")
+    response = _upload_eml(demo_client, name)
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["risk_band"] == expected
+    auth = next(c for c in body["checks"] if c["check_name"] == "sender_authentication")
+    if name == "authenticated_legit.eml":
+        assert auth["status"] == "pass"
+        assert "acme.example" in auth["details"]
+        assert "likely legitimate" == body["risk_band"]
+    elif name == "no_authentication_results.eml":
+        assert auth["status"] == "insufficient_information"
+        assert "forwarded or exported without headers" in auth["details"]
+    elif name == "forged_lower_auth_results.eml":
+        assert "lower Authentication-Results headers disagree" in auth["details"]
+    elif name == "authenticated_with_pdf.eml":
+        payment = next(c for c in body["checks"] if c["check_name"] == "payment_detection")
+        assert payment["status"] == "fail"
+        assert body["overall_risk_score"] >= 65
+
+
+def test_non_eml_sender_auth_check_is_not_applicable(api_client):
+    response = api_client.post("/analyze", data={"text": "Offer details, contact hr@acme.example."})
+    assert response.status_code == 200
+    auth = next(c for c in response.json()["checks"] if c["check_name"] == "sender_authentication")
+    assert auth["status"] == "not_applicable"
+    assert ".eml" in auth["details"]
+
+
+def test_eml_response_does_not_expose_private_headers_or_addresses(demo_client, monkeypatch, caplog):
+    monkeypatch.setenv("DEMO_FIXTURE_DOMAINS", "acme.example")
+    response = _upload_eml(demo_client, "authenticated_legit.eml")
+    assert response.status_code == 200
+    assert "candidate@student.example" not in response.text
+    assert "mx.receiver.example" not in response.text
+    assert "smtp.mailfrom" not in response.text
+    assert "candidate@student.example" not in caplog.text
+    assert "mx.receiver.example" not in caplog.text
+
+
+def test_eml_upload_uses_the_same_file_size_limit(api_client, monkeypatch):
+    from app.api.routes import analyze
+
+    monkeypatch.setattr(analyze, "MAX_FILE_BYTES", 16)
+    response = _upload_eml(api_client, "authenticated_legit.eml")
+    assert response.status_code == 413

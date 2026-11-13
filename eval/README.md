@@ -4,6 +4,10 @@
 row is marked `synthetic=true`; it is not a real-world benchmark and must not be
 reported as one.
 
+Rows with `input_type=eml` reference the synthetic RFC 5322 messages in
+`tests/fixtures/eml/`; the local evaluator parses those messages and feeds PDF
+attachments through the same ingestion path as `/analyze`.
+
 Run the local deterministic rule path (offline, using explicitly configured
 `.example` demo fixtures):
 
@@ -39,11 +43,26 @@ or updates expected bands from predictions.
 | EC03 | Payment +65; +10 GSTIN and -10 domain: 65 | high risk |
 | EC04 | Negated payment adds 0; +10 GSTIN and -10 domain: subtotal 0; external-verification guard floor 31 | insufficient evidence, verify manually |
 | EC05 | Inbound stipend and negated fee add 0; +10 GSTIN and -10 domain: subtotal 0; external-verification guard floor 31 | insufficient evidence, verify manually |
-| EC06 | Free-mail domain failure +30, GSTIN/free-mail consistency failure +25, and GSTIN PAN name-initial mismatch +10: 65 | high risk |
+| EC06 | Free-mail domain failure +30, GSTIN/free-mail consistency failure +25, and PAN-initial mismatch +10: 65. By hand, the weighted mod-36 sum for the first 14 GSTIN characters is 181; 181 mod 36 = 1, so the expected final character is Z. The GSTIN checksum passes and the PAN initial Z conflicts with claimed company initial A. | high risk |
 | EC07 | Missing registration +20; no usable domain and no registration +20: 40 | insufficient evidence, verify manually |
 | EC08 | No payment demand, so urgency adds 0; +10 GSTIN and -10 domain: subtotal 0; no external signal raises score to 31 | insufficient evidence, verify manually |
 | EC09 | Payment +65; missing registration +20; no usable domain and no registration +20; capped at 100 | high risk |
 | EC10 | Missing registration +20; no usable domain and no registration +20: 40 | insufficient evidence, verify manually |
+| EC11 | +10 unverified GSTIN and -10 passing From domain = 0; aligned authenticated sender meets guard | likely legitimate |
+| EC12 | DMARC fail +30 and body/From domain mismatch +15; base 0; total 45 | insufficient evidence, verify manually |
+| EC13 | Mismatched Gmail Reply-To +25; failed auth signal does not meet guard; 25 is raised to 31 | insufficient evidence, verify manually |
+| EC14 | Protected-brand display spoof +25; failed auth signal does not meet guard; 25 is raised to 31 | insufficient evidence, verify manually |
+| EC15 | Topmost DMARC fail +30; forged lower pass ignored; guard raises 30 to 31 | insufficient evidence, verify manually |
+| EC16 | No Authentication-Results gives no points; no external signal raises 0 to 31 | insufficient evidence, verify manually |
+| EC17 | PDF attachment exposes a payment demand; +65 hard floor | high risk |
+
+Step 0 hand re-derivation: the PAN-initial rule now runs only after checksum
+success. EC06 remains high risk because its checksum passes (weighted sum 181,
+remainder 1, expected final character Z), so the mismatch contributes +10. The
+incorporation contradiction rule adds no points to existing cases because none
+claims a founding year or company age. No existing expected band changed in Step
+0. EC11–EC17 are new synthetic email cases with expectations worked from the
+updated docstring before evaluation; truth labels remain synthetic assumptions.
 
 ## Known limitation: urgency without payment
 

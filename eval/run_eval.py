@@ -25,6 +25,8 @@ def load_cases():
             raise ValueError(f"{case.get('case_id')}: all evaluation rows must be labelled synthetic=true")
         if case.get("truth") not in {"scam", "legitimate"}:
             raise ValueError(f"{case.get('case_id')}: unsupported truth label")
+        if case.get("input_type", "text") not in {"text", "eml"}:
+            raise ValueError(f"{case.get('case_id')}: unsupported input_type")
         if case.get("expected_band") not in BANDS:
             raise ValueError(f"{case.get('case_id')}: unsupported expected band")
         if not case.get("expected_basis"):
@@ -32,27 +34,57 @@ def load_cases():
     return cases
 
 
-def local_band(text):
+def local_band(case):
     # Synthetic .example domains are configured as demo fixtures to keep this path
     # offline and deterministic. No external DNS or registry calls are made.
     from app.services import domain_verification, fact_extraction, gstin_verification
     from app.services import payment_detection, risk_scoring
 
-    facts = fact_extraction.extract_facts(text)
-    checks = [
-        domain_verification.verify_domain(facts),
-        gstin_verification.verify_gstin(facts),
-        payment_detection.detect_payment_demand(facts),
-    ]
+    from app.services import email_auth, ingestion
+    if case.get("input_type", "text") == "eml":
+        parsed = email_auth.parse_eml((ROOT / case["text"]).read_bytes())
+        body, _ = ingestion.ingest_offer(text=parsed["body_text"])
+        pieces = [body] if body else []
+        for attachment in parsed["attachments"]:
+            extracted, _ = ingestion.ingest_offer(file_bytes=attachment["data"], filename=attachment["filename"])
+            if extracted:
+                pieces.append(extracted)
+        text = "\n".join(pieces)
+        facts = fact_extraction.extract_facts(text)
+        body_domain = facts.get("sender_domain", {}).get("value")
+        auth_facts = dict(facts)
+        auth_facts["sender_domain"] = {"value": parsed.get("sender_domain")}
+        domain_check = domain_verification.verify_domain(auth_facts)
+        if body_domain:
+            domain_check["details"] += f" Body-claimed domain: '{body_domain}'."
+        auth_check = email_auth.verify_sender_authentication(parsed, facts)
+    else:
+        text = case["text"]
+        facts = fact_extraction.extract_facts(text)
+        domain_check = domain_verification.verify_domain(facts)
+        auth_check = email_auth.not_applicable()
+    checks = [domain_check, gstin_verification.verify_gstin(facts),
+              payment_detection.detect_payment_demand(facts), auth_check]
     return risk_scoring.calculate_risk_score(checks, facts=facts)["risk_band"]
 
 
-def live_band(text, base_url):
+def live_band(case, base_url):
     boundary = "----CodexEvalBoundary"
+    if case.get("input_type", "text") == "eml":
+        filename = Path(case["text"]).name
+        data = (ROOT / case["text"]).read_bytes()
+        body = (f"--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"{filename}\"\r\n"
+                "Content-Type: message/rfc822\r\n\r\n").encode() + data + f"\r\n--{boundary}--\r\n".encode()
+        content_type = f"multipart/form-data; boundary={boundary}"
+        request = urllib.request.Request(f"{base_url.rstrip('/')}/analyze", data=body,
+            headers={"Content-Type": content_type}, method="POST")
+        with urllib.request.urlopen(request, timeout=60) as response:
+            import json
+            return json.loads(response.read().decode("utf-8"))["risk_band"]
     body = (
         f"--{boundary}\r\n"
         'Content-Disposition: form-data; name="text"\r\n\r\n'
-        f"{text}\r\n"
+        f"{case['text']}\r\n"
         f"--{boundary}--\r\n"
     ).encode("utf-8")
     request = urllib.request.Request(
@@ -68,11 +100,14 @@ def live_band(text, base_url):
 
 def evaluate(cases, live=False, base_url="http://127.0.0.1:8000"):
     if live:
-        predict = lambda text: live_band(text, base_url)
+        predict = lambda case: live_band(case, base_url)
     else:
         domains = set()
         for case in cases:
-            domains.update(re.findall(r"[A-Za-z0-9.-]+\.example\b", case["text"].lower()))
+            scan_text = case["text"]
+            if case.get("input_type", "text") == "eml":
+                scan_text = (ROOT / scan_text).read_text(encoding="utf-8", errors="ignore")
+            domains.update(re.findall(r"[A-Za-z0-9.-]+\.example\b", scan_text.lower()))
         os.environ["DEMO_MODE"] = "1"
         os.environ["DEMO_FIXTURE_DOMAINS"] = ",".join(sorted(domains))
         sys.path.insert(0, str(ROOT))
@@ -80,7 +115,7 @@ def evaluate(cases, live=False, base_url="http://127.0.0.1:8000"):
 
     results = []
     for case in cases:
-        results.append({**case, "predicted_band": predict(case["text"])})
+        results.append({**case, "predicted_band": predict(case)})
     return results
 
 

@@ -1,0 +1,14 @@
+From: Amazon Recruiting <hr@imposter.example>
+To: candidate@student.example
+Subject: Synthetic internship offer
+Date: Thu, 12 Nov 2026 10:00:00 +0000
+Authentication-Results: mx.receiver.example; spf=pass; dkim=pass
+ header.d=imposter.example; dmarc=pass header.from=imposter.example
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 7bit
+MIME-Version: 1.0
+
+Acme Data Solutions Pvt Ltd
+GSTIN: 27AAFCA1234B1ZD
+Contact: hr@imposter.example
+No fee is required.
