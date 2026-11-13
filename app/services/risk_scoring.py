@@ -12,19 +12,24 @@ Risk points (added):
   +10  Registration number structurally valid but NOT verified against any registry
   +10  GSTIN PAN name-initial character conflicts with the claimed company name
   +15  MCA incorporation date contradicts a founding-year/age claim by >1 year
+  +30  DMARC fail, or absent DMARC with both SPF and DKIM failing
+  +25  Corporate From with free-mailbox or unrelated Reply-To
+  +25  Protected-brand display name from a non-official domain
+  +15  Body-claimed domain differs from the .eml From domain
   +20  No registration number (GSTIN/CIN/LLPIN) in the text
   +20  No usable domain AND no registration number
 
 Offsets (subtracted, only from NON-payment points; never below the payment points):
   -10  Domain check passed
   -10  Registry match
+  -10  DMARC pass with aligned DKIM (never offsets payment points)
 
 Low-risk guard: "likely legitimate" requires ALL of:
   - contact domain check passed;
   - registration number is present and did not fail; and
   - at least one externally verified signal: a registry pass marked as checked
-    against MCA data, or (planned; not implemented until .eml support) an authenticated
-    sender with DMARC pass and aligned DKIM.
+    against MCA data, or an authenticated sender from an original .eml with DMARC
+    pass and aligned DKIM.
 Structural checks alone (including a passing domain and checksum-valid GSTIN)
 do not meet this guard. A score <= 30 without an external signal is raised to 31
 with an explanatory factor. In DEMO_MODE only, an explicitly configured and
@@ -140,6 +145,10 @@ def calculate_risk_score(
         for note in (reg.get("details") or "").split("."):
             if "+10" in note or "+15" in note:
                 factors.append(note.strip())
+    auth_points = float(auth.get("risk_points", 0) or 0)
+    if auth_points:
+        other_points += auth_points
+        factors.append(f"Sender authentication risk (+{auth_points:g}): {auth.get('details', '')}")
 
     no_usable_domain = domain_status in ("not_applicable", "insufficient_information")
     if no_usable_domain and not reg_present:
@@ -159,6 +168,12 @@ def calculate_risk_score(
             factors.append(f"MCA registry pass ({_fmt(-reduction)})")
         else:
             factors.append(f"MCA registry pass ({_fmt(-G_REGISTRY_PASS)} offset; score floor is 0)")
+    if auth.get("status") == "pass" and auth.get("dmarc_status") == "pass" and auth.get("dkim_aligned") is True:
+        reduction = min(10.0, other_points)
+        if reduction > 0:
+            other_points -= reduction
+        applied = f"applied {_fmt(-reduction)}" if reduction < 10.0 else _fmt(-reduction)
+        factors.append(f"DMARC pass with aligned DKIM ({_fmt(-10.0)} signal; {applied}, non-payment only)")
 
     score = payment_points + other_points
     if has_payment and score < PAYMENT_FLOOR:
@@ -192,7 +207,7 @@ def calculate_risk_score(
     category = {BAND_LEGIT: "likely_legitimate", BAND_MANUAL: "insufficient_evidence_verify_manually",
                 BAND_HIGH: "high_risk"}[risk_band]
 
-    total_checks = len(check_results)
+    total_checks = sum(c.get("status") != "not_applicable" for c in check_results)
     evaluated = [c for c in check_results if c.get("status") in ("pass", "fail")]
     completeness = round(len(evaluated) / total_checks * 100.0, 2) if total_checks else 0.0
 
