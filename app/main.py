@@ -13,6 +13,7 @@ from slowapi.errors import RateLimitExceeded
 from app.api.limiter import limiter
 from app.api.routes.analyze import router as analyze_router
 from app.api.routes.community import router as community_router
+from app.api.routes.institutions import router as institutions_router
 from app.db.database import init_dev_db, SessionLocal
 from app.services.community_reports import purge_expired
 
@@ -78,6 +79,7 @@ app.add_middleware(
 
 app.include_router(analyze_router)
 app.include_router(community_router)
+app.include_router(institutions_router)
 
 
 @app.get("/health")

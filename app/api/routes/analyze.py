@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.api.limiter import limiter, RATE_LIMIT
 from app.db.database import get_db
-from app.models.models import Offer, VerificationResult, CheckResult
+from app.models.models import Offer, VerificationResult, CheckResult, Institution, InstitutionObservation
 from app.schemas.schemas import AnalyzeResponse, CheckResultSchema, CheckStatus
 from app.services import (
     ingestion,
@@ -18,6 +18,7 @@ from app.services import (
     email_auth,
     risk_scoring,
     community_reports,
+    institution_dashboard,
 )
 
 logger = logging.getLogger(__name__)
@@ -67,6 +68,7 @@ def analyze_offer(
     request: Request,
     text: Optional[str] = Form(None),
     file: Optional[UploadFile] = File(None),
+    institution_code: Optional[str] = Form(None),
     db: Session = Depends(get_db)
 ):
     """
@@ -169,6 +171,9 @@ def analyze_offer(
 
     # Persistence: verdict + check results only. raw_text / file_path / names are not stored.
     try:
+        institution = None
+        if institution_code:
+            institution = db.query(Institution).filter_by(code=institution_code.strip().upper()).first()
         db_offer = Offer(title=None, company_name=None, raw_text=None, file_path=None)
         db.add(db_offer)
         db.flush()
@@ -188,6 +193,13 @@ def analyze_offer(
                 status=c_schema.status.value,
                 score=c_schema.score,
                 details=c_schema.details,
+            ))
+        if institution:
+            db.add(InstitutionObservation(
+                institution_id=institution.id,
+                iso_week=institution_dashboard.current_iso_week(),
+                band=risk_band,
+                scam_category=institution_dashboard.classify_scam(check_dicts, raw_text),
             ))
         db.commit()
         offer_id = db_offer.id
