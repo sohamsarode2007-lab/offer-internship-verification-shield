@@ -105,6 +105,22 @@ been verified in this workspace.
 - `RATE_LIMIT` controls requests per IP. The default is `10/minute`; with
   `DEMO_MODE=1` and `RATE_LIMIT` unset, the default is `100/minute`.
 
+## Placement-cell dashboard
+
+- **Institution dashboard API is live.** `scripts/add_institution.py` creates
+  institutions and shows a random API key once; only its SHA-256 hash is stored.
+  `/analyze` optionally accepts `institution_code`. For a known code, its
+  institution trend record contains only institution ID, UTC ISO week, risk
+  band, and rule-based scam category. Unknown codes are ignored without a
+  response difference. No offer content or candidate data enters institution
+  trend records.
+- `GET /institutions/me/dashboard` authenticates with `X-API-Key`, returns
+  week-by-band and week-by-category counts for 12 ISO weeks, and replaces cells
+  below five with `"<5"`. It is limited to 30 requests/minute. Categories derive
+  from payment-demand, domain, sender-authentication and scheme-text rules; the
+  README documents their priority and mapping. The dashboard is aggregate trend
+  data, not a roster or student-level history.
+
 ## Database and CI
 
 - **Postgres was verified in CI** by successful run `43378004125` on 2026-11-13

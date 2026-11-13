@@ -92,6 +92,47 @@ from deployment secret storage; do not commit it. `INDICATOR_KEY_VERSION`
 versions digests during rotation, and `INDICATOR_PEPPER_PREVIOUS` temporarily
 keeps older digests matchable until they expire.
 
+## Placement-cell dashboard
+
+Run migrations, then add an institution from an administrative shell:
+
+```powershell
+python -m alembic upgrade head
+python scripts/add_institution.py --name "Example College" --code EXAMPLE
+```
+
+The CLI prints a random API key once. Store it as a secret; the database keeps
+only its SHA-256 hash. `/analyze` accepts an optional `institution_code` form
+field. A matching code records only the institution ID, ISO week (`YYYY-Www`),
+risk band, and one scam category. Unknown codes are silently ignored. The offer
+text, name, contacts, registration values, and analysis checks are not copied to
+the institution trend tables.
+
+Read the latest 12 weeks with the institution key in `X-API-Key`:
+
+```powershell
+Invoke-RestMethod -Uri http://localhost:8000/institutions/me/dashboard `
+  -Headers @{ "X-API-Key" = "PASTE_KEY_STORED_SECURELY" }
+```
+
+The response contains week-by-band and week-by-category counts; any cell below
+five is returned as `"<5"`. The endpoint is limited to 30 requests per minute.
+Category rules use the existing check results and follow this priority:
+
+- `security_deposit`: a payment demand mentions a deposit.
+- `training_or_kit_fee`: a payment demand mentions training, kit, laptop,
+  onboarding, document, or background charges.
+- `fake_government_scheme`: a payment demand co-occurs with government, govt,
+  ministry, or department scheme wording.
+- `registration_fee`: a registration, application, processing, joining, or
+  verification fee demand not classified above.
+- `free_mailbox_impersonation`: a failed domain check says the address uses a
+  free mailbox.
+- `lookalike_domain`: a failed domain check identifies a lookalike or brand.
+- `sender_spoofing`: sender authentication fails or adds risk points.
+- `no_red_flags`: no check failed and no check added positive risk points.
+- `other`: a finding exists but none of the more specific rules applies.
+
 ## Tests and migrations
 
 ```powershell
