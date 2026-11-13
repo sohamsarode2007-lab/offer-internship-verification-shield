@@ -12,7 +12,15 @@ registration number, phone number, account number and domain in them is fictiona
 Notes:
 
 - The Emberlake GSTIN `07AAFCE4321L1ZO` passes the official check-character test, but it is
-  **not** a registered GSTIN. The system only checks structure; it never claims a registry match.
+  **not** verified as a real registration. The system does not query live GST/MCA data.
+- The synthetic `registry_fixtures.csv` maps Emberlake's CIN to its fictional company
+  name. To exercise the positive demo path, set `DEMO_MODE=1`,
+  `DEMO_REGISTRY_FIXTURES=U74999DL2016PTC298345`, and the domain fixture setting below.
+  Its result starts with `[DEMO FIXTURE — not a live registry result]`. This fixture is
+  a demo-only scoring exception and is not external verification.
+- With only a demo-domain pass and checksum-valid GSTIN, Emberlake is capped at
+  `insufficient evidence, verify manually`; the configured demo CIN fixture makes it
+  `likely legitimate` for the labelled synthetic walkthrough.
 - Company domains use the reserved `.example` TLD, which **never resolves** in DNS. For a demo,
   run the backend with `DEMO_MODE=1` and
   `DEMO_FIXTURE_DOMAINS=emberlakeanalytics.example,brightpathedtech.example`.

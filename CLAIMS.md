@@ -30,6 +30,11 @@ been verified in this workspace.
   `emberlakeanalytics.example` and `brightpathedtech.example`. Fixture results are
   labelled in the output as `[DEMO FIXTURE — not a live DNS result]`; they are not
   live DNS or company registry results.
+- `DEMO_REGISTRY_FIXTURES` optionally selects CINs from
+  `fixtures/demo/registry_fixtures.csv`. Emberlake's opted-in CIN fixture returns
+  `[DEMO FIXTURE — not a live registry result]` with its fictional company name.
+  It lets Emberlake demonstrate the low-risk band only in demo mode; this synthetic
+  fixture is not an externally verified MCA match.
 - The government-scheme document is also fictional and is labelled as a sample
   scam pattern in its source text.
 
@@ -43,16 +48,28 @@ been verified in this workspace.
 - The payment-demand signal is worth 65 points, with urgency near the demand worth
   20 additional points. A payment demand forces a high-risk score of at least 61.
   See the scoring table in `app/services/risk_scoring.py`.
-- **Known limitation:** urgency without a detected payment demand adds no score.
-  Synthetic case EC08 is labelled `scam` but scores `likely legitimate`: its demo
-  domain pass offsets the +10 valid-but-unverified GSTIN, and its deadline alone
-  is not weighted. This is reported as a dangerous miss even though the
-  rule-derived expected-band check passes. Adding +31 for expiry/deadline language
-  would move EC08 into manual review, but would change its existing regression
-  result and could send legitimate offer acceptance deadlines to manual review;
-  that rule has not been implemented.
+- **Known limitation:** urgency without a detected payment demand adds no points.
+  Synthetic case EC08 remains labelled `scam` but is now `insufficient evidence,
+  verify manually`: its deadline alone is not weighted, and it lacks an external
+  verification signal. Its dangerous-miss count is now zero because it is no
+  longer rated likely legitimate. This synthetic label is not independent proof
+  that a real offer deadline is fraudulent.
+- The low-risk band requires a passing domain, a present non-failing identifier,
+  and an externally verified signal. The available live external signal is an
+  active, name-matched CIN from the locally loaded MCA SQLite master data.
+  Sender authentication (DMARC pass plus aligned DKIM) is planned for future
+  `.eml` support and is not currently available. Structural domain/GSTIN checks
+  alone are capped at manual review. The demo registry fixture is an explicit
+  demo-only exception for illustrating that path; it is not external verification.
+- `scripts/load_mca_master.py` imports an official MCA company-master CSV into
+  local SQLite. This workspace does not include a populated MCA master database;
+  live lookup behavior is tested using temporary database rows.
+- `/analyze` returns `next_steps` and `complaint_summary` based on its rule
+  results. These are automated guidance, not an official complaint filing.
 - The model is `rule_based_v2`; it is a fixed rule table, not a trained ML model.
-  GSTIN/CIN checks are structural and do not query a live registry.
+  GSTIN checks are structural. CIN lookup uses a local MCA master SQLite copy;
+  it does not contact a live service. An opted-in synthetic CIN fixture is
+  available only in demo mode and is labelled in output.
 
 ## OCR and rate limiting
 

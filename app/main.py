@@ -32,7 +32,7 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(
     title="Offer & Internship Verification Shield API",
-    description="Rule-based checks for job and internship offers (no ML, no registry lookup).",
+    description="Rule-based offer checks using local MCA master data when configured (no remote registry queries; labelled demo fixtures are optional).",
     version="1.0.0",
     lifespan=lifespan,
 )
