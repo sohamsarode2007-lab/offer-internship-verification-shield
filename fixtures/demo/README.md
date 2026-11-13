@@ -32,7 +32,8 @@ $env:DEMO_FIXTURE_DOMAINS = "emberlakeanalytics.example,brightpathedtech.example
 
 The database records `source=SYNTHETIC`; the app uses it only when `DEMO_MODE=1` and
 otherwise behaves as if no registry is loaded. On the website, results appear like any
-registry result ("Company registry match: name; status; incorporated date") with no
+registry result ("Company registry match: name; Active; incorporated date", or a failure that
+leads with the problem, e.g. "Company is Struck Off in company registry records: ...") with no
 synthetic label; the API response carries `registry_source: "synthetic"` for traceability.
 Tell your audience that the demo companies are fictional.
 

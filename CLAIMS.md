@@ -41,8 +41,11 @@ been verified in this workspace.
   CIN lookup → scoring) with fictional data only.
 - In demo mode, synthetic registry results are displayed like any registry result,
   **without a synthetic label on the website**: the details read
-  `Company registry match: <name>; status <status>; incorporated <date>.` (or
-  `CIN belongs to a different company in company registry records: ...`). No UI
+  `Company registry match: <name>; Active; incorporated <date>.` for an active,
+  name-matched company; failures lead with the problem: `Company is <status> in
+  company registry records: <name>; incorporated <date>.` or `CIN belongs to a
+  different company in company registry records: ...`. The same wording is used for
+  real company-master data. No UI
   text, API detail or page describes this data as official, live, MCA data or from
   data.gov.in. Every such response carries the non-displayed API field
   `registry_source: "synthetic"`, so a result can always be traced to the synthetic

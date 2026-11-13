@@ -46,7 +46,8 @@ def test_loader_and_active_name_matched_cin_pass(mca_db):
 def test_mca_name_mismatch_fails(mca_db):
     result = gv.verify_gstin(facts(f"Different Example Pvt Ltd\nCIN: {CIN}\nGSTIN: {GSTIN}"))
     assert result["status"] == "fail"
-    assert "does not match claimed company" in result["details"]
+    assert result["details"].startswith(
+        "CIN belongs to a different company in company registry records: Emberlake Analytics Pvt. Ltd.;")
 
 
 @pytest.mark.parametrize("status", ["Struck Off", "Dissolved"])

@@ -128,11 +128,12 @@ def test_api_outside_demo_mode_has_no_registry_source(api_client, synthetic_db, 
 
 # --- The three demo cases (bands derived by hand; see module docstring) -------
 
+# Lead sentence of the registry details; informational state-code notes may follow it.
 DEMO_CASES = [
     ("registry_name_match_quillmere", "pass", 0.0, "likely legitimate",
-     "Company registry match: Quillmere Software Private Limited; status Active; incorporated 2014-07-21."),
+     "Company registry match: Quillmere Software Private Limited; Active; incorporated 2014-07-21."),
     ("registry_struck_off_tarnwick", "fail", 31.0, "insufficient evidence, verify manually",
-     "Company registry match: Tarnwick Logistics Private Limited; status Struck Off; incorporated 2011-09-04."),
+     "Company is Struck Off in company registry records: Tarnwick Logistics Private Limited; incorporated 2011-09-04."),
     ("registry_cin_mismatch_halvorn", "fail", 31.0, "insufficient evidence, verify manually",
      "CIN belongs to a different company in company registry records: "
      "Ashcombe Data Labs Private Limited; status Active; incorporated 2019-06-18."),
@@ -143,7 +144,7 @@ DEMO_CASES = [
 def test_registry_demo_case(registry_demo_client, stem, status, score, band, details):
     body, registry = analyze(registry_demo_client, stem)
     assert registry["status"] == status
-    assert registry["details"] == details
+    assert registry["details"].startswith(details), registry["details"]
     assert body["overall_risk_score"] == score
     assert body["risk_band"] == band
 
