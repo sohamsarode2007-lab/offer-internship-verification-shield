@@ -16,6 +16,8 @@ Risk points (added):
   +25  Corporate From with free-mailbox or unrelated Reply-To
   +25  Protected-brand display name from a non-official domain
   +15  Body-claimed domain differs from the .eml From domain
+  +25  Community indicator reported by 3-9 reports; +40 at 10+ reports
+  +25  Community template MinHash similarity >= 0.8
   +20  No registration number (GSTIN/CIN/LLPIN) in the text
   +20  No usable domain AND no registration number
 
@@ -23,6 +25,9 @@ Offsets (subtracted, only from NON-payment points; never below the payment point
   -10  Domain check passed
   -10  Registry match
   -10  DMARC pass with aligned DKIM (never offsets payment points)
+
+Community indicators are risk evidence only; they never satisfy the external
+verification guard. Details use threshold buckets and never expose exact counts.
 
 Low-risk guard: "likely legitimate" requires ALL of:
   - contact domain check passed;
@@ -149,6 +154,11 @@ def calculate_risk_score(
     if auth_points:
         other_points += auth_points
         factors.append(f"Sender authentication risk (+{auth_points:g}): {auth.get('details', '')}")
+    community = by_name.get("community_reports", {})
+    community_points = float(community.get("risk_points", community.get("score", 0)) or 0)
+    if community_points:
+        other_points += community_points
+        factors.append(f"Community report signals (+{community_points:g}): {community.get('details', '')}")
 
     no_usable_domain = domain_status in ("not_applicable", "insufficient_information")
     if no_usable_domain and not reg_present:

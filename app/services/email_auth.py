@@ -71,12 +71,15 @@ def parse_eml(file_bytes: bytes) -> Dict[str, Any]:
         if data:
             attachments.append({"filename": f"email-attachment.{allowed}", "content_type": content_type, "data": data})
     from_domain, display_name = _address_domain(message.get("From"))
+    _, from_address = parseaddr(str(message.get("From") or ""))
+    sender_email = from_address.strip().lower() if "@" in from_address else None
     reply_domain, _ = _address_domain(message.get("Reply-To"))
     auth_headers = message.get_all("Authentication-Results", [])
     top = str(auth_headers[0]) if auth_headers else ""
     authserv_tokens = top.split(";", 1)[0].strip().split()
     authserv_id = authserv_tokens[0] if authserv_tokens else None
     return {"body_text": body, "attachments": attachments, "sender_domain": from_domain,
+            "sender_email": sender_email,
             "display_name": display_name, "reply_domain": reply_domain,
             "authserv_id": authserv_id, "auth_headers": [str(h) for h in auth_headers]}
 
