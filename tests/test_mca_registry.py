@@ -82,15 +82,36 @@ def test_pan_initial_mismatch_adds_ten(mca_db):
     assert "PAN name-initial" in result["details"]
 
 
-def test_recent_incorporation_adds_fifteen(mca_db):
-    _, db_path = mca_db
-    recent = date.today().strftime("%d/%m/%Y")
+def _set_incorporation_date(db_path, value):
     import sqlite3
     with sqlite3.connect(db_path) as db:
-        db.execute("UPDATE mca_companies SET date_of_registration=? WHERE cin=?", (recent, CIN))
+        db.execute("UPDATE mca_companies SET date_of_registration=? WHERE cin=?", (value, CIN))
+
+
+def test_recent_incorporation_without_claim_adds_no_points(mca_db):
+    _, db_path = mca_db
+    recent = date.today().strftime("%d/%m/%Y")
+    _set_incorporation_date(db_path, recent)
     result = gv.verify_gstin(facts(f"{NAME}\nCIN: {CIN}\nGSTIN: {GSTIN}"))
+    assert result["consistency_risk_points"] == 0
+    assert "no founding-year/age claim" in result["details"]
+
+
+def test_established_year_contradicted_by_registry_adds_fifteen(mca_db):
+    _, db_path = mca_db
+    _set_incorporation_date(db_path, "15/03/2025")
+    result = gv.verify_gstin(facts(f"{NAME} established 2012\nCIN: {CIN}\nGSTIN: {GSTIN}"))
     assert result["consistency_risk_points"] == 15
-    assert "less than one year ago (+15)" in result["details"]
+    assert "founding-year claim 2012" in result["details"]
+    assert "2025-03-15" in result["details"]
+
+
+def test_established_year_within_one_year_of_registry_adds_no_points(mca_db):
+    _, db_path = mca_db
+    _set_incorporation_date(db_path, "15/03/2025")
+    result = gv.verify_gstin(facts(f"{NAME} established 2024\nCIN: {CIN}\nGSTIN: {GSTIN}"))
+    assert result["consistency_risk_points"] == 0
+    assert "within one year" in result["details"]
 
 
 def test_gstin_cin_location_note_is_informational(mca_db):

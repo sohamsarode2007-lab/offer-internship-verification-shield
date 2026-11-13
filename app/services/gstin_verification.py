@@ -170,7 +170,7 @@ def _normalized_company_name(value: Optional[str]) -> str:
     return re.sub(r"[^a-z0-9]", "", (value or "").lower())
 
 
-def _date_consistency(record: Dict[str, Any]) -> tuple[int, List[str]]:
+def _date_consistency(record: Dict[str, Any], raw_text: str) -> tuple[int, List[str]]:
     raw_date = record.get("date_of_registration")
     if not raw_date:
         return 0, []
@@ -183,10 +183,27 @@ def _date_consistency(record: Dict[str, Any]) -> tuple[int, List[str]]:
             pass
     if not parsed:
         return 0, []
-    age_days = (date.today() - parsed).days
-    if 0 <= age_days < 365:
-        return 15, [f"MCA incorporation date {raw_date} is less than one year ago (+15)"]
-    return 0, [f"MCA incorporation date {raw_date}; company is at least one year old"]
+    claim = re.search(
+        r"\b(?:established|founded|since)\s+(\d{4})\b|\b(\d{1,2})\s+years?\b",
+        raw_text, re.IGNORECASE,
+    )
+    if not claim:
+        return 0, [f"MCA incorporation date {parsed.isoformat()}; no founding-year/age claim to compare (informational only)."]
+    if claim.group(1):
+        claim_year = int(claim.group(1))
+        claim_label = f"founding-year claim {claim_year}"
+    else:
+        claim_year = date.today().year - int(claim.group(2))
+        claim_label = f"age claim {claim.group(2)} years (implied founding year {claim_year})"
+    difference = abs(parsed.year - claim_year)
+    if difference > 1:
+        return 15, [
+            f"Contradiction: {claim_label}; MCA incorporation date {parsed.isoformat()} "
+            f"(year difference {difference}; +15)"
+        ]
+    return 0, [
+        f"{claim_label} is within one year of MCA incorporation date {parsed.isoformat()} (no points)."
+    ]
 
 
 def _gstin_cin_state_note(gstin: Optional[str], cin: Optional[str]) -> Optional[str]:
@@ -317,7 +334,7 @@ def verify_gstin(facts: Dict[str, Any]) -> Dict[str, Any]:
                     return _result("fail", True,
                         f"CIN '{cin}' is registered to '{registered}', which does not match claimed company '{claimed_company}'.",
                         identifiers, 0.0, registry_checked=True, verification_source="mca_registry")
-            age_points, age_notes = _date_consistency(record)
+            age_points, age_notes = _date_consistency(record, raw_text)
             consistency_points += age_points
             consistency_notes.extend(age_notes)
             return _result("pass", True,
