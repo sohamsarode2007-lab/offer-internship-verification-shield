@@ -17,11 +17,11 @@ def upgrade():
         "institutions",
         sa.Column("id", sa.Integer(), primary_key=True),
         sa.Column("name", sa.String(length=200), nullable=False),
-        sa.Column("code", sa.String(length=40), nullable=False, unique=True),
-        sa.Column("api_key_hash", sa.String(length=64), nullable=False, unique=True),
+        sa.Column("code", sa.String(length=40), nullable=False),
+        sa.Column("api_key_hash", sa.String(length=64), nullable=False),
     )
-    op.create_index("ix_institutions_code", "institutions", ["code"])
-    op.create_index("ix_institutions_api_key_hash", "institutions", ["api_key_hash"])
+    op.create_index("ix_institutions_code", "institutions", ["code"], unique=True)
+    op.create_index("ix_institutions_api_key_hash", "institutions", ["api_key_hash"], unique=True)
     op.create_table(
         "institution_observations",
         sa.Column("id", sa.Integer(), primary_key=True),
