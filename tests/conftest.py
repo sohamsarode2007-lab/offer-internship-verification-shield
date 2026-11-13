@@ -72,4 +72,5 @@ def demo_client(api_client, monkeypatch):
     """api_client with DEMO_MODE fixtures for the two synthetic company domains."""
     monkeypatch.setenv("DEMO_MODE", "1")
     monkeypatch.setenv("DEMO_FIXTURE_DOMAINS", DEMO_FIXTURE_DOMAINS)
+    monkeypatch.setenv("DEMO_REGISTRY_FIXTURES", "U74999DL2016PTC298345")
     return api_client

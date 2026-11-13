@@ -61,3 +61,24 @@ def test_demo_fixture_is_labelled(demo_client, path):
     body = analyze(demo_client, "legit_emberlake", path)
     domain = next(c for c in body["checks"] if c["check_name"] == "domain_verification")
     assert domain["details"].startswith(dv.DEMO_PREFIX)
+
+
+@pytest.mark.parametrize("path", ["text", "pdf"])
+def test_emberlake_registry_fixture_is_labelled(demo_client, path):
+    body = analyze(demo_client, "legit_emberlake", path)
+    registry = next(c for c in body["checks"] if c["check_name"] == "gstin_verification")
+    assert registry["status"] == "pass"
+    assert registry["details"].startswith("[DEMO FIXTURE — not a live registry result]")
+
+
+def test_demo_registry_fixture_does_not_match_unrelated_company(demo_client):
+    from app.services.fact_extraction import extract_facts
+    from app.services.gstin_verification import verify_gstin
+
+    facts = extract_facts(
+        "Other Example Pvt Ltd; CIN: U74999DL2016PTC298345; "
+        "GSTIN: 07AAFCE4321L1ZO; contact: hr@emberlakeanalytics.example"
+    )
+    result = verify_gstin(facts)
+    assert result["status"] == "insufficient_information"
+    assert result.get("demo_registry_fixture") is not True
