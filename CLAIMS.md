@@ -94,14 +94,7 @@ been verified in this workspace.
 
 ## OCR and rate limiting
 
-- **OCR was verified in CI** by successful run `43378004125` on 2026-11-13 UTC
-  (commit `ae741a05136f1c0496629df7840493fdb30ca9e7`). The log shows the OCR
-  binary-install step completed and the test suite finished `71 passed` with no
-  skipped tests. This includes the degraded-image robustness cases for the three
-  demo PDFs across clean, 3° rotation, blur, and JPEG quality 30 variants. No band
-  flips occurred. Passing cases do not print their extracted OCR text, so the logs
-  contain no extracted text to report; there is no flip-causing text. This verifies
-  the CI environment, not the previously blocked local Windows Tesseract install.
+- **OCR was verified in CI** by successful run `43403402979` on 2026-11-13 UTC (commit `51c6c2357ddf93566249e2287913d36a9b674263`). The log shows Tesseract and Poppler installed and the suite finished `143 passed` with no skipped tests or pytest warnings. This includes degraded-image robustness cases for the three demo PDFs across clean, 3° rotation, blur, and JPEG quality 30 variants. No band flips occurred; therefore there is no flip-causing extracted text to report. Passing cases do not print their OCR text. This verifies the CI environment, not the previously blocked local Windows Tesseract install.
 - `RATE_LIMIT` controls requests per IP. The default is `10/minute`; with
   `DEMO_MODE=1` and `RATE_LIMIT` unset, the default is `100/minute`.
 
@@ -125,9 +118,4 @@ been verified in this workspace.
 
 ## Database and CI
 
-- **Postgres was verified in CI** by successful run `43378004125` on 2026-11-13
-  UTC (commit `ae741a05136f1c0496629df7840493fdb30ca9e7`). The job initialized a
-  `postgres:15` service; Alembic logged `PostgresqlImpl`, applied revisions 001
-  and 002, and `alembic check` reported `No new upgrade operations detected.` The
-  test step used the configured PostgreSQL `DATABASE_URL` and completed with
-  `71 passed, 3 warnings`.
+- **Postgres was verified in CI** by successful run `43403402979` on 2026-11-13 UTC (commit `51c6c2357ddf93566249e2287913d36a9b674263`). The job initialized a `postgres:15` service; Alembic logged `PostgresqlImpl`, applied revisions 001 through 004, and `alembic check` reported `No new upgrade operations detected.` The test step used the configured PostgreSQL `DATABASE_URL` and completed with `143 passed` and no pytest warnings.
