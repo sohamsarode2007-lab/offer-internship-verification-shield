@@ -66,7 +66,15 @@ def test_degraded_scan_keeps_band(demo_client, stem, how):
     r = demo_client.post("/analyze", files={"file": (f"{stem}_{how}.{ext}", data, f"image/{ext}")})
     assert r.status_code == 200, r.text
     got = r.json()
-    assert got["risk_band"] == expected, (
-        f"BAND FLIP for {stem} [{how}]: text-layer PDF={expected!r}, OCR={got['risk_band']!r}; "
-        f"factors={got['risk_factors']}"
-    )
+    if got["risk_band"] != expected:
+        # Diagnostics only (synthetic fixture text, no personal data): show what OCR made of
+        # the contact lines and how the domain check saw them.
+        from app.services.ingestion import ingest_offer
+        ocr_text, _ = ingest_offer(file_bytes=data, filename=f"{stem}_{how}.{ext}")
+        contact_lines = [line for line in ocr_text.splitlines() if "@" in line or "www" in line.lower()]
+        domain = next(c for c in got["checks"] if c["check_name"] == "domain_verification")
+        pytest.fail(
+            f"BAND FLIP for {stem} [{how}]: text-layer PDF={expected!r}, OCR={got['risk_band']!r}; "
+            f"factors={got['risk_factors']}; domain={domain['status']}: {domain['details']!r}; "
+            f"OCR contact lines={contact_lines!r}"
+        )
