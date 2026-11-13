@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.api.limiter import limiter, RATE_LIMIT
 from app.db.database import get_db
+from app.utils.field_utils import get_field_value
 from app.models.models import Offer, VerificationResult, CheckResult, Institution, InstitutionObservation
 from app.schemas.schemas import AnalyzeResponse, CheckResultSchema, CheckStatus
 from app.services import (
@@ -240,4 +241,6 @@ def analyze_offer(
         report_token=report_token,
         reportable_indicators=reportable_indicators,
         registry_source=gstin_check.get("registry_source"),
+        # Returned for display only; never persisted (Offer.company_name stays NULL).
+        company_name=get_field_value(facts, "company_name", "company_name_legacy"),
     )

@@ -49,6 +49,26 @@ def test_every_demo_pdf_matches_its_text(demo_client, stem):
     assert [c["status"] for c in pdf_body["checks"]] == [c["status"] for c in text_body["checks"]]
 
 
+def test_company_name_returned_but_not_stored(demo_client):
+    from app.db.database import get_db
+    from app.main import app
+    from app.models.models import Offer
+
+    body = analyze(demo_client, "registry_name_match_quillmere", "pdf")
+    assert body["company_name"] == "Quillmere Software Private Limited"
+    db = next(app.dependency_overrides[get_db]())
+    try:
+        assert db.query(Offer).filter(Offer.company_name.isnot(None)).count() == 0
+    finally:
+        db.close()
+
+
+def test_company_name_absent_when_not_extracted(api_client):
+    r = api_client.post("/analyze", data={"text": "Selected for WFH data entry. Our team will WhatsApp you the tasks."})
+    assert r.status_code == 200
+    assert r.json()["company_name"] is None
+
+
 def test_demo_pdfs_have_text_layer_and_letter_layout():
     import pdfplumber
     for stem in DEMO_LETTERS:

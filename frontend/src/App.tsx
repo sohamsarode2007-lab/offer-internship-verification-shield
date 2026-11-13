@@ -142,6 +142,7 @@ function Result({ result, onClear }: { result: AnalyzeResponse; onClear: () => v
   const band = result.risk_band
   return <section className={styles.result} aria-live="polite">
     <div className={styles.resultSide}>{band && <div className={`${styles.verdict} ${bandClass(band)}`}><h1>{band}</h1><p className={styles.score}><span>{Number.isInteger(result.overall_risk_score) ? result.overall_risk_score : result.overall_risk_score.toFixed(1)}</span> / 100</p><p className={styles.completeness}>{result.completeness_percentage}% information completeness</p></div>}
+      {result.company_name?.trim() && <p className={styles.checkedCompany}>Checked: {result.company_name.trim()}</p>}
       {result.next_steps?.length > 0 && <section className={styles.guidance}><h2>What to do next</h2><ul>{result.next_steps.map((step, i) => <li key={i}>{step}</li>)}</ul></section>}
       <div className={styles.actions}>{result.report_token && <button onClick={() => setReportOpen(true)}>Report this scam</button>}<button className={styles.secondaryButton} onClick={onClear}>Check another offer</button></div>
       {result.complaint_summary?.trim() && <Complaint summary={result.complaint_summary}/>}

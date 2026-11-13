@@ -55,3 +55,6 @@ class AnalyzeResponse(BaseModel):
     # registry result: "synthetic" (demo-only fictional data), "mca_csv", or None
     # when no registry record was consulted. Keeps demo results traceable.
     registry_source: Optional[str] = None
+    # Company name extracted from the offer text, shown under the verdict. Returned in
+    # the response only; it is never stored.
+    company_name: Optional[str] = None

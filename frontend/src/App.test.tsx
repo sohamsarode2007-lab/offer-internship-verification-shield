@@ -66,6 +66,21 @@ describe('analysis result', () => {
     expect(within(ledger).getByText('DMARC and aligned DKIM passed.')).toBeInTheDocument()
   })
 
+  it('shows the checked company name under the verdict plate, in steel', async () => {
+    await showResult(payload({ risk_band: 'likely legitimate', company_name: 'Quillmere Software Private Limited' }))
+    const line = screen.getByText('Checked: Quillmere Software Private Limited')
+    expect(line).toHaveClass(styles.checkedCompany)
+    const plate = screen.getByRole('heading', { name: 'likely legitimate' }).parentElement!
+    expect(plate.nextElementSibling).toBe(line)
+    const css = readFileSync(resolve(__dirname, 'App.module.css'), 'utf8')
+    expect(css).toMatch(/\.checkedCompany \{[^}]*color: var\(--steel\)/)
+  })
+
+  it.each([null, undefined, '', '   '])('hides the company line when no name was extracted (%j)', async name => {
+    await showResult(payload({ company_name: name as string | null | undefined }))
+    expect(screen.queryByText(/^Checked:/)).not.toBeInTheDocument()
+  })
+
   it('labels demo fixture evidence', async () => {
     await showResult(payload({ checks: [{ check_name: 'domain_verification', status: 'pass', details: '[DEMO FIXTURE — not a live DNS result] emberlakeanalytics.example.' }] }))
     expect(screen.getByText('Demo fixture, not a live check')).toBeInTheDocument()

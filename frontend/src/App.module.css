@@ -46,6 +46,7 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .likely { border: 1px solid var(--graphite); color: var(--platinum); }
 .score { margin: 0 0 8px; font-size: 30px; font-variant-numeric: tabular-nums; font-weight: 500; letter-spacing: -.035em; }
 .completeness { color: var(--steel); }
+.checkedCompany { margin: 12px 0 0; color: var(--steel); font-size: 14px; line-height: 1.45; overflow-wrap: anywhere; }
 .highRisk .completeness { color: var(--graphite); }
 .guidance { margin-top: 35px; }
 .guidance h2, .why h2, .ledgerSection h2, .complaint h2, .dashboardResults h2, .howPage h2 { margin: 0 0 14px; font-size: 20px; font-weight: 500; letter-spacing: -.02em; }
