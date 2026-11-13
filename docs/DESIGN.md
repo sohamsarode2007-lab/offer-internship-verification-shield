@@ -21,7 +21,7 @@ A quiet, precise verification tool for students checking an offer under pressure
 
 No other color values are permitted. Scores and counts use tabular numerals. Body typography scales from 16px to 18px, section titles 20px, page titles 48px desktop / 38px mobile, verdict 38px desktop / 32px mobile. Metadata is 13px. Text labels remain sentence case; no eyebrow headings, all-caps, monospace labels, or numbered stage markers.
 
-Steel on obsidian and basalt is approximately 5.7:1 and 5.1:1 contrast respectively, above WCAG AA for normal text. Platinum and white exceed AA on both surfaces.
+Steel on obsidian and basalt measures 6.23:1 and 5.76:1 respectively, above WCAG AA for normal text. Platinum and white exceed AA on both surfaces.
 
 ## Screen wireframes
 
@@ -126,6 +126,172 @@ At 1440px, the header spans a centered 1120px content measure. At 390px, it wrap
 ## Motion and accessibility
 
 Only result arrival is orchestrated: verdict fades in and ledger rows follow at roughly 90ms intervals. Disclosure and modal transitions animate only on activation. `prefers-reduced-motion` removes all transitions. Dialog keyboard handling includes focus trap and Escape. Buttons, links, inputs, rows and file picker have visible 2px white focus outline plus offset. Ledger and dashboard data are semantic tables. Contrast is checked at the supplied steel values above. API result changes are announced in an `aria-live` region.
+
+### Result mobile wireframe
+
+```text
+┌──────────────────────────────┐
+│ Offer shield         Nav     │
+├──────────────────────────────┤
+│ [high risk verdict plate]    │
+│ 72 / 100, completeness      │
+│                              │
+│ Why                          │
+│ • Risk factor                │
+│ • Risk factor                │
+│                              │
+│ Evidence                     │
+│ Who sent it       ○ Not enough│
+│   Details expand here        │
+│ Email domain     ✓ Passed    │
+│ Company record  ✕ Failed     │
+│ Payment request ✕ Failed     │
+│ Student reports — Not applied│
+│                              │
+│ What to do next              │
+│ • Action                     │
+│ [Report scam]                │
+│ [Check another offer]        │
+│ Police summary, when present │
+└──────────────────────────────┘
+```
+
+### Report modal wireframes
+
+Desktop:
+```text
+┌────────────────────────────────────────────┐
+│ Choose details to share              Close │
+│ ☑ Payment UPI ID       rky.ver•••@ybl       │
+│ ☑ Contact phone        +91 ••••••1234       │
+│ Untick anything that's yours or unwanted.  │
+│ [Continue]                                  │
+│                                             │
+│ Step 2: consent and Report scam             │
+│ Success: one-time withdrawal code and copy  │
+└────────────────────────────────────────────┘
+```
+Mobile:
+```text
+┌──────────────────────────────┐
+│ Choose details to share Close│
+│ ☑ Payment UPI ID             │
+│   rky.ver•••@ybl             │
+│ ☑ Contact phone              │
+│   +91 ••••••1234             │
+│ Untick anything that's yours │
+│ [Continue]                   │
+│                              │
+│ Consent step scrolls in place│
+│ Success code wraps safely    │
+└──────────────────────────────┘
+```
+
+### Withdraw report (`/withdraw`) wireframes
+
+Desktop:
+```text
+┌───────────────────────────────────────────┐
+│ Withdraw a report                         │
+│ Enter the one-time code you saved.        │
+│ Withdrawal code [                         ]│
+│ [Withdraw report]                         │
+│ Inline success or an actionable error     │
+└───────────────────────────────────────────┘
+```
+Mobile:
+```text
+┌──────────────────────────────┐
+│ Withdraw a report            │
+│ Enter the one-time code.     │
+│ [Withdrawal code            ]│
+│ [Withdraw report            ]│
+│ Inline status or error       │
+└──────────────────────────────┘
+```
+
+### Dispute (`/dispute`) wireframes
+
+Desktop:
+```text
+┌───────────────────────────────────────────┐
+│ Dispute an indicator                      │
+│ Type [Domain                          v]   │
+│ Value [                                  ] │
+│ Contact email [                          ] │
+│ Same-domain verification note, if needed  │
+│ Reason [                                  ]│
+│        [                                  ]│
+│ [Submit dispute]                           │
+│ API response: under review / link sent     │
+└───────────────────────────────────────────┘
+```
+
+Mobile:
+```text
+┌──────────────────────────────┐
+│ Dispute an indicator         │
+│ Plain-language limit         │
+│ [Type                      v]│
+│ [Indicator value           ] │
+│ [Contact email             ] │
+│ Domain verification note     │
+│ [Reason                    ] │
+│ [                           ]│
+│ [Submit dispute            ] │
+│ API response inline          │
+└──────────────────────────────┘
+```
+
+### Placement-cell dashboard (`/dashboard`) mobile wireframe
+
+```text
+┌──────────────────────────────┐
+│ Placement cell dashboard    │
+│ [Institution API key        ]│
+│ [Load dashboard             ]│
+│ Counts aren't deduplicated   │
+│ Results by week              │
+│ Legend                       │
+│ [12-week chart scrolls →    ]│
+│ Scam categories by week      │
+│ [Table scrolls →            ]│
+│ <5 cells have privacy tooltip│
+└──────────────────────────────┘
+```
+
+### What this checks (`/how-it-works`) wireframes
+
+Desktop:
+```text
+┌───────────────────────────────────────────┐
+│ What this checks                          │
+│ Plain-language scope and limitations      │
+│ Who sent it                               │
+│ Email domain                              │
+│ Company registration                      │
+│ Payment request                           │
+│ Reports from other students               │
+│ Verified signals / unavailable checks     │
+│ Privacy and limits → privacy design       │
+└───────────────────────────────────────────┘
+```
+
+Mobile:
+```text
+┌──────────────────────────────┐
+│ What this checks             │
+│ Short scope statement        │
+│ Who sent it                  │
+│ Email domain                 │
+│ Company registration         │
+│ Payment request              │
+│ Reports from other students  │
+│ Verified and unavailable     │
+│ Privacy and limits           │
+│ Read privacy design          │
+└──────────────────────────────┘
+```
 
 ## Self-review
 
