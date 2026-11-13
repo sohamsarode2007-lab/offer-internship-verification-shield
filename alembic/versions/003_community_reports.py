@@ -7,7 +7,7 @@ from alembic import op
 import sqlalchemy as sa
 
 revision = "003_community_reports"
-down_revision = "002_timestamptz_nullable_text"
+down_revision = "002"
 branch_labels = None
 depends_on = None
 
