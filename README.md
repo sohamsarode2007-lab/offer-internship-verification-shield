@@ -107,6 +107,9 @@ field. A matching code records only the institution ID, ISO week (`YYYY-Www`),
 risk band, and one scam category. Unknown codes are silently ignored. The offer
 text, name, contacts, registration values, and analysis checks are not copied to
 the institution trend tables.
+These are consented submissions attributed by the supplied code; enrollment is
+not independently verified and repeated submissions are not deduplicated by
+student.
 
 Read the latest 12 weeks with the institution key in `X-API-Key`:
 

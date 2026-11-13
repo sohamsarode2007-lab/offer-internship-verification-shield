@@ -87,7 +87,7 @@ store only a verifier, not the plaintext code.
   evidence alone crosses 60, cap the result at manual review with the factor
   “Reported by other students; not enough independent evidence to call this high
   risk.” Neither community signal satisfies the external-verification low-risk
-  guard. These limits address the [poisoning threat in the threat model](#threat-model).
+  guard. These limits address the [poisoning threat](#poisoning-a-legitimate-companys-identifiers).
 - Details use buckets only: “reported by 3+ students” or “reported by 10+
   students”; never disclose exact counts or other reports' contents. `/indicators/stats`
   is aggregate-only and suppresses cells below 5.
@@ -113,6 +113,12 @@ Limiter IP state is transient and expires with its rate-limit window, with a
 24-hour maximum retention.
 
 ## Threat model
+
+### Poisoning a legitimate company's identifiers
+
+Correlated identifiers can arise from the same report and template; they are
+therefore capped together. Multiple matching contact/payment values are not
+independent evidence that the offer is fraudulent.
 
 | Attacker goal | Method | Mitigation | Residual risk |
 | --- | --- | --- | --- |

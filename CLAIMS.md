@@ -113,7 +113,9 @@ been verified in this workspace.
   institution trend record contains only institution ID, UTC ISO week, risk
   band, and rule-based scam category. Unknown codes are ignored without a
   response difference. No offer content or candidate data enters institution
-  trend records.
+  trend records. Attribution uses the supplied code only; enrollment is not
+  verified and repeated submissions are not deduplicated by student, so counts
+  are analysis records rather than verified unique-student totals.
 - `GET /institutions/me/dashboard` authenticates with `X-API-Key`, returns
   week-by-band and week-by-category counts for 12 ISO weeks, and replaces cells
   below five with `"<5"`. It is limited to 30 requests/minute. Categories derive
