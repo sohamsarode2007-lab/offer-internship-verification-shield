@@ -38,13 +38,14 @@ class DisputeRequest(BaseModel):
 
 def _send_verification(email: str, token: str, domain: str):
     host = os.getenv("SMTP_HOST")
-    if not host:
+    base_url = os.getenv("PUBLIC_BASE_URL")
+    if not host or not base_url:
         return False
     message = EmailMessage()
     message["Subject"] = "Verify company-domain dispute"
     message["From"] = os.getenv("SMTP_FROM", "no-reply@localhost")
     message["To"] = email
-    message.set_content(f"Verify this domain dispute for {domain}: {os.getenv('PUBLIC_BASE_URL', '').rstrip('/')}/disputes/verify?token={token}\nThis link expires in 24 hours.")
+    message.set_content(f"Verify this domain dispute for {domain}: {base_url.rstrip('/')}/disputes/verify?token={token}\nThis link expires in 24 hours.")
     with smtplib.SMTP(host, int(os.getenv("SMTP_PORT", "587")), timeout=10) as smtp:
         smtp.starttls()
         username = os.getenv("SMTP_USERNAME")
