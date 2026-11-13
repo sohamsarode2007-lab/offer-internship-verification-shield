@@ -25,13 +25,35 @@ def load_cases():
             raise ValueError(f"{case.get('case_id')}: all evaluation rows must be labelled synthetic=true")
         if case.get("truth") not in {"scam", "legitimate"}:
             raise ValueError(f"{case.get('case_id')}: unsupported truth label")
-        if case.get("input_type", "text") not in {"text", "eml"}:
+        if case.get("input_type", "text") not in {"text", "text_file", "eml"}:
             raise ValueError(f"{case.get('case_id')}: unsupported input_type")
         if case.get("expected_band") not in BANDS:
             raise ValueError(f"{case.get('case_id')}: unsupported expected band")
         if not case.get("expected_basis"):
             raise ValueError(f"{case.get('case_id')}: expected_basis must record the hand calculation")
     return cases
+
+
+def case_text(case):
+    """Inline text, or the contents of a repo-relative fixture file (input_type=text_file)."""
+    if case.get("input_type", "text") == "text_file":
+        return (ROOT / case["text"]).read_text(encoding="utf-8")
+    return case["text"]
+
+
+_REGISTRY_DB = None
+
+
+def _synthetic_registry_db():
+    """Load fixtures/demo/synthetic_mca_master.csv (fictional companies) into a temporary SQLite file."""
+    global _REGISTRY_DB
+    if _REGISTRY_DB is None:
+        import tempfile
+        sys.path.insert(0, str(ROOT))
+        from scripts.load_mca_master import load_csv
+        _REGISTRY_DB = Path(tempfile.mkdtemp(prefix="eval-registry-")) / "synthetic.sqlite3"
+        load_csv(ROOT / "fixtures" / "demo" / "synthetic_mca_master.csv", _REGISTRY_DB, synthetic=True)
+    return _REGISTRY_DB
 
 
 def local_band(case):
@@ -64,7 +86,7 @@ def local_band(case):
         payment_check = payment_detection.detect_payment_demand(facts)
         indicators = community_reports.extract_indicators(text, parsed, payment_check)
     else:
-        text = case["text"]
+        text = case_text(case)
         facts = fact_extraction.extract_facts(text)
         domain_check = domain_verification.verify_domain(facts)
         auth_check = email_auth.not_applicable()
@@ -130,7 +152,7 @@ def live_band(case, base_url):
     body = (
         f"--{boundary}\r\n"
         'Content-Disposition: form-data; name="text"\r\n\r\n'
-        f"{case['text']}\r\n"
+        f"{case_text(case)}\r\n"
         f"--{boundary}--\r\n"
     ).encode("utf-8")
     request = urllib.request.Request(
@@ -151,11 +173,17 @@ def evaluate(cases, live=False, base_url="http://127.0.0.1:8000"):
         domains = set()
         for case in cases:
             scan_text = case["text"]
-            if case.get("input_type", "text") == "eml":
+            if case.get("input_type", "text") in {"eml", "text_file"}:
                 scan_text = (ROOT / scan_text).read_text(encoding="utf-8", errors="ignore")
             domains.update(re.findall(r"[A-Za-z0-9.-]+\.example\b", scan_text.lower()))
         os.environ["DEMO_MODE"] = "1"
         os.environ["DEMO_FIXTURE_DOMAINS"] = ",".join(sorted(domains))
+        # Cases flagged registry_fixture=true run against the synthetic company master
+        # (DEMO_MODE only). Every other case sees no registry at all.
+        if any(case.get("registry_fixture", "").lower() == "true" for case in cases):
+            os.environ["MCA_DB_PATH"] = str(_synthetic_registry_db())
+        else:
+            os.environ["MCA_DB_PATH"] = str(ROOT / "eval" / "no-registry.sqlite3")
         sys.path.insert(0, str(ROOT))
         predict = local_band
 

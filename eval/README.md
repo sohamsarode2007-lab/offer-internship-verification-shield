@@ -57,6 +57,17 @@ or updates expected bands from predictions.
 | EC17 | PDF attachment exposes a payment demand; +65 hard floor | high risk |
 | EC18 | Three matching indicators contribute +25; matching reported template +25; community cap gives +40. Missing registration +20 and passing demo domain -10 give 50 | insufficient evidence, verify manually |
 | EC19 | Payment demand +65; missing registration +20; passing domain -10; correlated community evidence +40; subtotal 115 capped at 100 | high risk |
+| EC20 | Synthetic registry: active, name-matched CIN gives a registry pass; 0 points; the -10 offsets have nothing to offset; the registry match satisfies the low-risk guard | likely legitimate |
+| EC21 | Synthetic registry: CIN belongs to a Struck Off company, registration fail +25; passing demo domain -10; subtotal 15; guard raises to 31 because the registration failed | insufficient evidence, verify manually |
+| EC22 | Synthetic registry: CIN is registered to a different company (Ashcombe Data Labs), registration fail +25; passing demo domain -10; subtotal 15; guard raises to 31 | insufficient evidence, verify manually |
+
+EC20–EC22 (`registry_fixture=true`, `input_type=text_file`) read the demo offers in
+`fixtures/demo/` and run with the synthetic company master
+(`fixtures/demo/synthetic_mca_master.csv`, fictional companies only) loaded into a
+temporary SQLite file in `DEMO_MODE`. All other cases run with no registry loaded.
+EC21 and EC22 are labelled `scam` but land in the manual-review band: a registry
+failure alone is worth +25, so without a payment demand they are abstentions, not
+high risk. That is the documented behaviour, not a miss.
 
 EC18 and EC19's `community_fixture=true` flag causes the local evaluator to seed three
 synthetic scam reports in an ephemeral SQLite database through the same
@@ -101,9 +112,9 @@ before running tests. Truth labels are unchanged.
 | Eval EC01, EC04, EC05, EC08 | likely legitimate | insufficient evidence, verify manually | They have a passing domain and structurally valid GSTIN but no registry match or authenticated sender; the low-risk guard raises subtotal 0 to 31. |
 | Regression tests using `GOOD` with only domain + valid GSTIN (negated fee, no fee, inbound stipend, recipient-email variant) | likely legitimate | insufficient evidence, verify manually | Structural evidence is insufficient without an external verification signal. |
 
-The Emberlake demo document stays `likely legitimate` only when its opt-in
-synthetic registry fixture is enabled; that result is explicitly labelled and is
-not a claim of live MCA verification.
+The Emberlake demo document stays `likely legitimate` only when the synthetic
+company master is loaded in `DEMO_MODE`; its companies are fictional and the
+result is not a claim of live MCA verification.
 
 ## Held-out rule
 
