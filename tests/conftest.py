@@ -20,7 +20,10 @@ import pytest  # noqa: E402
 from app.services import domain_verification as dv  # noqa: E402
 
 DEMO_DIR = Path(__file__).resolve().parent.parent / "fixtures" / "demo"
-DEMO_FIXTURE_DOMAINS = "emberlakeanalytics.example,brightpathedtech.example"
+DEMO_FIXTURE_DOMAINS = ("emberlakeanalytics.example,brightpathedtech.example,quillmeresoftware.example,"
+                        "tarnwicklogistics.example,halvornfintech.example")
+DEMO_LETTERS = ["legit_emberlake", "legit_brightpath_young_startup", "scam_fake_govt_scheme_fee",
+                "registry_name_match_quillmere", "registry_struck_off_tarnwick", "registry_cin_mismatch_halvorn"]
 
 
 @pytest.fixture(autouse=True)

@@ -6,7 +6,7 @@ DNS (the .example domains never resolve); all other DNS is mocked as NXDOMAIN.
 import pytest
 
 from app.services import domain_verification as dv
-from conftest import DEMO_DIR
+from conftest import DEMO_DIR, DEMO_LETTERS
 from pathlib import Path
 
 EML_DIR = Path(__file__).parent / "fixtures" / "eml"
@@ -37,6 +37,29 @@ def test_demo_document(demo_client, stem, expected_band, expected_score, path):
     assert body["risk_band"] == expected_band
     assert body["overall_risk_score"] == expected_score
     assert body["scoring_model"] == "rule_based_v2"
+
+
+@pytest.mark.parametrize("stem", DEMO_LETTERS)
+def test_every_demo_pdf_matches_its_text(demo_client, stem):
+    """Each offer-letter PDF has a real text layer and scores exactly like its .txt source."""
+    text_body = analyze(demo_client, stem, "text")
+    pdf_body = analyze(demo_client, stem, "pdf")
+    assert (pdf_body["risk_band"], pdf_body["overall_risk_score"]) == \
+        (text_body["risk_band"], text_body["overall_risk_score"])
+    assert [c["status"] for c in pdf_body["checks"]] == [c["status"] for c in text_body["checks"]]
+
+
+def test_demo_pdfs_have_text_layer_and_letter_layout():
+    import pdfplumber
+    for stem in DEMO_LETTERS:
+        with pdfplumber.open(DEMO_DIR / f"{stem}.pdf") as pdf:
+            page = pdf.pages[0]
+            text = page.extract_text() or ""
+            header_size = max(ch["size"] for ch in page.chars)
+        source_first_line = (DEMO_DIR / f"{stem}.txt").read_text(encoding="utf-8").splitlines()[0]
+        assert text.splitlines()[0] == source_first_line, stem      # company / sender header first
+        assert header_size > 14, stem                                 # header set larger than body text
+        assert len(text) > 400, stem                                  # real text layer, no OCR needed
 
 
 @pytest.mark.parametrize("path", ["text", "pdf"])
