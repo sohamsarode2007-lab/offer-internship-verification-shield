@@ -28,5 +28,9 @@ Notes:
   `[DEMO FIXTURE — not a live DNS result]`, so the output always says it is a fixture.
 - Without `DEMO_MODE`, the `.example` domains fail the MX check (NXDOMAIN), which is the correct
   live behaviour.
+- `scam_reports.csv` contains synthetic community-network examples with reserved `.example`
+  domains. With `DEMO_MODE=1` and an environment-provided `INDICATOR_PEPPER`, run
+  `python scripts/seed_demo_reports.py`. It uses the normal token/consent service path; rows are
+  marked demo and ignored outside demo mode.
 - The PDFs are generated from the `.txt` files by `scripts/make_demo_pdfs.py` (reportlab, A4,
   line breaks preserved) so the demo also exercises the PDF upload path.
