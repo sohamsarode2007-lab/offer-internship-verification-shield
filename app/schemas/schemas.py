@@ -47,3 +47,5 @@ class AnalyzeResponse(BaseModel):
     risk_band: Optional[str] = None
     risk_factors: List[str] = []
     scoring_model: Optional[str] = None
+    next_steps: List[str] = []
+    complaint_summary: str = ""

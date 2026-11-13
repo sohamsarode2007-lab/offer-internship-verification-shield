@@ -25,6 +25,18 @@ def test_rate_limit_environment_override(monkeypatch):
     assert configured_rate_limit() == "23/minute"
 
 
+def test_analyze_includes_next_steps_and_complaint_summary(api_client):
+    response = api_client.post("/analyze", data={
+        "text": "Selected for a job. Pay registration fee Rs 499 to receive your offer."
+    })
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["next_steps"]
+    assert all(isinstance(step, str) for step in payload["next_steps"])
+    assert "Automated review result" in payload["complaint_summary"]
+    assert "Do not send money" in payload["next_steps"][0]
+
+
 @pytest.mark.parametrize(("demo", "expected"), [(False, "10/minute"), (True, "100/minute")])
 def test_rate_limit_environment_defaults(monkeypatch, demo, expected):
     monkeypatch.delenv("RATE_LIMIT", raising=False)

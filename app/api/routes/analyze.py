@@ -21,6 +21,36 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="", tags=["analyze"])
 
+
+def build_user_guidance(risk_band: str, checks: list[dict], risk_factors: list[str]):
+    """Return actionable, non-legal advice without repeating submitted text."""
+    payment = next((c for c in checks if c.get("check_name") == "payment_detection"), {})
+    registry = next((c for c in checks if c.get("check_name") == "gstin_verification"), {})
+    if payment.get("status") == "fail":
+        next_steps = [
+            "Do not send money or share OTPs, passwords, or banking credentials.",
+            "Save the offer, messages, payment instructions, and transaction receipts.",
+            "If you already paid, contact your bank or UPI provider promptly and report the transaction to the official cybercrime channel.",
+        ]
+    elif risk_band == "likely legitimate":
+        next_steps = [
+            "Confirm the role and sender through contact details found independently from the offer.",
+            "Do not pay recruitment or training fees; legitimate employers should explain any terms in writing.",
+        ]
+    else:
+        next_steps = [
+            "Verify the company and registration directly through official sources before proceeding.",
+            "Contact the employer using independently located contact details, not links or numbers in the offer.",
+            "Do not pay fees or share sensitive identity or banking information while details remain unverified.",
+        ]
+    concerns = [factor.split(":", 1)[0].rstrip(".") for factor in risk_factors[:3]]
+    if registry.get("status") == "fail" and registry.get("details"):
+        concerns.insert(0, registry["details"].split(".", 1)[0])
+    summary = (f"Automated review result: {risk_band}. " +
+               ("Observed concerns: " + "; ".join(dict.fromkeys(concerns)) + "."
+                if concerns else "No rule-based warning was detected; independently verify the offer."))
+    return next_steps, summary
+
 MAX_TEXT_CHARS = 50_000
 MAX_FILE_BYTES = 10 * 1024 * 1024
 ALLOWED_EXTENSIONS = {"pdf", "png", "jpg", "jpeg", "bmp", "tiff", "txt"}
@@ -130,6 +160,9 @@ def analyze_offer(
         f"Analysis completed. Risk Score: {overall_risk_score}/100 ({risk_band.upper()}). "
         f"Completeness: {completeness_percentage}%."
     )
+    next_steps, complaint_summary = build_user_guidance(
+        risk_band, check_dicts, scoring_res["risk_factors"]
+    )
 
     return AnalyzeResponse(
         offer_id=offer_id,
@@ -140,4 +173,6 @@ def analyze_offer(
         risk_band=risk_band,
         risk_factors=scoring_res["risk_factors"],
         scoring_model=scoring_res["scoring_model"],
+        next_steps=next_steps,
+        complaint_summary=complaint_summary,
     )
