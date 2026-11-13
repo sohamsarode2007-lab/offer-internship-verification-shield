@@ -56,9 +56,10 @@ been verified in this workspace.
   that a real offer deadline is fraudulent.
 - The low-risk band requires a passing domain, a present non-failing identifier,
   and an externally verified signal. The available live external signal is an
-  active, name-matched CIN from the locally loaded MCA SQLite master data.
-  Sender authentication (DMARC pass plus aligned DKIM) is planned for future
-  `.eml` support and is not currently available. Structural domain/GSTIN checks
+  active, name-matched CIN from the locally loaded MCA SQLite master data, or a
+  sender authenticated from an original `.eml` by DMARC pass and aligned DKIM.
+  The latter verifies the sender as recorded by the recipient's mail provider;
+  it does not establish who authored the message. Structural domain/GSTIN checks
   alone are capped at manual review. The demo registry fixture is an explicit
   demo-only exception for illustrating that path; it is not external verification.
 - `scripts/load_mca_master.py` imports an official MCA company-master CSV into
@@ -66,6 +67,9 @@ been verified in this workspace.
   live lookup behavior is tested using temporary database rows.
 - `/analyze` returns `next_steps` and `complaint_summary` based on its rule
   results. These are automated guidance, not an official complaint filing.
+- Sender authentication is available only for `.eml` uploads. It reads the
+  topmost Authentication-Results header and does not store or log headers.
+  Pasted text, PDFs, and images still check only the domain claimed in the content.
 - The model is `rule_based_v2`; it is a fixed rule table, not a trained ML model.
   GSTIN checks are structural. CIN lookup uses a local MCA master SQLite copy;
   it does not contact a live service. An opted-in synthetic CIN fixture is

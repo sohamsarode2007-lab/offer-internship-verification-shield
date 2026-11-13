@@ -13,8 +13,8 @@ Copy-Item .env.example .env
 docker compose up --build
 ```
 
-The API accepts text or PDF/image uploads at `POST /analyze`. OCR uploads need
-Tesseract; scanned PDFs also need Poppler. The CI workflow installs both.
+The API accepts text or PDF/image/email (`.eml`) uploads at `POST /analyze`.
+OCR uploads need Tesseract; scanned PDFs also need Poppler. The CI workflow installs both.
 
 ## Rate limit
 
@@ -36,16 +36,21 @@ master data; it does not contact a remote registry. Obtain the source data from
 an official MCA/data.gov.in release, then load it with
 `python scripts/load_mca_master.py <source.csv> --db data/mca_master.sqlite3`.
 Set `MCA_DB_PATH` if the database is stored elsewhere. The matcher checks the
-registered name and active status. GSTIN/PAN consistency and recent
-incorporation can add risk points; GSTIN and CIN location codes are shown as
-informational context.
+registered name and active status. GSTIN/PAN consistency and a conflict between
+an offer's founding-year/age claim and MCA incorporation date can add risk points;
+recent incorporation without a contradictory claim is informational only.
+GSTIN and CIN location codes are shown as informational context.
 
-Sender authentication using DMARC and aligned DKIM is **planned**, not currently
-available. It is not a live verification signal today; the only live external
-verification signal is an active, name-matched CIN in the local MCA database.
+Sender authentication using DMARC and aligned DKIM is available only for
+original `.eml` uploads, not for pasted text or PDF/image uploads. It checks the
+topmost `Authentication-Results` supplied by the receiving mail provider and the
+actual From domain. For Gmail, open the message, select **⋮ → Download message**,
+then upload the downloaded `.eml`. Other inputs still verify only the domain
+claimed in the letter. The only available external verification signals are an
+active, name-matched CIN in the local MCA database or an aligned authenticated
+sender from an `.eml`.
 `/analyze` also returns `next_steps` and a concise `complaint_summary` based on
-the automated findings. These fields do not replace independent verification or
-an official complaint filing.
+the automated findings; these do not replace an official complaint.
 
 ## Tests and migrations
 
