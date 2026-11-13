@@ -48,17 +48,22 @@ been verified in this workspace.
 
 ## OCR and rate limiting
 
-- The OCR path has not yet been verified against degraded images in this workspace.
-  The image-quality matrix (clean, rotated 3°, blurred, JPEG quality 30) was
-  skipped because the Tesseract installer download did not complete; no band flips
-  or extracted-text results are available to claim. Poppler (`pdftoppm`) and the
-  Python `pdf2image` package are available.
+- **OCR was verified in CI** by successful run `43378004125` on 2026-11-13 UTC
+  (commit `ae741a05136f1c0496629df7840493fdb30ca9e7`). The log shows the OCR
+  binary-install step completed and the test suite finished `71 passed` with no
+  skipped tests. This includes the degraded-image robustness cases for the three
+  demo PDFs across clean, 3° rotation, blur, and JPEG quality 30 variants. No band
+  flips occurred. Passing cases do not print their extracted OCR text, so the logs
+  contain no extracted text to report; there is no flip-causing text. This verifies
+  the CI environment, not the previously blocked local Windows Tesseract install.
 - `RATE_LIMIT` controls requests per IP. The default is `10/minute`; with
   `DEMO_MODE=1` and `RATE_LIMIT` unset, the default is `100/minute`.
 
 ## Database and CI
 
-- CI is configured to use a `postgres:15` service, apply Alembic migrations, check
-  for model drift, and run the suite against Postgres.
-- Docker/Postgres has **not yet been verified** by a passing CI run. Local Docker
-  is unavailable in this workspace.
+- **Postgres was verified in CI** by successful run `43378004125` on 2026-11-13
+  UTC (commit `ae741a05136f1c0496629df7840493fdb30ca9e7`). The job initialized a
+  `postgres:15` service; Alembic logged `PostgresqlImpl`, applied revisions 001
+  and 002, and `alembic check` reported `No new upgrade operations detected.` The
+  test step used the configured PostgreSQL `DATABASE_URL` and completed with
+  `71 passed, 3 warnings`.
