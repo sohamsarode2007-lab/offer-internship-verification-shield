@@ -55,6 +55,13 @@ or updates expected bands from predictions.
 | EC15 | Topmost DMARC fail +30; forged lower pass ignored; guard raises 30 to 31 | insufficient evidence, verify manually |
 | EC16 | No Authentication-Results gives no points; no external signal raises 0 to 31 | insufficient evidence, verify manually |
 | EC17 | PDF attachment exposes a payment demand; +65 hard floor | high risk |
+| EC18 | Three seeded reports each match the contact domain, sender email, and HR phone: +75; missing registration +20, passing demo domain -10; total 85 | high risk |
+
+EC18's `community_fixture=true` flag causes the local evaluator to seed three
+synthetic scam reports in an ephemeral SQLite database through the same
+single-use token and consent service flow. Its expected band was calculated
+from the documented scoring weights before evaluation. Existing cases were
+not changed.
 
 Step 0 hand re-derivation: the PAN-initial rule now runs only after checksum
 success. EC06 remains high risk because its checksum passes (weighted sum 181,

@@ -40,7 +40,10 @@ def local_band(case):
     from app.services import domain_verification, fact_extraction, gstin_verification
     from app.services import payment_detection, risk_scoring
 
-    from app.services import email_auth, ingestion
+    from app.services import email_auth, ingestion, community_reports
+    if case.get("community_fixture"):
+        os.environ.setdefault("INDICATOR_PEPPER", "eval-only-pepper")
+        os.environ.setdefault("INDICATOR_KEY_VERSION", "1")
     if case.get("input_type", "text") == "eml":
         parsed = email_auth.parse_eml((ROOT / case["text"]).read_bytes())
         body, _ = ingestion.ingest_offer(text=parsed["body_text"])
@@ -58,14 +61,54 @@ def local_band(case):
         if body_domain:
             domain_check["details"] += f" Body-claimed domain: '{body_domain}'."
         auth_check = email_auth.verify_sender_authentication(parsed, facts)
+        payment_check = payment_detection.detect_payment_demand(facts)
+        indicators = community_reports.extract_indicators(text, parsed, payment_check)
     else:
         text = case["text"]
         facts = fact_extraction.extract_facts(text)
         domain_check = domain_verification.verify_domain(facts)
         auth_check = email_auth.not_applicable()
-    checks = [domain_check, gstin_verification.verify_gstin(facts),
-              payment_detection.detect_payment_demand(facts), auth_check]
+        payment_check = payment_detection.detect_payment_demand(facts)
+        indicators = community_reports.extract_indicators(text, None, payment_check)
+    signature = community_reports.minhash_signature(text) if os.getenv("INDICATOR_PEPPER") else []
+    community_check = community_reports.lookup_community(
+        _seed_eval_community(case, community_reports) if case.get("community_fixture") else _empty_eval_db(),
+        indicators, signature)
+    checks = [domain_check, gstin_verification.verify_gstin(facts), payment_check, auth_check, community_check]
     return risk_scoring.calculate_risk_score(checks, facts=facts)["risk_band"]
+
+
+_EVAL_DB = None
+
+
+def _empty_eval_db():
+    global _EVAL_DB
+    if _EVAL_DB is None:
+        from sqlalchemy import create_engine
+        from sqlalchemy.orm import sessionmaker
+        from sqlalchemy.pool import StaticPool
+        from app.db.database import Base
+        engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+        Base.metadata.create_all(engine)
+        _EVAL_DB = sessionmaker(bind=engine)()
+    return _EVAL_DB
+
+
+def _seed_eval_community(case, community_reports):
+    from app.services.fact_extraction import extract_facts
+    from app.services.payment_detection import detect_payment_demand
+    db = _empty_eval_db()
+    if not db.query(community_reports.CommunityReport).count():
+        fixture = ("Contact HR at hr@fraud.example or WhatsApp +91 9123456001. "
+                   "Pay processing fee Rs 500 to rky.verma@ybl.")
+        for _ in range(3):
+            facts = extract_facts(fixture)
+            indicators = community_reports.extract_indicators(fixture, None, detect_payment_demand(facts))
+            signature = community_reports.minhash_signature(fixture)
+            token, _ = community_reports.issue_report_token(db, indicators, signature)
+            selected = [x["indicator_type"] + ":" + x["digest"] for x in indicators]
+            community_reports.accept_report(db, token, selected, True, 2)
+    return db
 
 
 def live_band(case, base_url):
