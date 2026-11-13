@@ -80,8 +80,14 @@ store only a verifier, not the plaintext code.
   analysis tokens make simple replay harder but cannot stop coordinated or
   distributed poisoning.
 - Indicator counts affect scoring only at 3 reports (3–9: +25) and 10 reports
-  (+40). Template similarity >= 0.8 to a reported scam adds +25. These signals
-  never satisfy the external-verification low-risk guard.
+  (+40). Template similarity >= 0.8 to a reported scam adds +25. Because these
+  signals are correlated, the community contribution is the highest indicator
+  bucket plus any template match, capped at +40 total; matching more identifiers
+  never stacks. Community evidence alone cannot produce high risk: if community
+  evidence alone crosses 60, cap the result at manual review with the factor
+  “Reported by other students; not enough independent evidence to call this high
+  risk.” Neither community signal satisfies the external-verification low-risk
+  guard. These limits address the [poisoning threat in the threat model](#threat-model).
 - Details use buckets only: “reported by 3+ students” or “reported by 10+
   students”; never disclose exact counts or other reports' contents. `/indicators/stats`
   is aggregate-only and suppresses cells below 5.

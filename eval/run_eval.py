@@ -99,8 +99,11 @@ def _seed_eval_community(case, community_reports):
     from app.services.payment_detection import detect_payment_demand
     db = _empty_eval_db()
     if not db.query(community_reports.CommunityReport).count():
-        fixture = ("Contact HR at hr@fraud.example or WhatsApp +91 9123456001. "
-                   "Pay processing fee Rs 500 to rky.verma@ybl.")
+        fixture = ("No registration number is shown. Contact HR at hr@fraud.example or WhatsApp +91 9123456001. "
+                   "This remote role requires a processing fee of Rs 500 to rky.verma@ybl. "
+                   "We are pleased to offer the analyst internship. Please confirm your joining date and reply "
+                   "to the recruitment team. The role includes training, weekly meetings, and project work with "
+                   "our engineering group.")
         for _ in range(3):
             facts = extract_facts(fixture)
             indicators = community_reports.extract_indicators(fixture, None, detect_payment_demand(facts))

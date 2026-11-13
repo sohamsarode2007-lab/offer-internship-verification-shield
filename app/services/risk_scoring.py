@@ -18,6 +18,8 @@ Risk points (added):
   +15  Body-claimed domain differs from the .eml From domain
   +25  Community indicator reported by 3-9 reports; +40 at 10+ reports
   +25  Community template MinHash similarity >= 0.8
+  Community evidence is correlated: highest indicator bucket + template points,
+  capped at +40 total (multiple matching identifiers never stack).
   +20  No registration number (GSTIN/CIN/LLPIN) in the text
   +20  No usable domain AND no registration number
 
@@ -28,6 +30,10 @@ Offsets (subtracted, only from NON-payment points; never below the payment point
 
 Community indicators are risk evidence only; they never satisfy the external
 verification guard. Details use threshold buckets and never expose exact counts.
+Community evidence alone cannot produce a high-risk result: if it is the only
+factor pushing a score above 60 (no payment demand or failed domain, registration,
+or sender check), cap at 60 and add: "Reported by other students; not enough
+independent evidence to call this high risk."
 
 Low-risk guard: "likely legitimate" requires ALL of:
   - contact domain check passed;
@@ -155,7 +161,7 @@ def calculate_risk_score(
         other_points += auth_points
         factors.append(f"Sender authentication risk (+{auth_points:g}): {auth.get('details', '')}")
     community = by_name.get("community_reports", {})
-    community_points = float(community.get("risk_points", community.get("score", 0)) or 0)
+    community_points = min(40.0, max(0.0, float(community.get("risk_points", community.get("score", 0)) or 0)))
     if community_points:
         other_points += community_points
         factors.append(f"Community report signals (+{community_points:g}): {community.get('details', '')}")
@@ -185,11 +191,25 @@ def calculate_risk_score(
         applied = f"applied {_fmt(-reduction)}" if reduction < 10.0 else _fmt(-reduction)
         factors.append(f"DMARC pass with aligned DKIM ({_fmt(-10.0)} signal; {applied}, non-payment only)")
 
-    score = payment_points + other_points
+    unbounded_score = payment_points + other_points
+    score = unbounded_score
     if has_payment and score < PAYMENT_FLOOR:
         score = PAYMENT_FLOOR
         factors.append(f"Payment demand override: score raised to {PAYMENT_FLOOR:g} (high risk)")
     score = max(0.0, min(100.0, score))
+
+    community_alone_crossed_high = (
+        not has_payment
+        and community_points > 0
+        and unbounded_score > 60
+        and unbounded_score - community_points <= 60
+        and domain_status != "fail"
+        and reg_status != "fail"
+        and auth.get("status") != "fail"
+    )
+    if community_alone_crossed_high:
+        score = min(score, 60.0)
+        factors.append("Reported by other students; not enough independent evidence to call this high risk.")
 
     # Guard: no structural-only or demo-less checks can establish legitimacy.
     if score <= 30:

@@ -55,13 +55,18 @@ or updates expected bands from predictions.
 | EC15 | Topmost DMARC fail +30; forged lower pass ignored; guard raises 30 to 31 | insufficient evidence, verify manually |
 | EC16 | No Authentication-Results gives no points; no external signal raises 0 to 31 | insufficient evidence, verify manually |
 | EC17 | PDF attachment exposes a payment demand; +65 hard floor | high risk |
-| EC18 | Three seeded reports each match the contact domain, sender email, and HR phone: +75; missing registration +20, passing demo domain -10; total 85 | high risk |
+| EC18 | Three matching indicators contribute +25; matching reported template +25; community cap gives +40. Missing registration +20 and passing demo domain -10 give 50 | insufficient evidence, verify manually |
+| EC19 | Payment demand +65; missing registration +20; passing domain -10; correlated community evidence +40; subtotal 115 capped at 100 | high risk |
 
-EC18's `community_fixture=true` flag causes the local evaluator to seed three
+EC18 and EC19's `community_fixture=true` flag causes the local evaluator to seed three
 synthetic scam reports in an ephemeral SQLite database through the same
 single-use token and consent service flow. Its expected band was calculated
-from the documented scoring weights before evaluation. Existing cases were
-not changed.
+from the documented scoring weights before evaluation. EC18 is the sole existing
+expectation that changed: `high risk` to `insufficient evidence, verify manually`
+because correlated indicators and a template match now contribute only +40 total
+(20 - 10 + 40 = 50). EC19 is a new payment-demand case; its payment signal still
+forces high risk even with community evidence present. No other expected bands
+changed.
 
 Step 0 hand re-derivation: the PAN-initial rule now runs only after checksum
 success. EC06 remains high risk because its checksum passes (weighted sum 181,

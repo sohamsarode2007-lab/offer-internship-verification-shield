@@ -75,8 +75,12 @@ been verified in this workspace.
   Reports require version-2 consent; identifiers are stored as peppered,
   key-versioned HMAC digests and template signatures are computed after
   redacting names, identifiers, amounts and dates. Indicator thresholds are 3+
-  (+25) and 10+ (+40); template similarity >=0.8 adds +25. Details disclose
-  buckets only. Withdrawals delete a report's contributions. Reports are not
+  (+25) and 10+ (+40); template similarity >=0.8 adds +25. Correlated evidence
+  is the highest indicator bucket plus template evidence, capped at +40 total;
+  several identifiers do not stack. Community evidence alone cannot produce
+  high risk: if it alone crosses 60, the score is capped at manual review with
+  an explicit factor. Details disclose buckets only. Withdrawals delete a
+  report's contributions. Reports are not
   independently verified and do not count as external verification. Disputed
   indicators keep scoring during review; only a same-domain email-verified
   domain dispute is temporarily suppressed. Inactive indicators expire after

@@ -123,6 +123,45 @@ def test_indicator_thresholds_are_three_then_ten_reports(db):
     assert "reported by 10+ students" in match["details"] and "10 reports" not in match["details"]
 
 
+def test_correlated_indicator_and_template_evidence_caps_at_forty(db):
+    items = [candidate(), candidate("email", "hr@fraud.example"), candidate("domain", "fraud.example")]
+    text = "A reported synthetic recruitment letter with a fee request and contact instructions."
+    signature = cr.minhash_signature(text)
+    for _ in range(3):
+        token, _ = cr.issue_report_token(db, items, signature)
+        selected = [x["indicator_type"] + ":" + x["digest"] for x in items]
+        cr.accept_report(db, token, selected, True, 2)
+    incoming = [dict(x) for x in items]
+    match = cr.lookup_community(db, incoming, signature)
+    assert match["risk_points"] == 40
+
+
+def test_community_only_high_score_is_capped_to_manual_review():
+    from app.services.risk_scoring import calculate_risk_score
+    result = calculate_risk_score([
+        {"check_name": "domain_verification", "status": "insufficient_information"},
+        {"check_name": "gstin_verification", "status": "insufficient_information", "identifier_present": False},
+        {"check_name": "payment_detection", "status": "pass"},
+        {"check_name": "sender_authentication", "status": "not_applicable"},
+        {"check_name": "community_reports", "status": "fail", "risk_points": 100},
+    ])
+    assert result["overall_risk_score"] == 60
+    assert result["risk_band"] == "insufficient evidence, verify manually"
+    assert "Reported by other students; not enough independent evidence to call this high risk." in result["risk_factors"]
+
+
+def test_payment_demand_still_allows_high_risk_with_community_evidence():
+    from app.services.risk_scoring import calculate_risk_score
+    result = calculate_risk_score([
+        {"check_name": "domain_verification", "status": "pass"},
+        {"check_name": "gstin_verification", "status": "pass", "identifier_present": True},
+        {"check_name": "payment_detection", "status": "fail", "demands": ["processing fee"]},
+        {"check_name": "community_reports", "status": "fail", "risk_points": 40},
+    ])
+    assert result["risk_band"] == "high risk"
+    assert not any("not enough independent evidence to call this high risk" in x for x in result["risk_factors"])
+
+
 def test_community_match_does_not_satisfy_external_verification_guard():
     from app.services.risk_scoring import calculate_risk_score
     result = calculate_risk_score([

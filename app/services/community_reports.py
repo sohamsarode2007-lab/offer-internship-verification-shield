@@ -277,7 +277,8 @@ def lookup_community(db: Session, indicators: list[dict], signature: list[int]):
         return {"check_name": "community_reports", "status": "not_applicable", "score": 0,
                 "details": "Community report matching is unavailable until INDICATOR_PEPPER is configured."}
     peppers = {current[0]: current[1], **previous}
-    total_points = 0
+    indicator_bucket_points = 0
+    template_points = 0
     notes = []
     now = _utcnow()
     demo_only = os.getenv("DEMO_MODE") == "1"
@@ -302,10 +303,10 @@ def lookup_community(db: Session, indicators: list[dict], signature: list[int]):
             continue
         count = len(reports)
         if count >= 10:
-            total_points += 40
+            indicator_bucket_points = max(indicator_bucket_points, 40)
             notes.append(f"This {item['indicator_type']} was reported by 10+ students.")
         elif count >= 3:
-            total_points += 25
+            indicator_bucket_points = max(indicator_bucket_points, 25)
             notes.append(f"This {item['indicator_type']} was reported by 3+ students.")
         for report_id in reports:
             db.query(CommunityReport).filter_by(id=report_id).update({"last_seen_at": now})
@@ -319,11 +320,12 @@ def lookup_community(db: Session, indicators: list[dict], signature: list[int]):
         old_signature = json.loads(report.signature)
         score = similarity(signature, old_signature)
         if score >= 0.8:
-            total_points += 25
+            template_points = 25
             notes.append("This letter wording is similar to a reported scam template.")
             report.last_seen_at = now
             break
     db.commit()
+    total_points = min(40, indicator_bucket_points + template_points)
     return {"check_name": "community_reports", "status": "fail" if total_points else "pass",
             "score": total_points, "risk_points": total_points,
             "details": " ".join(dict.fromkeys(notes)) if notes else "No matching community scam reports were found."}
