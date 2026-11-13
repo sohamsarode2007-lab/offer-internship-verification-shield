@@ -101,3 +101,22 @@ class CommunityDispute(Base):
     verification_expires_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), default=utc_now, nullable=False)
     resolved_at = Column(DateTime(timezone=True), nullable=True)
+
+
+class Institution(Base):
+    __tablename__ = "institutions"
+    id = Column(Integer, primary_key=True)
+    name = Column(String(200), nullable=False)
+    code = Column(String(40), nullable=False, unique=True, index=True)
+    api_key_hash = Column(String(64), nullable=False, unique=True, index=True)
+    observations = relationship("InstitutionObservation", back_populates="institution", cascade="all, delete-orphan")
+
+
+class InstitutionObservation(Base):
+    __tablename__ = "institution_observations"
+    id = Column(Integer, primary_key=True)
+    institution_id = Column(Integer, ForeignKey("institutions.id", ondelete="CASCADE"), nullable=False, index=True)
+    iso_week = Column(String(8), nullable=False, index=True)
+    band = Column(String(50), nullable=False, index=True)
+    scam_category = Column(String(50), nullable=False, index=True)
+    institution = relationship("Institution", back_populates="observations")
