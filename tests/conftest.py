@@ -73,10 +73,19 @@ def api_client(monkeypatch):
         engine.dispose()
 
 
+@pytest.fixture(scope="session")
+def synthetic_registry_db(tmp_path_factory):
+    """The synthetic company master loaded once per session (fictional companies only)."""
+    from scripts.load_mca_master import load_csv
+    db = tmp_path_factory.mktemp("registry") / "synthetic.sqlite3"
+    load_csv(DEMO_DIR / "synthetic_mca_master.csv", db, synthetic=True)
+    return db
+
+
 @pytest.fixture
-def demo_client(api_client, monkeypatch):
-    """api_client with DEMO_MODE fixtures for the two synthetic company domains."""
+def demo_client(api_client, synthetic_registry_db, monkeypatch):
+    """api_client in DEMO_MODE: fixture domains for the demo companies plus the synthetic registry."""
     monkeypatch.setenv("DEMO_MODE", "1")
     monkeypatch.setenv("DEMO_FIXTURE_DOMAINS", DEMO_FIXTURE_DOMAINS)
-    monkeypatch.setenv("DEMO_REGISTRY_FIXTURES", "U74999DL2016PTC298345")
+    monkeypatch.setenv("MCA_DB_PATH", str(synthetic_registry_db))
     return api_client

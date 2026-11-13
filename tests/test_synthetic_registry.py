@@ -31,7 +31,6 @@ def synthetic_db(tmp_path, monkeypatch):
     db = tmp_path / "synthetic.sqlite3"
     assert load_csv(SYNTHETIC_CSV, db, synthetic=True) == 13
     monkeypatch.setenv("MCA_DB_PATH", str(db))
-    monkeypatch.delenv("DEMO_REGISTRY_FIXTURES", raising=False)
     return db
 
 

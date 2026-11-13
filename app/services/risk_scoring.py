@@ -43,9 +43,7 @@ Low-risk guard: "likely legitimate" requires ALL of:
     pass and aligned DKIM.
 Structural checks alone (including a passing domain and checksum-valid GSTIN)
 do not meet this guard. A score <= 30 without an external signal is raised to 31
-with an explanatory factor. In DEMO_MODE only, an explicitly configured and
-labelled synthetic registry fixture may exercise the positive demo path; it is
-not an external verification.
+with an explanatory factor.
 
 Synthetic company-master snapshot (DEMO_MODE only): a snapshot loaded with
 `load_mca_master.py --synthetic` is consulted only when DEMO_MODE=1. Its results
@@ -116,11 +114,6 @@ def calculate_risk_score(
         and auth.get("dmarc_status") == "pass"
         and auth.get("dkim_aligned") is True
     )
-    demo_registry_fixture = (
-        os.getenv("DEMO_MODE") == "1"
-        and reg_status == "pass"
-        and reg.get("demo_registry_fixture") is True
-    )
     # A synthetic snapshot is only ever consulted in DEMO_MODE (see gstin_verification);
     # there it exercises the same registry-match path as a loaded company master.
     synthetic_registry = (
@@ -130,7 +123,7 @@ def calculate_risk_score(
         and reg.get("registry_source") == "synthetic"
         and reg.get("verified_identifier_type") == "CIN"
     )
-    has_external_signal = registry_verified or sender_authenticated or demo_registry_fixture or synthetic_registry
+    has_external_signal = registry_verified or sender_authenticated or synthetic_registry
 
     factors: List[str] = []
     payment_points = 0.0
@@ -197,7 +190,7 @@ def calculate_risk_score(
         if reduction > 0:
             other_points -= reduction
             factors.append(f"Contact domain passed DNS checks ({_fmt(-reduction)}, offsets non-payment points only)")
-    if reg_status == "pass" and not demo_registry_fixture:
+    if reg_status == "pass":
         label = "Company registry match" if synthetic_registry else "MCA registry pass"
         reduction = min(G_REGISTRY_PASS, other_points)
         if reduction > 0:
@@ -248,10 +241,6 @@ def calculate_risk_score(
             factors.append(
                 f"Raised to {GUARD_SCORE:g}: 'likely legitimate' requires a passing domain, a valid "
                 f"registration number, and an externally verified signal, but {' and '.join(missing)}"
-            )
-        elif demo_registry_fixture:
-            factors.append(
-                "Low-risk demo fixture applied: the configured synthetic registry fixture is not a live verification."
             )
 
     risk_band = band_for(score)

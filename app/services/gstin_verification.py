@@ -12,11 +12,8 @@ What this module DOES (no network access):
 What this module does NOT do:
   - It does NOT query the GST portal or the MCA registry. There is no live registry
     integration. A structurally valid number may still be fake, belong to another
-    company, or be cancelled. Outside an explicitly configured demo fixture, a
-    valid structure is reported as "insufficient_information", never "pass".
-
-Demo mode: DEMO_REGISTRY_FIXTURES may opt specific CINs into the synthetic fixture file.
-A fixture pass is labelled and is never represented as live MCA verification.
+    company, or be cancelled. Without a registry record, a valid structure is
+    reported as "insufficient_information", never "pass".
 
 Synthetic company-master snapshot (scripts/load_mca_master.py --synthetic): consulted only
 when DEMO_MODE=1. Results read "Company registry match: <name>; status <status>;
@@ -28,9 +25,9 @@ Status contract:
   - no identifier found            -> insufficient_information, identifier_present=False
   - any structural/consistency problem -> fail, identifier_present=True
   - structurally valid             -> insufficient_information, identifier_present=True
-  - pass                           -> real registry match or explicitly labelled demo fixture
+  - pass                           -> active, name-matched record in a loaded company master
+                                      (a SYNTHETIC snapshot only in DEMO_MODE)
 """
-import csv
 import os
 import re
 from datetime import date, datetime
@@ -72,10 +69,6 @@ _COMPANY_NAME_HINT = re.compile(r"\b(?:pvt|private|ltd|limited)\b", re.IGNORECAS
 _PRIVATE_NAME_HINT = re.compile(r"\b(?:pvt|private)\b", re.IGNORECASE)
 
 REGISTRY_NOTE = "NOT checked against the GST/MCA registry; confirms structure only"
-DEMO_REGISTRY_PREFIX = "[DEMO FIXTURE — not a live registry result]"
-DEMO_REGISTRY_FIXTURE_PATH = (
-    Path(__file__).resolve().parents[2] / "fixtures" / "demo" / "registry_fixtures.csv"
-)
 
 
 def gstin_check_char(g14: str) -> str:
@@ -251,34 +244,6 @@ def _gstin_cin_state_note(gstin: Optional[str], cin: Optional[str]) -> Optional[
             f"({cin[6:8]}): these locations {relation}; informational only, not a verification failure.")
 
 
-def lookup_demo_registry_fixture(cin: str, claimed_company: Optional[str]) -> Optional[Dict[str, str]]:
-    """Return an explicitly opted-in synthetic CIN record in demo mode only."""
-    if os.getenv("DEMO_MODE") != "1":
-        return None
-    configured_cins = {
-        value.strip().upper()
-        for value in os.getenv("DEMO_REGISTRY_FIXTURES", "").split(",")
-        if value.strip()
-    }
-    cin = cin.upper()
-    if cin not in configured_cins:
-        return None
-    try:
-        with DEMO_REGISTRY_FIXTURE_PATH.open(encoding="utf-8", newline="") as source:
-            for row in csv.DictReader(source):
-                if row.get("cin", "").strip().upper() != cin:
-                    continue
-                if row.get("synthetic", "").strip().lower() != "true":
-                    continue
-                fixture_name = row.get("company_name", "").strip()
-                if _normalized_company_name(fixture_name) != _normalized_company_name(claimed_company):
-                    return None
-                return {"cin": cin, "company_name": fixture_name}
-    except OSError:
-        return None
-    return None
-
-
 INACTIVE_STATUSES = {"struck off", "dissolved", "under liquidation"}
 
 
@@ -379,20 +344,6 @@ def verify_gstin(facts: Dict[str, Any]) -> Dict[str, Any]:
     if problems:
         return _result("fail", True, "; ".join(problems + consistency_notes) + ".", identifiers, 0.0,
                        consistency_risk_points=consistency_points)
-
-    # Explicit demo fixtures are opt-in and visibly distinguished from live MCA data.
-    if cin:
-        fixture = lookup_demo_registry_fixture(cin, claimed_company)
-        if fixture:
-            return _result(
-                "pass", True,
-                f"{DEMO_REGISTRY_PREFIX} CIN '{cin}' matched synthetic company "
-                f"'{fixture['company_name']}' in the configured demo registry fixture.",
-                identifiers, 95.0,
-                registry_checked=False,
-                verification_source="demo_fixture",
-                demo_registry_fixture=True,
-            )
 
     # A CIN is verified only against the loaded local company-master data.
     if cin:

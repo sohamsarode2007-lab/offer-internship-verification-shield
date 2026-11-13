@@ -7,8 +7,9 @@ const baseEnv = {
   ...process.env,
   DATABASE_URL: db,
   DEMO_MODE: '1',
-  DEMO_FIXTURE_DOMAINS: 'emberlakeanalytics.example,brightpathedtech.example',
-  DEMO_REGISTRY_FIXTURES: 'U74999DL2016PTC298345',
+  DEMO_FIXTURE_DOMAINS: 'emberlakeanalytics.example,brightpathedtech.example,quillmeresoftware.example,tarnwicklogistics.example,halvornfintech.example',
+  // Synthetic company master built by playwright/run-e2e.mjs (fictional companies; DEMO_MODE only).
+  MCA_DB_PATH: process.env.E2E_REGISTRY_DB ?? 'frontend/e2e-registry.sqlite3',
   INDICATOR_PEPPER: pepper,
   INDICATOR_KEY_VERSION: '1',
   RATE_LIMIT: '100/minute',

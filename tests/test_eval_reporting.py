@@ -10,7 +10,6 @@ SPEC.loader.exec_module(runner)
 
 def test_report_shows_ec08_label_and_expected_band_separately(capsys, monkeypatch):
     monkeypatch.setenv("DEMO_MODE", "0")
-    monkeypatch.setenv("DEMO_REGISTRY_FIXTURES", "")
     results = runner.evaluate(runner.load_cases())
     runner.report(results)
     output = capsys.readouterr().out

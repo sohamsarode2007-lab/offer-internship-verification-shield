@@ -102,15 +102,15 @@ def test_aligned_authenticated_sender_satisfies_low_risk_verification_gate():
     assert result["risk_band"] == "likely legitimate"
 
 
-def test_demo_registry_fixture_requires_demo_mode(monkeypatch):
+def test_synthetic_registry_requires_demo_mode(synthetic_registry_db, monkeypatch):
     text = ("Emberlake Analytics Pvt. Ltd.\nCIN: U74999DL2016PTC298345\n"
             "GSTIN: 07AAFCE4321L1ZO\nhr@emberlakeanalytics.example")
     facts = fe.extract_facts(text)
-    monkeypatch.setenv("DEMO_REGISTRY_FIXTURES", "U74999DL2016PTC298345")
+    monkeypatch.setenv("MCA_DB_PATH", str(synthetic_registry_db))
     monkeypatch.delenv("DEMO_MODE", raising=False)
     result = gv.verify_gstin(facts)
     assert result["status"] == "insufficient_information"
-    assert result.get("demo_registry_fixture") is not True
+    assert "registry_source" not in result
 
 
 def test_reference_code_is_not_llpin():

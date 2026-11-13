@@ -9,16 +9,20 @@ const root = path.resolve(frontend, '..')
 const dbPath = path.join(frontend, 'e2e-test.db')
 if (!dbPath.startsWith(frontend + path.sep)) throw new Error('E2E database path escaped frontend directory')
 for (const suffix of ['', '-wal', '-shm']) if (existsSync(dbPath + suffix)) rmSync(dbPath + suffix)
+// Synthetic company master (fictional companies only), used by the backend only in DEMO_MODE.
+const registryPath = path.join(frontend, 'e2e-registry.sqlite3')
+if (existsSync(registryPath)) rmSync(registryPath)
 
 const python = process.env.PYTHON ?? (process.platform === 'win32'
   ? path.join(root, '.venv', 'Scripts', 'python.exe')
   : 'python')
+execFileSync(python, ['scripts/load_mca_master.py', 'fixtures/demo/synthetic_mca_master.csv', '--synthetic', '--db', registryPath], { cwd: root, stdio: 'inherit' })
 const demoEnv = {
   ...process.env,
   DATABASE_URL: 'sqlite:///./frontend/e2e-test.db',
   DEMO_MODE: '1',
-  DEMO_FIXTURE_DOMAINS: 'emberlakeanalytics.example,brightpathedtech.example',
-  DEMO_REGISTRY_FIXTURES: 'U74999DL2016PTC298345',
+  DEMO_FIXTURE_DOMAINS: 'emberlakeanalytics.example,brightpathedtech.example,quillmeresoftware.example,tarnwicklogistics.example,halvornfintech.example',
+  MCA_DB_PATH: registryPath,
   INDICATOR_PEPPER: randomBytes(32).toString('hex'),
   INDICATOR_KEY_VERSION: '1',
   RATE_LIMIT: '100/minute',
@@ -30,6 +34,7 @@ if (!apiKey || apiKey.startsWith('Institution')) throw new Error('Institution CL
 process.env.E2E_INSTITUTION_KEY = apiKey
 process.env.E2E_DATABASE_URL = demoEnv.DATABASE_URL
 process.env.E2E_DEMO_PEPPER = demoEnv.INDICATOR_PEPPER
+process.env.E2E_REGISTRY_DB = registryPath
 execFileSync(python, ['scripts/seed_demo_reports.py'], { cwd: root, env: demoEnv, stdio: 'inherit' })
 
 const playwrightCli = path.join(frontend, 'node_modules', 'playwright', 'cli.js')

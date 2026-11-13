@@ -30,11 +30,6 @@ been verified in this workspace.
   `emberlakeanalytics.example` and `brightpathedtech.example`. Fixture results are
   labelled in the output as `[DEMO FIXTURE — not a live DNS result]`; they are not
   live DNS or company registry results.
-- `DEMO_REGISTRY_FIXTURES` optionally selects CINs from
-  `fixtures/demo/registry_fixtures.csv`. Emberlake's opted-in CIN fixture returns
-  `[DEMO FIXTURE — not a live registry result]` with its fictional company name.
-  It lets Emberlake demonstrate the low-risk band only in demo mode; this synthetic
-  fixture is not an externally verified MCA match.
 - The government-scheme document is also fictional and is labelled as a sample
   scam pattern in its source text.
 - **The demo company registry is synthetic.** `fixtures/demo/synthetic_mca_master.csv`

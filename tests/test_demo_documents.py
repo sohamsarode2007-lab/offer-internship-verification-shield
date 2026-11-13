@@ -67,14 +67,15 @@ def test_demo_fixture_is_labelled(demo_client, path):
 
 
 @pytest.mark.parametrize("path", ["text", "pdf"])
-def test_emberlake_registry_fixture_is_labelled(demo_client, path):
+def test_emberlake_matches_synthetic_registry(demo_client, path):
     body = analyze(demo_client, "legit_emberlake", path)
     registry = next(c for c in body["checks"] if c["check_name"] == "gstin_verification")
     assert registry["status"] == "pass"
-    assert registry["details"].startswith("[DEMO FIXTURE — not a live registry result]")
+    assert registry["details"].startswith("Company registry match: Emberlake Analytics Pvt. Ltd.;")
+    assert body["registry_source"] == "synthetic"
 
 
-def test_demo_registry_fixture_does_not_match_unrelated_company(demo_client):
+def test_synthetic_registry_does_not_match_unrelated_company(demo_client):
     from app.services.fact_extraction import extract_facts
     from app.services.gstin_verification import verify_gstin
 
@@ -83,8 +84,8 @@ def test_demo_registry_fixture_does_not_match_unrelated_company(demo_client):
         "GSTIN: 07AAFCE4321L1ZO; contact: hr@emberlakeanalytics.example"
     )
     result = verify_gstin(facts)
-    assert result["status"] == "insufficient_information"
-    assert result.get("demo_registry_fixture") is not True
+    assert result["status"] == "fail"
+    assert result["details"].startswith("CIN belongs to a different company")
 
 
 def _upload_eml(client, name):

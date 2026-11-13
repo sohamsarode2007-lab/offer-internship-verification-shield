@@ -24,7 +24,6 @@ def mca_db(tmp_path, monkeypatch):
     assert load_csv(source, target) == 1
     monkeypatch.setenv("MCA_DB_PATH", str(target))
     monkeypatch.setenv("DEMO_MODE", "0")
-    monkeypatch.delenv("DEMO_REGISTRY_FIXTURES", raising=False)
     return source, target
 
 
