@@ -1,120 +1,133 @@
 # Privacy design: scam indicator network and template matching
 
-**Status: proposal for approval.** This document describes the intended design
-for Prompt 5. No indicator-network implementation is included in this change.
+**Status: implementation specification.** The service warns students using only
+scammer-role indicators selected by the reporting student and a redacted
+template signature. This is not proof that a person or company is fraudulent.
 
-## Data stored
+## What is stored
 
-For a report submitted with consent, the service stores only:
+For an explicitly consented report, store HMAC-SHA256 digests of only the
+selected, analyzer-extracted identifiers, keyed by `INDICATOR_PEPPER` (a
+deployment secret, never stored in the repository):
 
-- HMAC-SHA256 digests of identifiers extracted by the analyzer, keyed by a
-  secret pepper supplied through `INDICATOR_PEPPER` (never committed to the
-  repository): UPI VPAs; bank account numbers paired with their IFSC; Indian
-  phone numbers normalized to E.164; email addresses; and non-free-mail sender
-  domains.
-- A 128-value MinHash signature of normalized offer-letter text, using word
-  5-shingles. The source text is used in memory to compute the signature and is
-  then discarded; neither it nor its shingles are stored.
-- The consent version and report metadata needed to count reports, enforce
-  single use, and apply retention. Demo records are explicitly marked as demo.
+- UPI VPAs and bank account numbers paired with their IFSC, but only in a
+  payment-demand context;
+- Indian phone numbers normalized to E.164, but only in a contact context such
+  as “call/WhatsApp/contact HR”;
+- the sender address/domain (authenticated `From` for `.eml`, contact-line
+  addresses/domains otherwise); free-mail sender domains are excluded.
 
-The indicator store does not contain offer text, names, student/user identity,
-or IP addresses. The database stores no raw indicator values. Normalization is
-type-specific and deterministic before HMAC: for example, UPI VPAs are trimmed
-and case-folded, Indian phones are normalized to E.164, and bank-account
-digests include the normalized IFSC as well as the account number. HMAC inputs
-are domain-separated by indicator type so that equal strings from different
-types cannot be correlated accidentally. An unset `INDICATOR_PEPPER` must
-disable report creation and matching rather than use a repository or default
-secret.
+The analyzer must distinguish scammer-role values from candidate details.
+Identifiers on To/Cc/Dear lines and in the candidate's own details are never
+eligible. Before consent, show a masked list of the exact eligible indicators
+and let the student deselect any value. Only selected values are included in
+the report token and stored. Normalization is type-specific; UPI and email are
+trimmed and case-folded, phones are normalized to E.164, and account digests
+include the normalized IFSC. HMAC inputs are domain-separated by indicator
+type. Every digest records `key_version`.
 
-MinHash is a compact probabilistic sketch of shingle overlap, not an encrypted
-or reversible text representation. It contains neither the shingles nor their
-order, and each of its 128 values is a minimum hash over a large set of 5-word
-sequences. Recovering a unique source text from the signature is therefore not
-practical. Similarity can still reveal that two letters share substantial
-word-sequence structure; the signature is pseudonymous, so access and retention
-controls still apply.
+Store a 128-value MinHash signature based on word 5-shingles, but first replace
+names, emails, phone numbers, UPI IDs, account numbers, amounts, and dates with
+fixed placeholders. The source text and shingles exist only in memory and are
+discarded. MinHash stores minima over hashed shingles, not the shingles or
+their order; with only 128 values it is not practical to reconstruct a unique
+source text. A signature can still reveal similarity to known text, so it is
+pseudonymous and access/retention controls still apply.
 
-The report token carries only these hashes, the signature, and necessary
-non-content metadata. It is signed, expires after 24 hours, and is single-use.
-The server stores a token identifier or equivalent replay-prevention state;
-token payloads and raw upload content must not be written to application logs.
+The database also stores consent version, timestamps and report metadata
+needed for count/withdrawal/retention, and an `is_demo` flag for synthetic demo
+reports. It stores no offer text, names, student identity, raw indicator
+values, or IP addresses. The only contact email stored is the contact address
+on a dispute, retained until 12 months after that dispute is resolved.
+
+If `INDICATOR_PEPPER` is unset, report creation and matching are disabled; do
+not fall back to a checked-in or default secret. Rotation assigns a new
+`key_version`: new reports use the new pepper, while old digests remain
+matchable with their original version until they expire. Retire an old pepper
+only after all digests using that version have expired or been removed.
 
 ## Consent
 
-The report action requires an unchecked-by-default checkbox with this exact
-wording, version `1`:
+Before the report is sent, show the exact masked selected indicators. Require
+an unchecked-by-default checkbox with this exact wording, version `2`:
 
-> I consent to share the scam indicators and a privacy-preserving signature of this offer with the service to warn other students. The offer text, names, and my identity will not be stored. I understand the indicators are pseudonymised and may be matched against future reports.
+> Share these details to warn other students: the payment and contact details you selected above, and a scrambled fingerprint of the letter's wording with names and numbers removed. We don't store the letter, your name or your contact details. You can withdraw this report later with the code we give you.
 
-The submitted `consent_version` must equal `1`. Store that version alongside
-each accepted report so the consent shown at submission can be audited. No
-report is accepted without affirmative consent.
+Store `consent_version=2` with each accepted report. Version 1 is obsolete and
+must not be accepted or included in the codebase. No report is accepted without
+affirmative consent.
 
-## Abuse resistance and scoring
+The response to `/report` includes a one-time withdrawal code. `POST
+/report/withdraw {code}` is the report consent-withdrawal mechanism: it deletes
+that report's contributions and decrements its counts. The code is shown once;
+store only a verifier, not the plaintext code.
 
-- A report token is minted only by `/analyze`, from indicators and text the
-  analyzer itself extracted. `/report` accepts no caller-supplied indicator
-  values or signatures. One token can create at most one report.
-- `/report` is rate-limited per source IP. IPs are used transiently by the
-  limiter and are not saved in indicator/report records or application logs.
-- Indicator counts affect a result only after at least three reports from
-  distinct, single-use analysis tokens. Ten or more reports use the higher
-  indicator weight. A lightly edited letter may match a reported scam template
-  by MinHash LSH at similarity `>= 0.8`.
-- “Independent” here means distinct analysis/report tokens, not verified
-  distinct people. Because the design deliberately stores no student identity,
-  it cannot prove that several tokens came from several people. Per-IP
-  throttling and one-use tokens raise the cost of simple replay but do not
-  eliminate coordinated or distributed poisoning. This limitation must be
-  reflected in product wording and scoring confidence.
-- Community matches are risk evidence only. They never count as external
-  verification for the low-risk guard, and details disclose aggregate counts
-  without exposing another report's content.
-- Synthetic demo reports are marked `is_demo` and participate in lookups only
-  while `DEMO_MODE=1`; they must not inflate production counts.
+## Abuse resistance, matching, and disclosure
+
+- A signed, single-use `/analyze` report token expires after 24 hours. It
+  contains only selected indicator digests, key versions and the redacted
+  MinHash signature. `/report` accepts no caller-supplied identifiers or
+  signatures. Reject missing consent, expired/tampered/reused tokens, and
+  selections not present in the token.
+- `/report` and `/disputes` are rate-limited per source IP. IP state is
+  transient limiter state only, is not copied to application logs/database,
+  and is purged within 24 hours of the last request (or sooner when the limiter
+  expires its window). Single-use token state is purged 48 hours after token
+  expiry.
+- Only distinct accepted report contributions count. They are not verified
+  distinct people: no user identity is retained. Per-IP limits and one-use
+  analysis tokens make simple replay harder but cannot stop coordinated or
+  distributed poisoning.
+- Indicator counts affect scoring only at 3 reports (3–9: +25) and 10 reports
+  (+40). Template similarity >= 0.8 to a reported scam adds +25. These signals
+  never satisfy the external-verification low-risk guard.
+- Details use buckets only: “reported by 3+ students” or “reported by 10+
+  students”; never disclose exact counts or other reports' contents. `/indicators/stats`
+  is aggregate-only and suppresses cells below 5.
+- Synthetic demo reports are marked `is_demo` and participate only when
+  `DEMO_MODE=1`; they never inflate production counts.
 
 ## Disputes and retention
 
-A company can dispute an indicator through `/disputes`. The raw indicator value
-is normalized and HMACed for lookup, then discarded. The indicator is marked
-disputed and excluded from scoring while it awaits manual review. A contact
-email is stored only for a dispute, to support follow-up; it is not copied to
-reports, analyses, logs, or indicator records. Dispute reason text should not
-be used to submit offer content or unrelated personal information.
+Disputes are rate-limited. A dispute does not automatically suppress an
+indicator: its score remains active and its detail adds “disputed by the
+company, under review”. The exception is a domain dispute verified by a
+one-time link sent to an address at that same domain; that domain may be
+suppressed while pending manual review. Store the dispute contact email only
+for follow-up, and delete it 12 months after resolution. The dispute reason
+must not be used to submit offer text or unrelated personal information.
 
-Indicator records that have not been seen for 24 months are automatically
-purged, including their associated signatures/counts where applicable. A
-disputed indicator is excluded from scoring pending review; disputes do not
-justify retaining its indicator past the stated 24-month inactivity limit.
-The purge job must run automatically and be covered by a test.
-
-`GET /indicators/stats` exposes aggregate counts only. It must not return
-identifier hashes, signatures, report-level timestamps, or any report content.
+Indicators and their report contributions not seen for 24 months are deleted
+automatically. Report-level withdrawal removes that report's contribution
+immediately. Dispute state does not exempt records from the 24-month
+inactivity rule. Token replay state is purged 48 hours after token expiry.
+Limiter IP state is transient and expires with its rate-limit window, with a
+24-hour maximum retention.
 
 ## Threat model
 
 | Attacker goal | Method | Mitigation | Residual risk |
 | --- | --- | --- | --- |
-| Poison a legitimate company's identifiers | Submit repeated false reports for a company's UPI ID, account/IFSC, phone, email, or domain | Only analyzer-extracted values can enter a report; one-use tokens; per-IP `/report` limit; minimum three distinct tokens; company disputes pause scoring | A determined attacker can create multiple analyses or distribute submissions across IPs. Token independence is not proof of distinct people; manual dispute review is required. |
-| Enumerate whether a specific UPI ID was reported | Probe analyses and observe whether a match changes the result | HMAC-SHA256 with secret `INDICATOR_PEPPER`; never expose hashes or report contents; disclose only thresholded counts and generic match details; rate limits | Repeated adaptive probes may still reveal that a value crosses a threshold. Pepper compromise makes offline guessing of low-entropy identifiers more feasible. |
-| Replay report tokens | Submit the same token repeatedly or after expiry | Signed token with 24-hour expiry; persist single-use token state and atomically consume it; reject invalid, expired, or reused tokens | Theft before first use can let another party consume the token; short expiry and TLS reduce but do not eliminate that risk. |
-| Leak the pepper | Read environment/configuration, logs, backups, or process memory | Keep `INDICATOR_PEPPER` in deployment secret storage; never commit, log, return, or include it in database backups; restrict operational access and support rotation | Anyone obtaining the pepper and database can test guessed identifiers and correlate matching reports. Rotation complicates matching across key versions and may require retiring old digests. |
-| Infer text from template signatures | Obtain stored MinHash signatures and attempt reconstruction or linkage | Store only 128 MinHash values, not text or shingles; restrict access; expire inactive records; return aggregate results only | Similarity/linkage between known documents can remain possible. MinHash is a pseudonymous similarity sketch, not a guarantee of anonymity. |
-| Abuse disputes to suppress real scam indicators | File false disputes against a widely reported indicator | Exclude the disputed indicator only while pending manual review; authenticate and rate-limit dispute intake; keep auditable dispute status | Review delays may temporarily suppress a valid warning; a compromised dispute channel can still cause harm. |
+| Poison a legitimate company's identifiers | Submit repeated false reports for a company's payment/contact identifiers | Only analyzer-extracted scammer-role values can be selected; student previews and can deselect; one-use tokens; per-IP limits; score thresholds; disputes; domain suppression only after same-domain email verification | Distinct tokens do not prove distinct people; distributed attackers can still poison. A verified domain dispute can temporarily hide a true warning pending review. |
+| Enumerate whether a specific UPI ID was reported | Probe analyses and observe score/details | Secret peppered HMACs; never expose hashes or exact counts; bucketed details; suppress aggregate stats cells below 5; rate limits | Adaptive probes can reveal threshold crossings. Compromised pepper enables guessed-value checks against database digests. |
+| Replay a report token | Re-submit token or withdrawal code | Signed 24-hour report tokens; atomic single use; replay-state purge after 48 hours; withdrawal code verifier is single-use | Theft before consumption can submit/withdraw once; short expiry and TLS reduce but do not eliminate theft risk. |
+| Leak or rotate the pepper unsafely | Access configuration/database or discard an active key version | Deployment secret storage, no logging/committing; per-digest key version; old key retained only until associated digests expire | Database plus pepper permits guessing low-entropy identifiers. Key rotation requires retaining old keys and complicates operations. |
+| Infer wording from template signatures | Obtain signatures and compare against known letters | Redact names, emails, phone, VPA, accounts, amounts and dates before MinHash; store only 128 values; access controls and expiry | Signature linkage and similarity inference remain possible; it is pseudonymous, not anonymous. |
+| Abuse disputes to suppress scam reports | File false company disputes | Disputed indicators keep scoring; only a domain verified through a same-domain one-time link is temporarily suppressed; rate limits and review | Validly controlled domains can still suppress their domain temporarily while review is pending. |
+| Harvest a candidate's own details | Place candidate email/phone in a letter and induce reporting | Role-based extraction excludes To/Cc/Dear lines and candidate details; only eligible masked values are selectable; tests enforce exclusions | Ambiguous or deliberately misleading prose may still confuse extraction, so student review and deselection remain necessary. |
 
 ## Honest limits and legal review
 
 HMACed identifiers and MinHash signatures are **pseudonymised, not
-anonymous**. Stable hashes allow matching over time, and template signatures
-can reveal similarity. This design needs legal review under India's Digital
-Personal Data Protection (DPDP) framework before deployment, including the
-consent language, purpose, retention, dispute handling, and rights process.
-The lack of raw offer text does not by itself establish that the stored data is
-outside privacy law.
+anonymous**. Stable digests permit matching over time; signatures reveal
+similarity. Some indicators are personal data of third parties (the senders),
+which needs its own lawful-basis assessment. This design requires legal review
+under the DPDP Act, 2023 and its Rules before deployment, including consent,
+purpose, retention, third-party sender data, disputes, withdrawal, and rights
+handling. Removing raw offer text does not by itself establish that stored
+data is outside privacy law.
 
-Reports are not independently verified findings. Thresholds reduce single
-report influence but cannot guarantee that multiple tokens represent multiple
-people. Students should see community matches as a warning signal, not proof
-that an employer or identifier is fraudulent.
+Community matches are not independently verified findings. Thresholds and
+consent do not guarantee that reports describe scams or represent distinct
+people. Students should treat a match as a warning to verify independently,
+not proof that an employer or identifier is fraudulent.
