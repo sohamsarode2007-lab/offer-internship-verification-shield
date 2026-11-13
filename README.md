@@ -145,3 +145,37 @@ Category rules use the existing check results and follow this priority:
 ```
 
 CI runs migrations and tests against PostgreSQL.
+
+## Frontend
+
+The React, TypeScript and Vite interface lives in `frontend/`. Start the API in
+one PowerShell window, for example with `docker compose up --build`, and start
+the Vite app in another:
+
+```powershell
+Set-Location frontend
+npm ci
+$env:VITE_DEMO = "1"
+# Optional when the API is not available through the Vite proxy:
+# $env:VITE_API_URL = "http://127.0.0.1:8000"
+npm run dev
+```
+
+`VITE_DEMO=1` shows the three fictional text samples from `fixtures/demo/`;
+otherwise the sample row is hidden. Vite proxies backend routes to
+`http://127.0.0.1:8000`. The default backend `ALLOWED_ORIGINS` includes the Vite
+origin `http://127.0.0.1:5173` and `http://localhost:5173`.
+
+Create the production assets with:
+
+```powershell
+Set-Location frontend
+npm ci
+npm run build
+Set-Location ..
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+```
+
+The API serves only `frontend/dist` when its built `index.html` exists, with
+client-route fallback to that built index. It never serves the unbuilt Vite
+source page.

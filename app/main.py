@@ -23,7 +23,7 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
 )
 
-DEFAULT_DEV_ORIGINS = "http://localhost:5173,http://localhost:3000"
+DEFAULT_DEV_ORIGINS = "http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000"
 ALLOWED_ORIGINS = [o.strip() for o in os.getenv("ALLOWED_ORIGINS", DEFAULT_DEV_ORIGINS).split(",") if o.strip()]
 
 
@@ -87,13 +87,21 @@ def health_check():
     return {"status": "ok", "service": "Verification Shield Backend"}
 
 
-# Serve a built frontend if one is placed in ./frontend (optional).
-frontend_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend")
-if not os.path.exists(frontend_dir):
-    frontend_dir = os.path.join(os.getcwd(), "frontend")
+# Serve only the production build. The Vite source index is never served directly.
+frontend_dist = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend", "dist")
+frontend_index = os.path.join(frontend_dist, "index.html")
+if os.path.isfile(frontend_index):
+    assets_dir = os.path.join(frontend_dist, "assets")
+    demo_dir = os.path.join(frontend_dist, "demo")
+    if os.path.isdir(assets_dir):
+        app.mount("/assets", StaticFiles(directory=assets_dir), name="frontend_assets")
+    if os.path.isdir(demo_dir):
+        app.mount("/demo", StaticFiles(directory=demo_dir), name="frontend_demo")
 
-if os.path.exists(frontend_dir):
-    @app.get("/")
-    def serve_frontend():
-        return FileResponse(os.path.join(frontend_dir, "index.html"))
-    app.mount("/ui", StaticFiles(directory=frontend_dir, html=True), name="frontend_ui")
+    @app.get("/", include_in_schema=False)
+    def serve_frontend_root():
+        return FileResponse(frontend_index)
+
+    @app.get("/{frontend_path:path}", include_in_schema=False)
+    def serve_frontend_route(frontend_path: str):
+        return FileResponse(frontend_index)
