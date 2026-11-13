@@ -140,7 +140,10 @@ def verify_sender_authentication(parsed: Dict[str, Any], body_facts: Dict[str, A
 
     body_domain_value = body_facts.get("sender_domain")
     body_domain = body_domain_value.get("value") if isinstance(body_domain_value, dict) else body_domain_value
-    if body_domain and domain and str(body_domain).strip().lower().rstrip(".") != domain.strip().lower().rstrip("."):
+    body_host = str(body_domain).strip().lower().rstrip(".") if body_domain else None
+    sender_host = domain.strip().lower().rstrip(".") if domain else None
+    if (body_host and sender_host
+            and registrable_domain(body_host)[0] != registrable_domain(sender_host)[0]):
         points += 15
         signals.append("domain claimed in the letter differs from the authenticated From domain (+15)")
 

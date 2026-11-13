@@ -81,3 +81,29 @@ def test_html_body_fallback_is_converted_to_text():
     message = email_auth.parse_eml(raw)
     assert "Offer for Acme" in message["body_text"]
     assert "No fee." in message["body_text"]
+
+
+def test_body_domain_subdomain_of_sender_registrable_domain_is_not_mismatch():
+    check = email_auth.verify_sender_authentication(
+        {"sender_domain": "hr.acme.example", "auth_headers": []},
+        {"sender_domain": {"value": "acme.example"}},
+    )
+    assert check["risk_points"] == 0
+    assert "differs from the authenticated From domain" not in check["details"]
+
+
+def test_body_domain_with_different_registrable_domain_is_mismatch():
+    check = email_auth.verify_sender_authentication(
+        {"sender_domain": "acme.example", "auth_headers": []},
+        {"sender_domain": {"value": "acme-hr.example"}},
+    )
+    assert check["risk_points"] == 15
+    assert "differs from the authenticated From domain (+15)" in check["details"]
+
+
+def test_body_domain_uses_co_in_registrable_suffix_rules():
+    check = email_auth.verify_sender_authentication(
+        {"sender_domain": "mail.acme.co.in", "auth_headers": []},
+        {"sender_domain": {"value": "careers.acme.co.in"}},
+    )
+    assert check["risk_points"] == 0
