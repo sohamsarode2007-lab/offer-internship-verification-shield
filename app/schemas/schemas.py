@@ -49,3 +49,5 @@ class AnalyzeResponse(BaseModel):
     scoring_model: Optional[str] = None
     next_steps: List[str] = []
     complaint_summary: str = ""
+    report_token: Optional[str] = None
+    reportable_indicators: List[dict] = Field(default_factory=list)

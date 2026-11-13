@@ -1,4 +1,5 @@
 import logging
+import os
 from typing import Optional
 
 from fastapi import APIRouter, Depends, File, Form, Request, UploadFile, HTTPException, status
@@ -15,7 +16,8 @@ from app.services import (
     gstin_verification,
     payment_detection,
     email_auth,
-    risk_scoring
+    risk_scoring,
+    community_reports,
 )
 
 logger = logging.getLogger(__name__)
@@ -78,6 +80,8 @@ def analyze_offer(
     if not text and not file:
         raise HTTPException(status.HTTP_400_BAD_REQUEST,
                             "Either 'text' form field or 'file' upload must be provided.")
+
+    community_reports.purge_expired(db)
 
     if text and len(text) > MAX_TEXT_CHARS:
         raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
@@ -142,7 +146,10 @@ def analyze_offer(
         auth_check = email_auth.not_applicable()
     gstin_check = gstin_verification.verify_gstin(facts)
     payment_check = payment_detection.detect_payment_demand(facts)
-    check_dicts = [domain_check, gstin_check, payment_check, auth_check]
+    report_indicators = community_reports.extract_indicators(raw_text, email_result, payment_check)
+    signature = community_reports.minhash_signature(raw_text) if os.getenv("INDICATOR_PEPPER") else []
+    community_check = community_reports.lookup_community(db, report_indicators, signature)
+    check_dicts = [domain_check, gstin_check, payment_check, auth_check, community_check]
 
     # Step 6: scoring
     scoring_res = risk_scoring.calculate_risk_score(check_dicts, facts=facts)
@@ -197,6 +204,16 @@ def analyze_offer(
         risk_band, check_dicts, scoring_res["risk_factors"]
     )
 
+    report_token, reportable_indicators = community_reports.issue_report_token(
+        db, report_indicators, signature
+    )
+    if report_token:
+        try:
+            db.commit()
+        except Exception:
+            db.rollback()
+            report_token, reportable_indicators = None, []
+
     return AnalyzeResponse(
         offer_id=offer_id,
         overall_risk_score=overall_risk_score,
@@ -208,4 +225,6 @@ def analyze_offer(
         scoring_model=scoring_res["scoring_model"],
         next_steps=next_steps,
         complaint_summary=complaint_summary,
+        report_token=report_token,
+        reportable_indicators=reportable_indicators,
     )

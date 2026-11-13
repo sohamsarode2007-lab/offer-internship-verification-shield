@@ -163,6 +163,7 @@ def redact_text(text: str) -> str:
     text = ACCOUNT_RE.sub("<ACCOUNT>", text)
     text = PHONE_RE.sub("<PHONE>", text)
     text = re.sub(r"(?i)(?:₹|INR|Rs\.?\s*)\s*[\d,]+(?:\.\d{1,2})?", "<AMOUNT>", text)
+    text = re.sub(r"(?i)\b(?:salary|stipend|amount|fee|deposit|pay|paid|cost|compensation)\s*(?:is|of|:|=)?\s*[\d,]+(?:\.\d{1,2})?\b", "<AMOUNT>", text)
     text = re.sub(r"\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b|\b\d{4}-\d{2}-\d{2}\b", "<DATE>", text)
     text = re.sub(r"(?im)\b(?:candidate|applicant|student)\b[^\n]{0,60}", "<CANDIDATE>", text)
     return text
@@ -219,6 +220,7 @@ def issue_report_token(db: Session, indicators: list[dict], signature: list[int]
     payload = {"jti": jti, "exp": int(expires.timestamp()), "consent_version": CONSENT_VERSION,
                "indicators": token_indicators, "signature": signature}
     db.add(CommunityToken(jti=jti, expires_at=expires))
+    db.flush()
     return _sign_payload(payload, pepper), [{"id": x["indicator_type"] + ":" + x["digest"], "indicator_type": x["indicator_type"], "masked": x["masked"]} for x in indicators]
 
 
