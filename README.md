@@ -41,6 +41,11 @@ an offer's founding-year/age claim and MCA incorporation date can add risk point
 recent incorporation without a contradictory claim is informational only.
 GSTIN and CIN location codes are shown as informational context.
 
+No official MCA data is included: the official bulk snapshot requires eKYC and is
+future scope. For demos, `fixtures/demo/synthetic_mca_master.csv` holds fictional
+companies; load it with `--synthetic` (stored as `source=SYNTHETIC`, used only when
+`DEMO_MODE=1`). See [fixture notes](fixtures/demo/README.md#synthetic-company-registry).
+
 Sender authentication using DMARC and aligned DKIM is available only for
 original `.eml` uploads, not for pasted text or PDF/image uploads. It checks the
 topmost `Authentication-Results` supplied by the receiving mail provider and the

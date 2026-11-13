@@ -37,6 +37,24 @@ been verified in this workspace.
   fixture is not an externally verified MCA match.
 - The government-scheme document is also fictional and is labelled as a sample
   scam pattern in its source text.
+- **The demo company registry is synthetic.** `fixtures/demo/synthetic_mca_master.csv`
+  lists 13 fictional companies (invented names, made-up CINs in the real CIN format;
+  active, struck-off, dissolved and under-liquidation statuses). Loaded with
+  `scripts/load_mca_master.py --synthetic`, the database records `source=SYNTHETIC`
+  and the app consults it only when `DEMO_MODE=1`; outside demo mode it behaves as if
+  no registry is loaded. This demonstrates the full pipeline (CSV → loader → SQLite →
+  CIN lookup → scoring) with fictional data only.
+- In demo mode, synthetic registry results are displayed like any registry result,
+  **without a synthetic label on the website**: the details read
+  `Company registry match: <name>; status <status>; incorporated <date>.` (or
+  `CIN belongs to a different company in company registry records: ...`). No UI
+  text, API detail or page describes this data as official, live, MCA data or from
+  data.gov.in. Every such response carries the non-displayed API field
+  `registry_source: "synthetic"`, so a result can always be traced to the synthetic
+  snapshot. Presenters should state in the demo that the companies are fictional.
+- The official MCA company-master snapshot is **future scope**: its bulk download
+  requires eKYC, which this project has not completed. No official MCA data is
+  included in this repository or used by any deployment described here.
 
 ## Payment detection and scoring
 
@@ -62,9 +80,12 @@ been verified in this workspace.
   it does not establish who authored the message. Structural domain/GSTIN checks
   alone are capped at manual review. The demo registry fixture is an explicit
   demo-only exception for illustrating that path; it is not external verification.
-- `scripts/load_mca_master.py` imports an official MCA company-master CSV into
-  local SQLite. This workspace does not include a populated MCA master database;
-  live lookup behavior is tested using temporary database rows.
+- `scripts/load_mca_master.py` imports a company-master CSV into local SQLite and
+  records its source (`MCA_CSV`, or `SYNTHETIC` with `--synthetic`). Rows marked
+  `Synthetic=true` are refused without `--synthetic`, and the two sources are never
+  mixed in one database. This workspace does not include official MCA data (future
+  scope, eKYC required); lookup behaviour is tested with temporary database rows
+  and the synthetic demo snapshot.
 - `/analyze` returns `next_steps` and `complaint_summary` based on its rule
   results. These are automated guidance, not an official complaint filing.
 - Sender authentication is available only for `.eml` uploads. It reads the
@@ -88,9 +109,10 @@ been verified in this workspace.
   under the DPDP Act, 2023 and its Rules is required, including third-party
   sender data. Demo rows count only in `DEMO_MODE=1`.
 - The model is `rule_based_v2`; it is a fixed rule table, not a trained ML model.
-  GSTIN checks are structural. CIN lookup uses a local MCA master SQLite copy;
+  GSTIN checks are structural. CIN lookup uses a local company-master SQLite copy;
   it does not contact a live service. An opted-in synthetic CIN fixture is
-  available only in demo mode and is labelled in output.
+  available only in demo mode and is labelled in output. A synthetic company-master
+  snapshot is also demo-only; its results are traceable via `registry_source`.
 
 ## OCR and rate limiting
 
