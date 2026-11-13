@@ -14,6 +14,7 @@ from app.services import (
     domain_verification,
     gstin_verification,
     payment_detection,
+    email_auth,
     risk_scoring
 )
 
@@ -53,7 +54,7 @@ def build_user_guidance(risk_band: str, checks: list[dict], risk_factors: list[s
 
 MAX_TEXT_CHARS = 50_000
 MAX_FILE_BYTES = 10 * 1024 * 1024
-ALLOWED_EXTENSIONS = {"pdf", "png", "jpg", "jpeg", "bmp", "tiff", "txt"}
+ALLOWED_EXTENSIONS = {"pdf", "png", "jpg", "jpeg", "bmp", "tiff", "txt", "eml"}
 
 
 # Plain `def`: DNS, WHOIS and OCR are blocking calls, so FastAPI runs this in its
@@ -67,7 +68,7 @@ def analyze_offer(
     db: Session = Depends(get_db)
 ):
     """
-    Accepts offer text and/or one document (pdf, png, jpg, jpeg, bmp, tiff, txt).
+    Accepts offer text and/or one document (pdf, image, txt, or original .eml).
     Runs ingestion -> fact extraction -> domain / registration / payment checks ->
     rule_based_v2 scoring.
 
@@ -95,9 +96,29 @@ def analyze_offer(
             raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
                                 f"File is larger than {MAX_FILE_BYTES // (1024 * 1024)} MB.")
 
-    # Step 1: Ingestion
+    # Step 1: Ingestion. Parse .eml headers only in memory; only extracted body and
+    # supported PDF/image attachments enter the existing check pipeline.
+    email_result = None
     try:
-        raw_text, _ = ingestion.ingest_offer(text=text, file_bytes=file_bytes, filename=filename)
+        if filename and filename.lower().endswith(".eml"):
+            parsed_email = email_auth.parse_eml(file_bytes or b"")
+            body_text, _ = ingestion.ingest_offer(text=parsed_email["body_text"])
+            parts = [body_text] if body_text else []
+            for attachment in parsed_email["attachments"]:
+                extracted, _ = ingestion.ingest_offer(
+                    file_bytes=attachment["data"], filename=attachment["filename"]
+                )
+                if extracted:
+                    parts.append(extracted)
+            if text:
+                parts.insert(0, text)
+            raw_text = "\n".join(parts).strip()
+            if len(raw_text) > MAX_TEXT_CHARS:
+                raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                                    f"Extracted email text is longer than {MAX_TEXT_CHARS:,} characters.")
+            email_result = parsed_email
+        else:
+            raw_text, _ = ingestion.ingest_offer(text=text, file_bytes=file_bytes, filename=filename)
     except ValueError as e:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"Could not read the document: {e}")
     if not raw_text or not raw_text.strip():
@@ -106,10 +127,22 @@ def analyze_offer(
 
     # Steps 2-5: extraction and checks
     facts = fact_extraction.extract_facts(raw_text)
-    domain_check = domain_verification.verify_domain(facts)
+    if email_result:
+        body_domain = facts.get("sender_domain", {}).get("value")
+        auth_facts = dict(facts)
+        auth_facts["sender_domain"] = {"value": email_result.get("sender_domain")}
+        auth_facts["sender_email"] = {"value": None}
+        domain_check = domain_verification.verify_domain(auth_facts)
+        if body_domain:
+            domain_check["details"] += f" Body-claimed domain: '{body_domain}'."
+            domain_check["explanation"] = domain_check["details"]
+        auth_check = email_auth.verify_sender_authentication(email_result, facts)
+    else:
+        domain_check = domain_verification.verify_domain(facts)
+        auth_check = email_auth.not_applicable()
     gstin_check = gstin_verification.verify_gstin(facts)
     payment_check = payment_detection.detect_payment_demand(facts)
-    check_dicts = [domain_check, gstin_check, payment_check]
+    check_dicts = [domain_check, gstin_check, payment_check, auth_check]
 
     # Step 6: scoring
     scoring_res = risk_scoring.calculate_risk_score(check_dicts, facts=facts)
