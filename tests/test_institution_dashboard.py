@@ -3,6 +3,7 @@ import os
 import re
 import subprocess
 import sys
+import uuid
 from pathlib import Path
 
 import pytest
@@ -51,8 +52,9 @@ def test_dashboard_suppresses_cells_below_five(api_client):
     from app.models.models import Institution, InstitutionObservation
     from app.services.institution_dashboard import current_iso_week, hash_api_key
     gen, db = _test_db(api_client)
-    key = "test-dashboard-secret"
-    institution = Institution(name="Synthetic College", code="SYNTH", api_key_hash=hash_api_key(key))
+    key = "test-dashboard-" + uuid.uuid4().hex
+    code = "D" + uuid.uuid4().hex[:12].upper()
+    institution = Institution(name="Synthetic College", code=code, api_key_hash=hash_api_key(key))
     db.add(institution)
     db.flush()
     for _ in range(4):
@@ -78,13 +80,16 @@ def test_analyze_stores_only_weekly_institution_aggregate(api_client):
     from app.models.models import Institution, InstitutionObservation, Offer
     from app.services.institution_dashboard import hash_api_key
     gen, db = _test_db(api_client)
-    db.add(Institution(name="Synthetic College", code="SYNTH", api_key_hash=hash_api_key("secret")))
+    key = "test-api-" + uuid.uuid4().hex
+    code = "A" + uuid.uuid4().hex[:12].upper()
+    institution = Institution(name="Synthetic College", code=code, api_key_hash=hash_api_key(key))
+    db.add(institution)
     db.commit()
     text = ("Selected for a software role. Contact HR at hiring@company.example. "
             "Pay registration fee Rs 500 to recruit@ybl.")
-    response = api_client.post("/analyze", data={"text": text, "institution_code": "synth"})
+    response = api_client.post("/analyze", data={"text": text, "institution_code": code.lower()})
     assert response.status_code == 200, response.text
-    observation = db.query(InstitutionObservation).one()
+    observation = db.query(InstitutionObservation).filter_by(institution_id=institution.id).one()
     assert re.fullmatch(r"\d{4}-W\d{2}", observation.iso_week)
     assert observation.band == response.json()["risk_band"]
     assert observation.scam_category == "registration_fee"
@@ -96,12 +101,15 @@ def test_analyze_stores_only_weekly_institution_aggregate(api_client):
 
 def test_unknown_institution_code_is_silently_ignored(api_client):
     from app.models.models import InstitutionObservation
+    gen, db = _test_db(api_client)
+    before = db.query(InstitutionObservation).count()
+    gen.close()
     response = api_client.post("/analyze", data={"text": "A small remote internship is open.",
         "institution_code": "DOES-NOT-EXIST"})
     assert response.status_code == 200
     assert "institution" not in response.text.casefold()
     gen, db = _test_db(api_client)
-    assert db.query(InstitutionObservation).count() == 0
+    assert db.query(InstitutionObservation).count() == before
     gen.close()
 
 
