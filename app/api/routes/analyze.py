@@ -84,7 +84,7 @@ def analyze_offer(
     community_reports.purge_expired(db)
 
     if text and len(text) > MAX_TEXT_CHARS:
-        raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+        raise HTTPException(status.HTTP_413_CONTENT_TOO_LARGE,
                             f"Text is longer than {MAX_TEXT_CHARS:,} characters.")
 
     file_bytes = None
@@ -97,7 +97,7 @@ def analyze_offer(
                                 f"Unsupported file type. Allowed: {', '.join(sorted(ALLOWED_EXTENSIONS))}.")
         file_bytes = file.file.read(MAX_FILE_BYTES + 1)
         if len(file_bytes) > MAX_FILE_BYTES:
-            raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            raise HTTPException(status.HTTP_413_CONTENT_TOO_LARGE,
                                 f"File is larger than {MAX_FILE_BYTES // (1024 * 1024)} MB.")
 
     # Step 1: Ingestion. Parse .eml headers only in memory; only extracted body and
@@ -118,15 +118,15 @@ def analyze_offer(
                 parts.insert(0, text)
             raw_text = "\n".join(parts).strip()
             if len(raw_text) > MAX_TEXT_CHARS:
-                raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                raise HTTPException(status.HTTP_413_CONTENT_TOO_LARGE,
                                     f"Extracted email text is longer than {MAX_TEXT_CHARS:,} characters.")
             email_result = parsed_email
         else:
             raw_text, _ = ingestion.ingest_offer(text=text, file_bytes=file_bytes, filename=filename)
     except ValueError as e:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"Could not read the document: {e}")
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, f"Could not read the document: {e}")
     if not raw_text or not raw_text.strip():
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY,
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT,
                             "No text could be extracted from the submission.")
 
     # Steps 2-5: extraction and checks
