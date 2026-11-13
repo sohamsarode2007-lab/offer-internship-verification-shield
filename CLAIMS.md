@@ -70,6 +70,19 @@ been verified in this workspace.
 - Sender authentication is available only for `.eml` uploads. It reads the
   topmost Authentication-Results header and does not store or log headers.
   Pasted text, PDFs, and images still check only the domain claimed in the content.
+- **Community indicator network is implemented.** `/analyze` offers a signed
+  24-hour token and a masked, deselectable list of scammer-role indicators.
+  Reports require version-2 consent; identifiers are stored as peppered,
+  key-versioned HMAC digests and template signatures are computed after
+  redacting names, identifiers, amounts and dates. Indicator thresholds are 3+
+  (+25) and 10+ (+40); template similarity >=0.8 adds +25. Details disclose
+  buckets only. Withdrawals delete a report's contributions. Reports are not
+  independently verified and do not count as external verification. Disputed
+  indicators keep scoring during review; only a same-domain email-verified
+  domain dispute is temporarily suppressed. Inactive indicators expire after
+  24 months. Digests/signatures are pseudonymised, not anonymous; legal review
+  under the DPDP Act, 2023 and its Rules is required, including third-party
+  sender data. Demo rows count only in `DEMO_MODE=1`.
 - The model is `rule_based_v2`; it is a fixed rule table, not a trained ML model.
   GSTIN checks are structural. CIN lookup uses a local MCA master SQLite copy;
   it does not contact a live service. An opted-in synthetic CIN fixture is

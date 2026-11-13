@@ -64,11 +64,12 @@ store only a verifier, not the plaintext code.
 
 ## Abuse resistance, matching, and disclosure
 
-- A signed, single-use `/analyze` report token expires after 24 hours. It
-  contains only selected indicator digests, key versions and the redacted
-  MinHash signature. `/report` accepts no caller-supplied identifiers or
-  signatures. Reject missing consent, expired/tampered/reused tokens, and
-  selections not present in the token.
+- A signed, single-use `/analyze` report token expires after 24 hours. Before
+  consent it contains only eligible candidate indicator digests, key versions
+  and the redacted MinHash signature; it contains no raw identifiers. `/report`
+  accepts no caller-supplied identifiers or signatures and persists only the
+  digest selections the student confirms. Reject missing consent,
+  expired/tampered/reused tokens, and selections not present in the token.
 - `/report` and `/disputes` are rate-limited per source IP. IP state is
   transient limiter state only, is not copied to application logs/database,
   and is purged within 24 hours of the last request (or sooner when the limiter
@@ -100,7 +101,8 @@ must not be used to submit offer text or unrelated personal information.
 Indicators and their report contributions not seen for 24 months are deleted
 automatically. Report-level withdrawal removes that report's contribution
 immediately. Dispute state does not exempt records from the 24-month
-inactivity rule. Token replay state is purged 48 hours after token expiry.
+inactivity rule. An application retention worker runs hourly, and requests
+also trigger a purge. Token replay state is purged 48 hours after token expiry.
 Limiter IP state is transient and expires with its rate-limit window, with a
 24-hour maximum retention.
 

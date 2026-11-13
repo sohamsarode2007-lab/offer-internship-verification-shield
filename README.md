@@ -52,6 +52,46 @@ sender from an `.eml`.
 `/analyze` also returns `next_steps` and a concise `complaint_summary` based on
 the automated findings; these do not replace an official complaint.
 
+## Community scam reports
+
+With `INDICATOR_PEPPER` configured, `/analyze` can return a signed, single-use
+`report_token` and a masked `reportable_indicators` list. It extracts only
+scammer-role details: payment destinations in a payment demand, phones in HR
+contact lines, and the sender address/domain (From header for `.eml`, contact
+line otherwise). Candidate To/Cc/Dear details are excluded. Review the masked
+list and send only selected IDs to `POST /report`; no report is saved until the
+student supplies `consent: true` and `consent_version: 2`.
+
+The checkbox wording is: “Share these details to warn other students: the
+payment and contact details you selected above, and a scrambled fingerprint of
+the letter's wording with names and numbers removed. We don't store the letter,
+your name or your contact details. You can withdraw this report later with the
+code we give you.” The response gives a one-time withdrawal code for
+`POST /report/withdraw`. Report tokens expire after 24 hours. Indicators use
+peppered HMAC digests; template matching uses a 128-value MinHash after masking
+names and identifiers, amounts, and dates. The service does not store offer
+text. Counts affect scoring at 3 reports (+25) and 10 reports (+40); similar
+reported templates add +25. These are warning signals, never external
+verification, and are not independently verified claims. Details disclose
+only “3+ students” or “10+ students”. `/indicators/stats` returns aggregate
+counts and suppresses cells below 5.
+
+Disputes are rate limited. A dispute does not remove points; its match detail
+shows that it is under review. Only a domain dispute verified through a
+one-time link sent to that same domain is temporarily excluded from scoring.
+Configure SMTP to deliver those links. Dispute contact email is retained for
+12 months after resolution. Reports can be withdrawn with their one-time code;
+inactive indicators expire after 24 months. Demo reports can be seeded only
+with `DEMO_MODE=1` using `python scripts/seed_demo_reports.py`; they count only
+in demo mode.
+
+HMACed identifiers and MinHash signatures are pseudonymised, not anonymous.
+The DPDP Act, 2023 and its Rules, including the lawful basis for third-party
+sender data, require legal review before deployment. Set `INDICATOR_PEPPER`
+from deployment secret storage; do not commit it. `INDICATOR_KEY_VERSION`
+versions digests during rotation, and `INDICATOR_PEPPER_PREVIOUS` temporarily
+keeps older digests matchable until they expire.
+
 ## Tests and migrations
 
 ```powershell
