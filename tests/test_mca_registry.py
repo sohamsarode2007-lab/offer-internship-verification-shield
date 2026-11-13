@@ -114,6 +114,14 @@ def test_established_year_within_one_year_of_registry_adds_no_points(mca_db):
     assert "within one year" in result["details"]
 
 
+def test_pan_initial_check_skips_checksum_invalid_gstin(mca_db):
+    invalid = "27AABCZ0001E1ZY"
+    assert not gv.gstin_checksum_ok(invalid)
+    result = gv.verify_gstin(facts(f"Aevrion Signal Works Pvt Ltd\nGSTIN: {invalid}"))
+    assert result["consistency_risk_points"] == 0
+    assert "PAN name-initial" not in result["details"]
+
+
 def test_gstin_cin_location_note_is_informational(mca_db):
     result = gv.verify_gstin(facts(f"{NAME}\nCIN: {CIN}\nGSTIN: {GSTIN}"))
     assert "GSTIN state: Delhi (07); CIN RoC location: Delhi (DL)" in result["details"]

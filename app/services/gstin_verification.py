@@ -283,7 +283,7 @@ def verify_gstin(facts: Dict[str, Any]) -> Dict[str, Any]:
     if llpin:
         problems += _llpin_problems(llpin)
 
-    if gstin and claimed_company and len(gstin) == 15:
+    if gstin and claimed_company and len(gstin) == 15 and gstin_checksum_ok(gstin):
         initial = next((c.upper() for c in claimed_company if c.isalpha()), None)
         if initial and gstin[6] != initial:
             consistency_points += 10

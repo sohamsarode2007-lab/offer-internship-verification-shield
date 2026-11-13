@@ -11,7 +11,7 @@ Risk points (added):
   +25  Registration number failed structural checks
   +10  Registration number structurally valid but NOT verified against any registry
   +10  GSTIN PAN name-initial character conflicts with the claimed company name
-  +15  MCA-verified company incorporated less than one year ago
+  +15  MCA incorporation date contradicts a founding-year/age claim by >1 year
   +20  No registration number (GSTIN/CIN/LLPIN) in the text
   +20  No usable domain AND no registration number
 
