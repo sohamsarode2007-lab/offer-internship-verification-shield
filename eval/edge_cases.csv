@@ -1,11 +1,11 @@
-case_id,case_type,text,truth,expected_band,synthetic
-EC01,confirmed_legitimate,"Acme Data Solutions Pvt Ltd; GSTIN 27AAFCA1234B1ZD; Contact hr@acmedata.example. No fee is required.",legitimate,likely legitimate,true
-EC02,payment_demand,"Acme Data Solutions Pvt Ltd; GSTIN 27AAFCA1234B1ZD; Contact hr@acmedata.example. Pay a refundable security deposit of Rs 2,000 within 24 hours.",scam,high risk,true
-EC03,upi_payment_demand,"Acme Data Solutions Pvt Ltd; GSTIN 27AAFCA1234B1ZD; Contact hr@acmedata.example. Transfer the processing fee of Rs 900 to verify.hr@ybl.",scam,high risk,true
-EC04,negated_payment,"Acme Data Solutions Pvt Ltd; GSTIN 27AAFCA1234B1ZD; Contact hr@acmedata.example. No registration fee or security deposit is required.",legitimate,likely legitimate,true
-EC05,inbound_stipend_upi,"Acme Data Solutions Pvt Ltd; GSTIN 27AAFCA1234B1ZD; Contact hr@acmedata.example. Your stipend will be credited to priya@ybl. No fee is required.",legitimate,likely legitimate,true
-EC06,free_mail_valid_format_gstin,"Aevrion Signal Works Pvt Ltd; GSTIN 27AABCZ0001E1ZZ; Contact aevrion@gmail.com. Please submit documents for the offer.",scam,"insufficient evidence, verify manually",true
-EC07,missing_evidence,"A small remote internship is available. Please reply with your availability.",legitimate,"insufficient evidence, verify manually",true
-EC08,soft_urgency,"Acme Data Solutions Pvt Ltd; GSTIN 27AAFCA1234B1ZD; Contact hr@acmedata.example. Confirm your joining today or your position expires.",scam,likely legitimate,true
-EC09,payment_without_domain,"Selected for a data-entry role. Pay the registration fee of Rs 499 to receive your joining letter.",scam,high risk,true
-EC10,missing_evidence,"A fictional startup is hiring an intern. Interview details will follow by email.",scam,"insufficient evidence, verify manually",true
+case_id,case_type,text,truth,expected_band,expected_basis,synthetic
+EC01,confirmed_legitimate,"Acme Data Solutions Pvt Ltd; GSTIN 27AAFCA1234B1ZD; Contact hr@acmedata.example. No fee is required.",legitimate,likely legitimate,"domain pass -10; valid but unverified GSTIN +10; subtotal 0",true
+EC02,payment_demand,"Acme Data Solutions Pvt Ltd; GSTIN 27AAFCA1234B1ZD; Contact hr@acmedata.example. Pay a refundable security deposit of Rs 2,000 within 24 hours.",scam,high risk,"payment +65; nearby urgency +20; GSTIN +10 and domain pass -10; total 85",true
+EC03,upi_payment_demand,"Acme Data Solutions Pvt Ltd; GSTIN 27AAFCA1234B1ZD; Contact hr@acmedata.example. Transfer the processing fee of Rs 900 to verify.hr@ybl.",scam,high risk,"payment +65; GSTIN +10 and domain pass -10; total 65",true
+EC04,negated_payment,"Acme Data Solutions Pvt Ltd; GSTIN 27AAFCA1234B1ZD; Contact hr@acmedata.example. No registration fee or security deposit is required.",legitimate,likely legitimate,"negated fee yields no payment points; GSTIN +10 and domain pass -10; total 0",true
+EC05,inbound_stipend_upi,"Acme Data Solutions Pvt Ltd; GSTIN 27AAFCA1234B1ZD; Contact hr@acmedata.example. Your stipend will be credited to priya@ybl. No fee is required.",legitimate,likely legitimate,"stipend VPA and negated fee yield no payment points; GSTIN +10 and domain pass -10; total 0",true
+EC06,free_mail_valid_format_gstin,"Aevrion Signal Works Pvt Ltd; GSTIN 27AABCZ0001E1ZZ; Contact aevrion@gmail.com. Please submit documents for the offer.",scam,"insufficient evidence, verify manually","free mailbox domain fail +30; registration fails mailbox consistency +25; total 55",true
+EC07,missing_evidence,"A small remote internship is available. Please reply with your availability.",legitimate,"insufficient evidence, verify manually","missing registration +20; no usable domain and no registration +20; total 40",true
+EC08,soft_urgency,"Acme Data Solutions Pvt Ltd; GSTIN 27AAFCA1234B1ZD; Contact hr@acmedata.example. Confirm your joining today or your position expires.",scam,likely legitimate,"no payment demand means urgency adds 0; GSTIN +10 and domain pass -10; total 0",true
+EC09,payment_without_domain,"Selected for a data-entry role. Pay the registration fee of Rs 499 to receive your joining letter.",scam,high risk,"payment +65; missing registration +20; no usable domain and no registration +20; capped at 100",true
+EC10,missing_evidence,"A fictional startup is hiring an intern. Interview details will follow by email.",scam,"insufficient evidence, verify manually","missing registration +20; no usable domain and no registration +20; total 40",true

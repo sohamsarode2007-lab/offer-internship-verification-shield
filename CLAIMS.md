@@ -43,6 +43,14 @@ been verified in this workspace.
 - The payment-demand signal is worth 65 points, with urgency near the demand worth
   20 additional points. A payment demand forces a high-risk score of at least 61.
   See the scoring table in `app/services/risk_scoring.py`.
+- **Known limitation:** urgency without a detected payment demand adds no score.
+  Synthetic case EC08 is labelled `scam` but scores `likely legitimate`: its demo
+  domain pass offsets the +10 valid-but-unverified GSTIN, and its deadline alone
+  is not weighted. This is reported as a dangerous miss even though the
+  rule-derived expected-band check passes. Adding +31 for expiry/deadline language
+  would move EC08 into manual review, but would change its existing regression
+  result and could send legitimate offer acceptance deadlines to manual review;
+  that rule has not been implemented.
 - The model is `rule_based_v2`; it is a fixed rule table, not a trained ML model.
   GSTIN/CIN checks are structural and do not query a live registry.
 

@@ -27,6 +27,8 @@ def load_cases():
             raise ValueError(f"{case.get('case_id')}: unsupported truth label")
         if case.get("expected_band") not in BANDS:
             raise ValueError(f"{case.get('case_id')}: unsupported expected band")
+        if not case.get("expected_basis"):
+            raise ValueError(f"{case.get('case_id')}: expected_basis must record the hand calculation")
     return cases
 
 
@@ -82,6 +84,20 @@ def evaluate(cases, live=False, base_url="http://127.0.0.1:8000"):
     return results
 
 
+def label_band_status(truth, band):
+    if truth == "scam":
+        return {
+            BANDS[0]: "DANGEROUS MISS",
+            BANDS[1]: "ABSTENTION",
+            BANDS[2]: "SCAM FLAGGED",
+        }[band]
+    return {
+        BANDS[0]: "LEGITIMATE ALIGNED",
+        BANDS[1]: "ABSTENTION",
+        BANDS[2]: "FALSE ALARM",
+    }[band]
+
+
 def report(results):
     matrix = {truth: Counter() for truth in ("scam", "legitimate")}
     classes = Counter()
@@ -125,9 +141,14 @@ def report(results):
         matches = sum(r["predicted_band"] == r["expected_band"] for r in group)
         print(f"{case_type:<31} {len(group):>3} {counts[BANDS[0]]:>19} {counts[BANDS[1]]:>8} {counts[BANDS[2]]:>10} {matches}/{len(group):>13}")
 
-    print(f"\nExpected-band regression matches: {exact}/{len(results)}")
+    print(f"\nLabel-vs-band summary: {len(dangerous)} dangerous miss(es); {len(false_alarms)} false alarm(s)")
+    print(f"Expected-vs-actual summary: {exact}/{len(results)} expected-band checks pass")
+    print("\nPer-case reconciliation (label-vs-band and expected-vs-actual are separate checks)")
+    print(f"{'case_id':<9} {'label':<12} {'actual band':<39} {'label-vs-band':<20} {'expected band':<39} {'expected-vs-actual'}")
     for row in results:
-        print(f"  {row['case_id']} [{row['truth']}/{row['case_type']}]: {row['predicted_band']} (expected {row['expected_band']})")
+        expected_status = "PASS" if row["predicted_band"] == row["expected_band"] else "MISMATCH"
+        label_status = label_band_status(row["truth"], row["predicted_band"])
+        print(f"{row['case_id']:<9} {row['truth']:<12} {row['predicted_band']:<39} {label_status:<20} {row['expected_band']:<39} {expected_status}")
     return exact == len(results)
 
 
