@@ -10,3 +10,6 @@
 *.tiff binary
 *.docx binary
 *.db   binary
+
+# Windows batch files must keep CRLF line endings
+*.bat text eol=crlf

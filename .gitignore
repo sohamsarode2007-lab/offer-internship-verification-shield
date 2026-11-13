@@ -23,3 +23,6 @@ frontend/e2e-test.db*
 frontend/test-results/
 frontend/playwright-report/
 frontend/tsconfig.tsbuildinfo
+
+# run_demo.bat state (demo DB, synthetic registry, demo pepper)
+data/demo/
