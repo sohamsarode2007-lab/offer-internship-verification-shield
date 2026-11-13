@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: verification
+          POSTGRES_PASSWORD: verification_ci_password
+          POSTGRES_DB: verification_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U verification -d verification_db"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+
+      # Optional: lets the OCR robustness tests run instead of skipping.
+      # The test suite itself never needs network (DNS/WHOIS are mocked).
+      - name: Install OCR binaries
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends tesseract-ocr poppler-utils
+
+      - name: Install Python dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Import every app module
+        env:
+          DATABASE_URL: "sqlite://"
+        run: python -c "import importlib, pkgutil, app; [importlib.import_module(m.name) for m in pkgutil.walk_packages(app.__path__, 'app.')]"
+
+      - name: Migrations apply cleanly and match the models
+        env:
+          DATABASE_URL: "postgresql://verification:verification_ci_password@localhost:5432/verification_db"
+        run: |
+          python -m alembic upgrade head
+          python -m alembic check
+
+      - name: Run tests
+        env:
+          DATABASE_URL: "postgresql://verification:verification_ci_password@localhost:5432/verification_db"
+        run: python -m pytest -rs -q

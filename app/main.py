@@ -1,0 +1,70 @@
+import os
+import logging
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+
+from app.api.limiter import limiter
+from app.api.routes.analyze import router as analyze_router
+from app.db.database import init_dev_db
+
+# Log level comes from the LOG_LEVEL env var (default INFO). Nothing is forced to DEBUG.
+logging.basicConfig(
+    level=getattr(logging, os.getenv("LOG_LEVEL", "INFO").upper(), logging.INFO),
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+)
+
+DEFAULT_DEV_ORIGINS = "http://localhost:5173,http://localhost:3000"
+ALLOWED_ORIGINS = [o.strip() for o in os.getenv("ALLOWED_ORIGINS", DEFAULT_DEV_ORIGINS).split(",") if o.strip()]
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    # SQLite dev only; Postgres schema is managed by `alembic upgrade head`.
+    init_dev_db()
+    yield
+
+
+app = FastAPI(
+    title="Offer & Internship Verification Shield API",
+    description="Rule-based checks for job and internship offers (no ML, no registry lookup).",
+    version="1.0.0",
+    lifespan=lifespan,
+)
+
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# No cookies or auth are used, so credentials are never allowed; this also means a
+# "*" origin can never be combined with credentials.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=ALLOWED_ORIGINS,
+    allow_credentials=False,
+    allow_methods=["GET", "POST"],
+    allow_headers=["*"],
+)
+
+app.include_router(analyze_router)
+
+
+@app.get("/health")
+def health_check():
+    return {"status": "ok", "service": "Verification Shield Backend"}
+
+
+# Serve a built frontend if one is placed in ./frontend (optional).
+frontend_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend")
+if not os.path.exists(frontend_dir):
+    frontend_dir = os.path.join(os.getcwd(), "frontend")
+
+if os.path.exists(frontend_dir):
+    @app.get("/")
+    def serve_frontend():
+        return FileResponse(os.path.join(frontend_dir, "index.html"))
+    app.mount("/ui", StaticFiles(directory=frontend_dir, html=True), name="frontend_ui")

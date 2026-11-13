@@ -1,0 +1,9 @@
+-r requirements.txt
+
+# Tests
+pytest>=7.3
+httpx>=0.24
+
+# Demo fixtures / OCR robustness tests
+reportlab>=4.0
+pypdfium2>=4.0

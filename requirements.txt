@@ -1,0 +1,33 @@
+# Runtime dependencies (every third-party import in app/ and alembic/).
+# System packages also needed for OCR: tesseract-ocr, poppler-utils (see Dockerfile).
+
+# Web / API
+fastapi>=0.110
+uvicorn>=0.22
+python-multipart>=0.0.6
+pydantic>=2.0
+slowapi>=0.1.9
+
+# Database
+# 2.0.x: falls back to pure Python if its compiled extension is blocked
+# (2.1 hard-fails under Windows Application Control).
+sqlalchemy>=2.0,<2.1
+alembic>=1.11
+psycopg2-binary>=2.9.6
+
+# Checks
+dnspython>=2.4
+python-whois>=0.9
+rapidfuzz>=3.0
+
+# Ingestion / OCR
+numpy>=1.24
+opencv-python-headless>=4.8
+pillow>=10.0
+pdfplumber>=0.10
+pypdf>=4.0
+pdf2image>=1.16
+pytesseract>=0.3.10
+
+# Optional OCR engines tried first if installed (not required, not installed by default):
+#   easyocr, paddleocr
