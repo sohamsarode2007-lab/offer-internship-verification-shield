@@ -15,7 +15,6 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
   if (!response.ok) {
     const messages: Record<number, string> = {
-      401: 'That API key was not accepted. Check it and try again.',
       413: 'This file is over 10 MB. Upload a smaller file or paste the text instead.',
       415: "This file type isn't supported. Use PDF, PNG, JPG or .eml.",
       422: "We couldn't read any text in this file. Try a clearer image or paste the text.",
@@ -46,11 +45,10 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>
 }
 
-export function analyze(text: string, file: File | null, institutionCode: string) {
+export function analyze(text: string, file: File | null) {
   const body = new FormData()
   if (text.trim()) body.set('text', text)
   if (file) body.set('file', file)
-  if (institutionCode.trim()) body.set('institution_code', institutionCode.trim())
   return request<AnalyzeResponse>('/analyze', { method: 'POST', body })
 }
 
@@ -63,6 +61,6 @@ export function withdrawReport(payload: WithdrawRequest) {
 export function submitDispute(payload: DisputeRequest) {
   return request<DisputeResponse>('/disputes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
 }
-export function loadDashboard(apiKey: string) {
-  return request<InstitutionDashboard>('/institutions/me/dashboard', { headers: { 'X-API-Key': apiKey } })
+export function loadDashboard() {
+  return request<InstitutionDashboard>('/placement-cell/dashboard')
 }

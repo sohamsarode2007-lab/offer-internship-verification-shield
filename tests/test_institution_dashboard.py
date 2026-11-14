@@ -1,17 +1,14 @@
-import hashlib
 import os
 import re
-import subprocess
-import sys
 import uuid
 from pathlib import Path
-
-import pytest
 
 from app.services.institution_dashboard import CATEGORIES, classify_scam
 
 
 ROOT = Path(__file__).resolve().parents[1]
+PAYMENT_TEXT = ("Selected for a software role. Contact HR at hiring@company.example. "
+                "Pay registration fee Rs 500 to recruit@ybl.")
 
 
 def test_scam_categories_follow_rule_priority():
@@ -36,102 +33,117 @@ def test_scam_categories_follow_rule_priority():
                 "free_mailbox_impersonation", "lookalike_domain", "sender_spoofing", "no_red_flags", "other")) == set(CATEGORIES)
 
 
-def _test_db(api_client):
+def _test_db():
     from app.db.database import get_db
     from app.main import app
     generator = app.dependency_overrides[get_db]()
     return generator, next(generator)
 
 
-def test_dashboard_requires_api_key(api_client):
-    assert api_client.get("/institutions/me/dashboard").status_code == 401
-    assert api_client.get("/institutions/me/dashboard", headers={"X-API-Key": "wrong"}).status_code == 401
+def test_dashboard_needs_no_key_and_is_vit_pune(api_client):
+    response = api_client.get("/placement-cell/dashboard")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["institution"] == "VIT Pune"
+    assert len(body["weeks"]) == 12
+    # The old key-protected endpoint is gone (the SPA catch-all may answer, but with no data).
+    assert "by_week_band" not in api_client.get("/institutions/me/dashboard").text
+
+
+def test_single_institution_is_created_once(api_client):
+    from app.models.models import Institution
+    api_client.get("/placement-cell/dashboard")
+    api_client.get("/placement-cell/dashboard")
+    gen, db = _test_db()
+    try:
+        assert [i.name for i in db.query(Institution).all()] == ["VIT Pune"]
+        assert {c.name for c in Institution.__table__.columns} == {"id", "name"}
+    finally:
+        gen.close()
 
 
 def test_dashboard_suppresses_cells_below_five(api_client):
-    from app.models.models import Institution, InstitutionObservation
-    from app.services.institution_dashboard import current_iso_week, hash_api_key
-    gen, db = _test_db(api_client)
-    key = "test-dashboard-" + uuid.uuid4().hex
-    code = "D" + uuid.uuid4().hex[:12].upper()
-    institution = Institution(name="Synthetic College", code=code, api_key_hash=hash_api_key(key))
-    db.add(institution)
-    db.flush()
-    for _ in range(4):
-        db.add(InstitutionObservation(institution_id=institution.id, iso_week=current_iso_week(),
-            band="high risk", scam_category="registration_fee"))
-    db.commit()
-    response = api_client.get("/institutions/me/dashboard", headers={"X-API-Key": key})
-    assert response.status_code == 200
-    body = response.json()
-    assert len(body["weeks"]) == 12
-    week = current_iso_week()
-    assert next(c["count"] for c in body["by_week_band"] if c["week"] == week and c["band"] == "high risk") == "<5"
-    assert next(c["count"] for c in body["by_week_category"] if c["week"] == week and c["category"] == "registration_fee") == "<5"
-    db.add(InstitutionObservation(institution_id=institution.id, iso_week=week, band="high risk", scam_category="registration_fee"))
-    db.commit()
-    body = api_client.get("/institutions/me/dashboard", headers={"X-API-Key": key}).json()
-    assert next(c["count"] for c in body["by_week_band"] if c["week"] == week and c["band"] == "high risk") == 5
-    assert next(c["count"] for c in body["by_week_category"] if c["week"] == week and c["category"] == "registration_fee") == 5
-    gen.close()
-
-
-def test_analyze_stores_only_weekly_institution_aggregate(api_client):
-    from app.models.models import Institution, InstitutionObservation, Offer
-    from app.services.institution_dashboard import hash_api_key
-    gen, db = _test_db(api_client)
-    key = "test-api-" + uuid.uuid4().hex
-    code = "A" + uuid.uuid4().hex[:12].upper()
-    institution = Institution(name="Synthetic College", code=code, api_key_hash=hash_api_key(key))
-    db.add(institution)
-    db.commit()
-    text = ("Selected for a software role. Contact HR at hiring@company.example. "
-            "Pay registration fee Rs 500 to recruit@ybl.")
-    response = api_client.post("/analyze", data={"text": text, "institution_code": code.lower()})
-    assert response.status_code == 200, response.text
-    observation = db.query(InstitutionObservation).filter_by(institution_id=institution.id).one()
-    assert re.fullmatch(r"\d{4}-W\d{2}", observation.iso_week)
-    assert observation.band == response.json()["risk_band"]
-    assert observation.scam_category == "registration_fee"
-    assert {c.name for c in InstitutionObservation.__table__.columns} == {
-        "id", "institution_id", "iso_week", "band", "scam_category"}
-    assert all(offer.raw_text is None and offer.company_name is None for offer in db.query(Offer).all())
-    gen.close()
-
-
-def test_unknown_institution_code_is_silently_ignored(api_client):
     from app.models.models import InstitutionObservation
-    gen, db = _test_db(api_client)
+    from app.services.institution_dashboard import get_institution, last_weeks
+    gen, db = _test_db()
+    institution = get_institution(db)
+    # A week/band/category no other test writes to, so the test also holds on a shared Postgres DB.
+    week, band, category = last_weeks()[0], "likely legitimate", "sender_spoofing"
+    existing = db.query(InstitutionObservation).filter_by(iso_week=week, band=band, scam_category=category,
+                                                          is_demo=False).count()
+    assert existing <= 4
+    for _ in range(4 - existing):
+        db.add(InstitutionObservation(institution_id=institution.id, iso_week=week, band=band, scam_category=category))
+    db.commit()
+    body = api_client.get("/placement-cell/dashboard").json()
+    assert next(c["count"] for c in body["by_week_band"] if c["week"] == week and c["band"] == band) == "<5"
+    assert next(c["count"] for c in body["by_week_category"] if c["week"] == week and c["category"] == category) == "<5"
+    db.add(InstitutionObservation(institution_id=institution.id, iso_week=week, band=band, scam_category=category))
+    db.commit()
+    body = api_client.get("/placement-cell/dashboard").json()
+    assert next(c["count"] for c in body["by_week_band"] if c["week"] == week and c["band"] == band) == 5
+    assert next(c["count"] for c in body["by_week_category"] if c["week"] == week and c["category"] == category) == 5
+    db.query(InstitutionObservation).filter_by(iso_week=week, band=band, scam_category=category).delete()
+    db.commit()
+    gen.close()
+
+
+def test_analyze_without_consent_records_no_observation(api_client, monkeypatch):
+    from app.models.models import InstitutionObservation, Offer
+    monkeypatch.setenv("INDICATOR_PEPPER", "test-pepper-" + uuid.uuid4().hex)
+    gen, db = _test_db()
     before = db.query(InstitutionObservation).count()
     gen.close()
+    response = api_client.post("/analyze", data={"text": PAYMENT_TEXT})
+    assert response.status_code == 200, response.text
+    assert response.json()["report_token"]
+    gen, db = _test_db()
+    try:
+        assert db.query(InstitutionObservation).count() == before
+        assert all(offer.raw_text is None and offer.company_name is None for offer in db.query(Offer).all())
+    finally:
+        gen.close()
+
+
+def test_former_college_code_field_is_ignored(api_client):
+    # The college-code field no longer exists; an extra form field changes nothing.
     response = api_client.post("/analyze", data={"text": "A small remote internship is open.",
-        "institution_code": "DOES-NOT-EXIST"})
+                                                  "institution_code": "ANYTHING"})
     assert response.status_code == 200
     assert "institution" not in response.text.casefold()
-    gen, db = _test_db(api_client)
-    assert db.query(InstitutionObservation).count() == before
+
+
+def test_consented_report_counts_for_vit_pune_and_withdrawal_removes_it(api_client, monkeypatch):
+    from app.models.models import InstitutionObservation
+    monkeypatch.setenv("INDICATOR_PEPPER", "test-pepper-" + uuid.uuid4().hex)
+    gen, db = _test_db()
+    before = db.query(InstitutionObservation).count()
     gen.close()
+    analysis = api_client.post("/analyze", data={"text": PAYMENT_TEXT}).json()
+    selected = [i["id"] for i in analysis["reportable_indicators"]]
+    from app.services.community_reports import CONSENT_VERSION
+    reported = api_client.post("/report", json={"report_token": analysis["report_token"], "consent": True,
+        "consent_version": CONSENT_VERSION, "selected_indicators": selected})
+    assert reported.status_code == 200, reported.text
+    gen, db = _test_db()
+    try:
+        assert db.query(InstitutionObservation).count() == before + 1
+        observation = db.query(InstitutionObservation).order_by(InstitutionObservation.id.desc()).first()
+        assert observation.institution.name == "VIT Pune"
+        assert re.fullmatch(r"\d{4}-W\d{2}", observation.iso_week)
+        assert observation.band == analysis["risk_band"]
+        assert observation.scam_category == "registration_fee"
+        assert {c.name for c in InstitutionObservation.__table__.columns} == {
+            "id", "institution_id", "report_id", "iso_week", "band", "scam_category", "is_demo"}
+    finally:
+        gen.close()
+    assert api_client.post("/report/withdraw", json={"code": reported.json()["withdrawal_code"]}).status_code == 200
+    gen, db = _test_db()
+    try:
+        assert db.query(InstitutionObservation).count() == before
+    finally:
+        gen.close()
 
 
-def test_cli_creates_and_shows_api_key_once(tmp_path):
-    db_path = tmp_path / "institutions.sqlite3"
-    env = os.environ.copy()
-    env["DATABASE_URL"] = f"sqlite:///{db_path.as_posix()}"
-    command = [sys.executable, str(ROOT / "scripts" / "add_institution.py"),
-        "--name", "Synthetic College", "--code", "SYNTH"]
-    first = subprocess.run(command, env=env, capture_output=True, text=True, check=True)
-    key = first.stdout.strip().splitlines()[-1]
-    assert len(key) > 30
-    assert "API key (shown once" in first.stdout
-    duplicate = subprocess.run(command, env=env, capture_output=True, text=True)
-    assert duplicate.returncode != 0
-    assert key not in duplicate.stdout
-    from sqlalchemy import create_engine
-    from sqlalchemy.orm import Session
-    from app.models.models import Institution
-    engine = create_engine(f"sqlite:///{db_path.as_posix()}")
-    with Session(engine) as db:
-        stored = db.query(Institution).one().api_key_hash
-    assert stored == hashlib.sha256(key.encode()).hexdigest()
-    assert stored != key
-    engine.dispose()
+def test_add_institution_script_is_gone():
+    assert not (ROOT / "scripts" / "add_institution.py").exists()

@@ -28,10 +28,6 @@ const demoEnv = {
   RATE_LIMIT: '100/minute',
   ALLOWED_ORIGINS: 'http://localhost:5173,http://127.0.0.1:5173',
 }
-const output = execFileSync(python, ['scripts/add_institution.py', '--name', 'Synthetic placement cell', '--code', 'DEMO-PLACEMENT'], { cwd: root, env: demoEnv, encoding: 'utf8' })
-const apiKey = output.trim().split(/\r?\n/).at(-1)
-if (!apiKey || apiKey.startsWith('Institution')) throw new Error('Institution CLI did not return its one-time test key')
-process.env.E2E_INSTITUTION_KEY = apiKey
 process.env.E2E_DATABASE_URL = demoEnv.DATABASE_URL
 process.env.E2E_DEMO_PEPPER = demoEnv.INDICATOR_PEPPER
 process.env.E2E_REGISTRY_DB = registryPath

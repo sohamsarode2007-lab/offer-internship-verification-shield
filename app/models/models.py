@@ -58,6 +58,7 @@ class CommunityReport(Base):
     is_demo = Column(Boolean, default=False, nullable=False)
     indicators = relationship("CommunityIndicator", back_populates="report", cascade="all, delete-orphan")
     bands = relationship("CommunityTemplateBand", back_populates="report", cascade="all, delete-orphan")
+    observations = relationship("InstitutionObservation", back_populates="report", cascade="all, delete-orphan")
 
 
 class CommunityIndicator(Base):
@@ -104,19 +105,23 @@ class CommunityDispute(Base):
 
 
 class Institution(Base):
+    """Single-college simulation: exactly one record, "VIT Pune", created automatically."""
     __tablename__ = "institutions"
     id = Column(Integer, primary_key=True)
     name = Column(String(200), nullable=False)
-    code = Column(String(40), nullable=False, unique=True, index=True)
-    api_key_hash = Column(String(64), nullable=False, unique=True, index=True)
     observations = relationship("InstitutionObservation", back_populates="institution", cascade="all, delete-orphan")
 
 
 class InstitutionObservation(Base):
+    """One row per consented community report: week, band and scam category only."""
     __tablename__ = "institution_observations"
     id = Column(Integer, primary_key=True)
     institution_id = Column(Integer, ForeignKey("institutions.id", ondelete="CASCADE"), nullable=False, index=True)
+    # Withdrawing the report removes its observation too.
+    report_id = Column(String(36), ForeignKey("community_reports.id", ondelete="CASCADE"), nullable=True, index=True)
     iso_week = Column(String(8), nullable=False, index=True)
     band = Column(String(50), nullable=False, index=True)
     scam_category = Column(String(50), nullable=False, index=True)
+    is_demo = Column(Boolean, default=False, nullable=False)
     institution = relationship("Institution", back_populates="observations")
+    report = relationship("CommunityReport", back_populates="observations")

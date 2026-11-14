@@ -208,7 +208,10 @@ def _decode_token(token: str, pepper: str) -> dict:
         raise ValueError("invalid report token") from exc
 
 
-def issue_report_token(db: Session, indicators: list[dict], signature: list[int]):
+def issue_report_token(db: Session, indicators: list[dict], signature: list[int],
+                       band: str | None = None, scam_category: str | None = None):
+    """Signed, single-use token. band/scam_category (rule outputs, no text) let a consented
+    report be counted on the VIT Pune dashboard."""
     current, _ = _pepper_config()
     if not current or not signature:
         return None, []
@@ -218,7 +221,8 @@ def issue_report_token(db: Session, indicators: list[dict], signature: list[int]
     token_indicators = [{k: item[k] for k in ("indicator_type", "digest", "key_version", "masked")}
                         for item in indicators]
     payload = {"jti": jti, "exp": int(expires.timestamp()), "consent_version": CONSENT_VERSION,
-               "indicators": token_indicators, "signature": signature}
+               "indicators": token_indicators, "signature": signature,
+               "band": band, "scam_category": scam_category}
     db.add(CommunityToken(jti=jti, expires_at=expires))
     db.flush()
     return _sign_payload(payload, pepper), [{"id": x["indicator_type"] + ":" + x["digest"], "indicator_type": x["indicator_type"], "masked": x["masked"]} for x in indicators]
@@ -256,6 +260,11 @@ def accept_report(db: Session, token: str, selected: list[str], consent: bool, c
             digest=item["digest"], key_version=item["key_version"], created_at=now, last_seen_at=now))
     for band, bucket in _signature_bands(signature):
         db.add(CommunityTemplateBand(report_id=report_id, band=band, bucket=bucket))
+    if payload.get("band"):
+        from app.services.institution_dashboard import current_iso_week, record_report_observation
+        db.flush()
+        record_report_observation(db, report_id, payload["band"], payload.get("scam_category") or "other",
+                                  current_iso_week(now.date()), report.is_demo)
     db.commit()
     return {"status": "reported", "withdrawal_code": code}
 

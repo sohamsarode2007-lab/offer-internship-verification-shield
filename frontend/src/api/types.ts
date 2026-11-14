@@ -79,6 +79,7 @@ export type DashboardCount = number | '<5'
 export interface WeekBandCount { week: string; band: RiskBand; count: DashboardCount }
 export interface WeekCategoryCount { week: string; category: ScamCategory; count: DashboardCount }
 export interface InstitutionDashboard {
+  institution: string
   weeks: string[]
   by_week_band: WeekBandCount[]
   by_week_category: WeekCategoryCount[]

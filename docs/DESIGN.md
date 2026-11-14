@@ -30,7 +30,7 @@ Steel on obsidian and basalt measures 6.23:1 and 5.76:1 respectively, above WCAG
 Desktop:
 ```text
 ┌──────────────────────────────────────────────────────────────────────────┐
-│ Offer shield                         How it works   For placement cells │
+│ Offer shield                    How it works   VIT Pune placement cell │
 ├──────────────────────────────────────────────────────────────────────────┤
 │                                                                          │
 │ Check an offer before you pay anything.                                  │
@@ -41,7 +41,6 @@ Desktop:
 │ │                                       │  │ Original email verifies   │ │
 │ │                                       │  │ who sent the offer.       │ │
 │ └──────────────────────────────────────┘  └───────────────────────────┘ │
-│ Your college's code [                         ]                           │
 │ [Check offer]  We don't store your offer or personal details.             │
 │ Try a sample: [Company offer] [Government scheme] [Internship offer]      │
 └──────────────────────────────────────────────────────────────────────────┘
@@ -104,8 +103,8 @@ Desktop: restrained form with indicator type, value, contact email, reason, and 
 Desktop:
 ```text
 ┌──────────────────────────────────────────────────────────────────────────┐
-│ Placement cell dashboard                                                │
-│ [API key in memory only] [Load dashboard]                                │
+│ VIT Pune placement cell                                                 │
+│ Loads automatically (single-college simulation; no key)                  │
 │ Counts aren't deduplicated by student.                                    │
 │ Results by week                                                          │
 │ [Monochrome hand-written SVG chart, 12 weeks, accessible legend]          │
@@ -247,9 +246,8 @@ Mobile:
 
 ```text
 ┌──────────────────────────────┐
-│ Placement cell dashboard    │
-│ [Institution API key        ]│
-│ [Load dashboard             ]│
+│ VIT Pune placement cell      │
+│ Loads automatically          │
 │ Counts aren't deduplicated   │
 │ Results by week              │
 │ Legend                       │

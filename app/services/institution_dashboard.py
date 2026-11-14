@@ -1,6 +1,10 @@
-"""Institution trend category rules and weekly k-anonymous dashboard queries."""
-import hashlib
-import hmac
+"""VIT Pune placement-cell dashboard: category rules and weekly k-anonymous queries.
+
+Single-college simulation. There is exactly one institution, "VIT Pune", created
+automatically; every consented community report is attributed to it. Multiple
+colleges and a staff login for the dashboard are future scope.
+"""
+import os
 import re
 from datetime import date, datetime, timedelta, timezone
 
@@ -9,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.models.models import Institution, InstitutionObservation
 
+INSTITUTION_NAME = "VIT Pune"
 BANDS = ("likely legitimate", "insufficient evidence, verify manually", "high risk")
 CATEGORIES = (
     "registration_fee", "security_deposit", "training_or_kit_fee", "fake_government_scheme",
@@ -16,19 +21,29 @@ CATEGORIES = (
 )
 
 
-def hash_api_key(api_key: str) -> str:
-    return hashlib.sha256(api_key.encode("utf-8")).hexdigest()
+def get_institution(db: Session) -> Institution:
+    """Return the single VIT Pune record, creating it on first use."""
+    institution = db.query(Institution).order_by(Institution.id).first()
+    if institution is None:
+        institution = Institution(name=INSTITUTION_NAME)
+        db.add(institution)
+        db.flush()
+    return institution
 
 
-def authenticate_api_key(db: Session, api_key: str | None) -> Institution | None:
-    if not api_key:
-        return None
-    digest = hash_api_key(api_key)
-    # Hash lookup narrows candidates; compare_digest avoids a normal string comparison.
-    institution = db.query(Institution).filter_by(api_key_hash=digest).first()
-    if institution and hmac.compare_digest(institution.api_key_hash, digest):
-        return institution
-    return None
+def record_report_observation(db: Session, report_id: str, band: str, scam_category: str,
+                              iso_week: str, is_demo: bool) -> None:
+    """Attribute one consented report to VIT Pune (week, band and category only)."""
+    if band not in BANDS:
+        return
+    if scam_category not in CATEGORIES:
+        scam_category = "other"
+    db.add(InstitutionObservation(institution_id=get_institution(db).id, report_id=report_id,
+                                  iso_week=iso_week, band=band, scam_category=scam_category, is_demo=is_demo))
+
+
+def _include_demo() -> bool:
+    return os.getenv("DEMO_MODE") == "1"
 
 
 def _check(checks: list[dict], name: str) -> dict:
@@ -75,25 +90,33 @@ def current_iso_week(today: date | None = None) -> str:
     return f"{year}-W{week:02d}"
 
 
-def dashboard(db: Session, institution_id: int, today: date | None = None) -> dict:
+def last_weeks(today: date | None = None, count: int = 12) -> list[str]:
     today = today or datetime.now(timezone.utc).date()
     weeks = []
-    for offset in reversed(range(12)):
+    for offset in reversed(range(count)):
         year, week, _ = (today - timedelta(weeks=offset)).isocalendar()
         weeks.append(f"{year}-W{week:02d}")
+    return weeks
+
+
+def dashboard(db: Session, today: date | None = None) -> dict:
+    institution = get_institution(db)
+    db.commit()
+    weeks = last_weeks(today)
+    base = [InstitutionObservation.institution_id == institution.id,
+            InstitutionObservation.iso_week.in_(weeks)]
+    if not _include_demo():
+        base.append(InstitutionObservation.is_demo.is_(False))
     rows = db.query(InstitutionObservation.iso_week, InstitutionObservation.band,
-        func.count(InstitutionObservation.id)).filter(
-            InstitutionObservation.institution_id == institution_id,
-            InstitutionObservation.iso_week.in_(weeks)
-        ).group_by(InstitutionObservation.iso_week, InstitutionObservation.band).all()
+        func.count(InstitutionObservation.id)).filter(*base).group_by(
+            InstitutionObservation.iso_week, InstitutionObservation.band).all()
     band_counts = {(week, band): count for week, band, count in rows}
     category_rows = db.query(InstitutionObservation.iso_week, InstitutionObservation.scam_category,
-        func.count(InstitutionObservation.id)).filter(
-            InstitutionObservation.institution_id == institution_id,
-            InstitutionObservation.iso_week.in_(weeks)
-        ).group_by(InstitutionObservation.iso_week, InstitutionObservation.scam_category).all()
+        func.count(InstitutionObservation.id)).filter(*base).group_by(
+            InstitutionObservation.iso_week, InstitutionObservation.scam_category).all()
     category_counts = {(week, category): count for week, category, count in category_rows}
     return {
+        "institution": institution.name,
         "weeks": weeks,
         "by_week_band": [{"week": week, "band": band,
                           "count": (n if n >= 5 else "<5")}

@@ -97,34 +97,26 @@ from deployment secret storage; do not commit it. `INDICATOR_KEY_VERSION`
 versions digests during rotation, and `INDICATOR_PEPPER_PREVIOUS` temporarily
 keeps older digests matchable until they expire.
 
-## Placement-cell dashboard
+## VIT Pune placement cell (single-college simulation)
 
-Run migrations, then add an institution from an administrative shell:
+This build simulates one college, **VIT Pune**. Its institution record is
+created automatically; there are no college codes or API keys. Every
+community report a student consents to is attributed to VIT Pune and recorded
+as one observation: ISO week (`YYYY-Www`), risk band and one scam category,
+linked to the report so a withdrawal removes it. A normal `/analyze` stores no
+observation. Reports are not deduplicated by student and enrollment is not
+verified, so counts are reports, not unique students.
 
-```powershell
-python -m alembic upgrade head
-python scripts/add_institution.py --name "Example College" --code EXAMPLE
-```
-
-The CLI prints a random API key once. Store it as a secret; the database keeps
-only its SHA-256 hash. `/analyze` accepts an optional `institution_code` form
-field. A matching code records only the institution ID, ISO week (`YYYY-Www`),
-risk band, and one scam category. Unknown codes are silently ignored. The offer
-text, name, contacts, registration values, and analysis checks are not copied to
-the institution trend tables.
-These are consented submissions attributed by the supplied code; enrollment is
-not independently verified and repeated submissions are not deduplicated by
-student.
-
-Read the latest 12 weeks with the institution key in `X-API-Key`:
+Multiple colleges and a staff login for this page are future scope; until then
+the page is open and shows only aggregate data.
 
 ```powershell
-Invoke-RestMethod -Uri http://localhost:8000/institutions/me/dashboard `
-  -Headers @{ "X-API-Key" = "PASTE_KEY_STORED_SECURELY" }
+Invoke-RestMethod -Uri http://localhost:8000/placement-cell/dashboard
 ```
 
-The response contains week-by-band and week-by-category counts; any cell below
-five is returned as `"<5"`. The endpoint is limited to 30 requests per minute.
+The response contains week-by-band and week-by-category counts for 12 weeks;
+any cell below five is returned as `"<5"`. The endpoint is limited to 30
+requests per minute.
 Category rules use the existing check results and follow this priority:
 
 - `security_deposit`: a payment demand mentions a deposit.

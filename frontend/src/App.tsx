@@ -21,7 +21,7 @@ const categoryLabels: Record<ScamCategory, string> = {
 const bandClass = (band?: string | null) => band === 'high risk' ? styles.highRisk : band === 'likely legitimate' ? styles.likely : styles.manual
 
 function Header() {
-  return <header className={styles.header}><a className={styles.brand} href="/">Offer shield</a><nav aria-label="Main navigation"><a href="/how-it-works">How it works</a><a href="/dashboard">For placement cells</a></nav></header>
+  return <header className={styles.header}><a className={styles.brand} href="/">Offer shield</a><nav aria-label="Main navigation"><a href="/how-it-works">How it works</a><a href="/dashboard">VIT Pune placement cell</a></nav></header>
 }
 function Footer() {
   return <footer className={styles.footer}><span>Check independently before you pay or share sensitive details.</span><nav aria-label="Support links"><a href="/withdraw">Withdraw a report</a><a href="/dispute">Dispute an indicator</a></nav></footer>
@@ -31,7 +31,6 @@ function Shell({ children }: { children: React.ReactNode }) { return <><Header/>
 function Home({ onResult }: { onResult: (result: AnalyzeResponse) => void }) {
   const [text, setText] = useState('')
   const [file, setFile] = useState<File | null>(null)
-  const [institutionCode, setInstitutionCode] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [demoText, setDemoText] = useState('')
@@ -41,7 +40,7 @@ function Home({ onResult }: { onResult: (result: AnalyzeResponse) => void }) {
     event.preventDefault(); setError('')
     if (!text.trim() && !file) { setError('Paste offer text or choose a file to check.'); return }
     setBusy(true)
-    try { onResult(await analyze(text, file, institutionCode)); window.scrollTo({ top: 0, behavior: 'instant' }) }
+    try { onResult(await analyze(text, file)); window.scrollTo({ top: 0, behavior: 'instant' }) }
     catch (err) { setError(err instanceof Error ? err.message : 'The request failed. Try again.') }
     finally { setBusy(false) }
   }
@@ -63,7 +62,6 @@ function Home({ onResult }: { onResult: (result: AnalyzeResponse) => void }) {
           {file && <p className={styles.selectedFile}>Selected: {file.name}</p>}{demoText && <p className={styles.selectedFile}>Sample loaded: {demoText.replace('.txt', '')}</p>}
         </div>
       </div>
-      <label className={styles.codeInput}>Your college’s code<input value={institutionCode} onChange={e => setInstitutionCode(e.target.value)} disabled={busy} autoComplete="off"/></label>
       <div className={styles.submitLine}><button type="submit" disabled={busy}>{busy ? 'Checking…' : 'Check offer'}</button><p>We don’t store your offer or your personal details. Only the result is kept.</p></div>
       {error && <p className={styles.error} role="alert">{error}</p>}
     </form>
@@ -173,9 +171,14 @@ function TrendChart({ dashboard }: { dashboard: InstitutionDashboard }) {
 }
 
 function DashboardPage() {
-  const [apiKey, setApiKey] = useState(''); const [dashboard, setDashboard] = useState<InstitutionDashboard | null>(null); const [error, setError] = useState(''); const [busy, setBusy] = useState(false)
-  async function submit(event: FormEvent) { event.preventDefault(); setBusy(true); setError(''); try { setDashboard(await loadDashboard(apiKey)) } catch (err) { setDashboard(null); setError(err instanceof Error ? err.message : 'The dashboard could not be loaded.') } finally { setBusy(false) } }
-  return <section className={styles.dashboardPage}><h1>Placement cell dashboard</h1><p>Review anonymised trends from analyses attributed to your college.</p><form className={styles.keyForm} onSubmit={submit}><label>Institution API key<input type="password" value={apiKey} onChange={e => setApiKey(e.target.value)} autoComplete="off" required/></label><button disabled={busy || !apiKey.trim()}>{busy ? 'Loading…' : 'Load dashboard'}</button></form><p className={styles.help}>The key stays in memory only. Counts aren’t deduplicated by student.</p>{error && <p role="alert" className={styles.error}>{error}</p>}{dashboard && <div className={styles.dashboardResults}><h2>Results by week</h2><TrendChart dashboard={dashboard}/><h2>Scam categories by week</h2><div className={styles.tableScroll} tabIndex={0} aria-label="Scrollable scam categories by week"><table className={styles.categoryTable} aria-label="Scam categories by week"><thead><tr><th scope="col">Category</th>{dashboard.weeks.map(w => <th scope="col" key={w}>{w}</th>)}</tr></thead><tbody>{Object.entries(categoryLabels).map(([category, label]) => <tr key={category}><th scope="row">{label}</th>{dashboard.weeks.map(week => { const count = dashboard.by_week_category.find(row => row.week === week && row.category === category)?.count ?? '<5'; return <td key={week} title={count === '<5' ? 'Counts under five are suppressed to protect privacy.' : `${count} analyses`}>{count}</td>})}</tr>)}</tbody></table></div></div>}</section>
+  const [dashboard, setDashboard] = useState<InstitutionDashboard | null>(null); const [error, setError] = useState('')
+  useEffect(() => {
+    let active = true
+    loadDashboard().then(data => { if (active) setDashboard(data) })
+      .catch(err => { if (active) setError(err instanceof Error ? err.message : 'The dashboard could not be loaded.') })
+    return () => { active = false }
+  }, [])
+  return <section className={styles.dashboardPage}><h1>VIT Pune placement cell</h1><p>Trends from scam reports that VIT students chose to share. Counts are reports, not verified unique students.</p>{!dashboard && !error && <p className={styles.help} role="status">Loading…</p>}{error && <p role="alert" className={styles.error}>{error}</p>}{dashboard && <div className={styles.dashboardResults}><h2>Results by week</h2><TrendChart dashboard={dashboard}/><h2>Scam categories by week</h2><div className={styles.tableScroll} tabIndex={0} aria-label="Scrollable scam categories by week"><table className={styles.categoryTable} aria-label="Scam categories by week"><thead><tr><th scope="col">Category</th>{dashboard.weeks.map(w => <th scope="col" key={w}>{w}</th>)}</tr></thead><tbody>{Object.entries(categoryLabels).map(([category, label]) => <tr key={category}><th scope="row">{label}</th>{dashboard.weeks.map(week => { const count = dashboard.by_week_category.find(row => row.week === week && row.category === category)?.count ?? '<5'; return <td key={week} title={count === '<5' ? 'Counts under five are suppressed to protect privacy.' : `${count} analyses`}>{count}</td>})}</tr>)}</tbody></table></div></div>}</section>
 }
 
 function HowPage() {
@@ -187,7 +190,7 @@ function HowPage() {
     <section><h2>Reports from other students</h2><p>With consent, selected scammer-role indicators and a redacted wording fingerprint can be matched against reports. Evidence is bucketed, correlated evidence is capped, and community evidence alone cannot cause a high-risk verdict. Reports are not independently verified.</p></section>
     <section><h2>How to read the result</h2><p>Likely legitimate requires a passing domain, present non-failing registration and an external verification signal. Otherwise structural checks alone cannot establish legitimacy. A payment demand forces high risk. These are rules, not a trained model.</p></section>
     <section><h2>Planned and unavailable checks</h2><p>No additional future check is claimed in the current capability statements. Company registry records are looked up locally; this service does not query a registry over the network. Sender authentication is available for .eml uploads only. Other input types cannot authenticate the sender.</p></section>
-    <section><h2>Privacy and limits</h2><p>The offer text and file aren’t stored. Analysis results are retained, and placement trends store only institution, week, band and category for recognized codes. Counts represent analyses, not verified unique students.</p><p><a href="https://github.com/sohamsarode2007-lab/offer-internship-verification-shield/blob/clean-main/docs/PRIVACY_DESIGN.md">Read the privacy design</a>. <a href="https://github.com/sohamsarode2007-lab/offer-internship-verification-shield/blob/clean-main/CLAIMS.md">Read current capability claims</a>.</p></section>
+    <section><h2>Privacy and limits</h2><p>The offer text and file aren’t stored. Analysis results are retained. This is a single-college simulation for VIT Pune: every report a student chooses to share counts towards the VIT Pune placement cell page, which shows only week, result and scam category. Counts represent reports, not verified unique students; a staff login for that page is future scope.</p><p><a href="https://github.com/sohamsarode2007-lab/offer-internship-verification-shield/blob/clean-main/docs/PRIVACY_DESIGN.md">Read the privacy design</a>. <a href="https://github.com/sohamsarode2007-lab/offer-internship-verification-shield/blob/clean-main/CLAIMS.md">Read current capability claims</a>.</p></section>
   </article>
 }
 

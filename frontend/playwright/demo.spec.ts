@@ -16,8 +16,6 @@ test('demo analysis, reporting, dashboard, and public screens', async ({ page },
   await capture(page, testInfo, 'home')
   await expect(page.getByText('Try a sample:')).toBeVisible()
 
-  const code = page.getByLabel('Your college’s code')
-  await code.fill('DEMO-PLACEMENT')
   const samples = [
     { button: 'Emberlake offer', key: 'legit_emberlake.txt', band: 'likely legitimate', shot: 'sample-emberlake-result' },
     { button: 'Brightpath internship', key: 'legit_brightpath_young_startup.txt', band: 'insufficient evidence, verify manually', shot: 'sample-brightpath-result' },
@@ -28,10 +26,7 @@ test('demo analysis, reporting, dashboard, and public screens', async ({ page },
     { button: 'Halvorn internship', key: 'registry_cin_mismatch_halvorn.txt', band: 'insufficient evidence, verify manually', shot: 'sample-halvorn-result' },
   ]
   for (const [index, sample] of samples.entries()) {
-    if (index > 0) {
-      await page.getByRole('button', { name: 'Check another offer' }).click()
-      await code.fill('DEMO-PLACEMENT')
-    }
+    if (index > 0) await page.getByRole('button', { name: 'Check another offer' }).click()
     await page.getByRole('button', { name: sample.button }).click()
     await expect(page.getByLabel('Paste offer text')).not.toHaveValue('')
     await expect(page.getByText(`Sample loaded: ${sample.key.replace('.txt', '')}`)).toBeVisible()
@@ -40,14 +35,6 @@ test('demo analysis, reporting, dashboard, and public screens', async ({ page },
     await capture(page, testInfo, sample.shot)
   }
 
-  // Produce enough synthetic weekly analyses for a visible, k-anonymous dashboard cell.
-  for (let i = 0; i < 4; i++) {
-    await page.getByRole('button', { name: 'Check another offer' }).click()
-    await page.getByLabel('Your college’s code').fill('DEMO-PLACEMENT')
-    await page.getByRole('button', { name: 'Government scheme' }).click()
-    await page.getByRole('button', { name: 'Check offer' }).click()
-    await expect(page.getByRole('heading', { name: 'high risk' })).toBeVisible()
-  }
 
   await page.getByRole('button', { name: 'Report this scam' }).click()
   const dialog = page.getByRole('dialog')
@@ -88,11 +75,7 @@ test('demo analysis, reporting, dashboard, and public screens', async ({ page },
   await capture(page, testInfo, 'dispute-success')
 
   await page.goto('/dashboard')
-  await expect(page.getByRole('heading', { name: 'Placement cell dashboard' })).toBeVisible()
-  const apiKey = process.env.E2E_INSTITUTION_KEY
-  if (!apiKey) throw new Error('Demo institution key was not passed to the browser test')
-  await page.getByLabel('Institution API key').fill(apiKey)
-  await page.getByRole('button', { name: 'Load dashboard' }).click()
+  await expect(page.getByRole('heading', { name: 'VIT Pune placement cell' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Results by week' })).toBeVisible()
   await expect(page.getByRole('table', { name: 'Scam categories by week' })).toBeVisible()
   await capture(page, testInfo, 'dashboard')

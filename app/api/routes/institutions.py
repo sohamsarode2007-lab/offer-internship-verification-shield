@@ -1,24 +1,19 @@
-"""Authenticated, aggregate-only placement cell dashboard."""
-from typing import Optional
+"""VIT Pune placement-cell dashboard (single-college simulation).
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request
+There is no staff login yet (future scope): the page shows only aggregate weekly
+counts with cells below five suppressed.
+"""
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
 
 from app.api.limiter import limiter
 from app.db.database import get_db
-from app.services.institution_dashboard import authenticate_api_key, dashboard
+from app.services.institution_dashboard import dashboard
 
-router = APIRouter(prefix="/institutions", tags=["institutions"])
+router = APIRouter(prefix="/placement-cell", tags=["placement-cell"])
 
 
-@router.get("/me/dashboard")
+@router.get("/dashboard")
 @limiter.limit("30/minute")
-def institution_dashboard(
-    request: Request,
-    x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
-    db: Session = Depends(get_db),
-):
-    institution = authenticate_api_key(db, x_api_key)
-    if institution is None:
-        raise HTTPException(status_code=401, detail="Invalid or missing API key")
-    return dashboard(db, institution.id)
+def placement_cell_dashboard(request: Request, db: Session = Depends(get_db)):
+    return dashboard(db)

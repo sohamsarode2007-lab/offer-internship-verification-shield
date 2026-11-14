@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+﻿import { afterEach, describe, expect, it, vi } from 'vitest'
 import { analyze, submitReport, withdrawReport, ApiError } from './client'
 
 afterEach(() => vi.unstubAllGlobals())
@@ -17,7 +17,7 @@ describe('backend error translation', () => {
     [429, 'rate limited', 'Too many checks in a minute. Wait a moment and try again.'],
   ])('shows the specified message for HTTP %i', async (status, detail, message) => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response(status, detail)))
-    await expect(analyze('offer', null, '')).rejects.toThrow(message)
+    await expect(analyze('offer', null)).rejects.toThrow(message)
   })
 
   it.each([
@@ -34,7 +34,7 @@ describe('backend error translation', () => {
 
   it('reports server connection failure in the interface voice', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('connection refused')))
-    await expect(analyze('offer', null, '')).rejects.toThrow("The server can't be reached. Check your connection and try again.")
+    await expect(analyze('offer', null)).rejects.toThrow("The server can't be reached. Check your connection and try again.")
     expect(new ApiError(0, 'example')).toBeInstanceOf(Error)
   })
 })
