@@ -1,0 +1,15 @@
+From: Acme Recruitment <hr@attacker.example>
+To: candidate@student.example
+Subject: Synthetic internship offer
+Date: Thu, 12 Nov 2026 10:00:00 +0000
+Authentication-Results: mx.receiver.example; spf=fail
+ smtp.mailfrom=attacker.example; dkim=fail header.d=attacker.example;
+ dmarc=fail header.from=attacker.example
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 7bit
+MIME-Version: 1.0
+
+Acme Data Solutions Pvt Ltd
+GSTIN: 27AAFCA1234B1ZD
+Contact: hr@acme.example
+No fee is required.

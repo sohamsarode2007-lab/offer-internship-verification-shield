@@ -25,6 +25,8 @@ def load_cases():
             raise ValueError(f"{case.get('case_id')}: all evaluation rows must be labelled synthetic=true")
         if case.get("truth") not in {"scam", "legitimate"}:
             raise ValueError(f"{case.get('case_id')}: unsupported truth label")
+        if case.get("input_type", "text") not in {"text", "text_file", "eml"}:
+            raise ValueError(f"{case.get('case_id')}: unsupported input_type")
         if case.get("expected_band") not in BANDS:
             raise ValueError(f"{case.get('case_id')}: unsupported expected band")
         if not case.get("expected_basis"):
@@ -32,27 +34,125 @@ def load_cases():
     return cases
 
 
-def local_band(text):
+def case_text(case):
+    """Inline text, or the contents of a repo-relative fixture file (input_type=text_file)."""
+    if case.get("input_type", "text") == "text_file":
+        return (ROOT / case["text"]).read_text(encoding="utf-8")
+    return case["text"]
+
+
+_REGISTRY_DB = None
+
+
+def _synthetic_registry_db():
+    """Load fixtures/demo/synthetic_mca_master.csv (fictional companies) into a temporary SQLite file."""
+    global _REGISTRY_DB
+    if _REGISTRY_DB is None:
+        import tempfile
+        sys.path.insert(0, str(ROOT))
+        from scripts.load_mca_master import load_csv
+        _REGISTRY_DB = Path(tempfile.mkdtemp(prefix="eval-registry-")) / "synthetic.sqlite3"
+        load_csv(ROOT / "fixtures" / "demo" / "synthetic_mca_master.csv", _REGISTRY_DB, synthetic=True)
+    return _REGISTRY_DB
+
+
+def local_band(case):
     # Synthetic .example domains are configured as demo fixtures to keep this path
     # offline and deterministic. No external DNS or registry calls are made.
     from app.services import domain_verification, fact_extraction, gstin_verification
     from app.services import payment_detection, risk_scoring
 
-    facts = fact_extraction.extract_facts(text)
-    checks = [
-        domain_verification.verify_domain(facts),
-        gstin_verification.verify_gstin(facts),
-        payment_detection.detect_payment_demand(facts),
-    ]
+    from app.services import email_auth, ingestion, community_reports
+    if case.get("community_fixture"):
+        os.environ.setdefault("INDICATOR_PEPPER", "eval-only-pepper")
+        os.environ.setdefault("INDICATOR_KEY_VERSION", "1")
+    if case.get("input_type", "text") == "eml":
+        parsed = email_auth.parse_eml((ROOT / case["text"]).read_bytes())
+        body, _ = ingestion.ingest_offer(text=parsed["body_text"])
+        pieces = [body] if body else []
+        for attachment in parsed["attachments"]:
+            extracted, _ = ingestion.ingest_offer(file_bytes=attachment["data"], filename=attachment["filename"])
+            if extracted:
+                pieces.append(extracted)
+        text = "\n".join(pieces)
+        facts = fact_extraction.extract_facts(text)
+        body_domain = facts.get("sender_domain", {}).get("value")
+        auth_facts = dict(facts)
+        auth_facts["sender_domain"] = {"value": parsed.get("sender_domain")}
+        domain_check = domain_verification.verify_domain(auth_facts)
+        if body_domain:
+            domain_check["details"] += f" Body-claimed domain: '{body_domain}'."
+        auth_check = email_auth.verify_sender_authentication(parsed, facts)
+        payment_check = payment_detection.detect_payment_demand(facts)
+        indicators = community_reports.extract_indicators(text, parsed, payment_check)
+    else:
+        text = case_text(case)
+        facts = fact_extraction.extract_facts(text)
+        domain_check = domain_verification.verify_domain(facts)
+        auth_check = email_auth.not_applicable()
+        payment_check = payment_detection.detect_payment_demand(facts)
+        indicators = community_reports.extract_indicators(text, None, payment_check)
+    signature = community_reports.minhash_signature(text) if os.getenv("INDICATOR_PEPPER") else []
+    community_check = community_reports.lookup_community(
+        _seed_eval_community(case, community_reports) if case.get("community_fixture") else _empty_eval_db(),
+        indicators, signature)
+    checks = [domain_check, gstin_verification.verify_gstin(facts), payment_check, auth_check, community_check]
     return risk_scoring.calculate_risk_score(checks, facts=facts)["risk_band"]
 
 
-def live_band(text, base_url):
+_EVAL_DB = None
+
+
+def _empty_eval_db():
+    global _EVAL_DB
+    if _EVAL_DB is None:
+        from sqlalchemy import create_engine
+        from sqlalchemy.orm import sessionmaker
+        from sqlalchemy.pool import StaticPool
+        from app.db.database import Base
+        engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+        Base.metadata.create_all(engine)
+        _EVAL_DB = sessionmaker(bind=engine)()
+    return _EVAL_DB
+
+
+def _seed_eval_community(case, community_reports):
+    from app.services.fact_extraction import extract_facts
+    from app.services.payment_detection import detect_payment_demand
+    db = _empty_eval_db()
+    if not db.query(community_reports.CommunityReport).count():
+        fixture = ("No registration number is shown. Contact HR at hr@fraud.example or WhatsApp +91 9123456001. "
+                   "This remote role requires a processing fee of Rs 500 to rky.verma@ybl. "
+                   "We are pleased to offer the analyst internship. Please confirm your joining date and reply "
+                   "to the recruitment team. The role includes training, weekly meetings, and project work with "
+                   "our engineering group.")
+        for _ in range(3):
+            facts = extract_facts(fixture)
+            indicators = community_reports.extract_indicators(fixture, None, detect_payment_demand(facts))
+            signature = community_reports.minhash_signature(fixture)
+            token, _ = community_reports.issue_report_token(db, indicators, signature)
+            selected = [x["indicator_type"] + ":" + x["digest"] for x in indicators]
+            community_reports.accept_report(db, token, selected, True, community_reports.CONSENT_VERSION)
+    return db
+
+
+def live_band(case, base_url):
     boundary = "----CodexEvalBoundary"
+    if case.get("input_type", "text") == "eml":
+        filename = Path(case["text"]).name
+        data = (ROOT / case["text"]).read_bytes()
+        body = (f"--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"{filename}\"\r\n"
+                "Content-Type: message/rfc822\r\n\r\n").encode() + data + f"\r\n--{boundary}--\r\n".encode()
+        content_type = f"multipart/form-data; boundary={boundary}"
+        request = urllib.request.Request(f"{base_url.rstrip('/')}/analyze", data=body,
+            headers={"Content-Type": content_type}, method="POST")
+        with urllib.request.urlopen(request, timeout=60) as response:
+            import json
+            return json.loads(response.read().decode("utf-8"))["risk_band"]
     body = (
         f"--{boundary}\r\n"
         'Content-Disposition: form-data; name="text"\r\n\r\n'
-        f"{text}\r\n"
+        f"{case_text(case)}\r\n"
         f"--{boundary}--\r\n"
     ).encode("utf-8")
     request = urllib.request.Request(
@@ -68,19 +168,28 @@ def live_band(text, base_url):
 
 def evaluate(cases, live=False, base_url="http://127.0.0.1:8000"):
     if live:
-        predict = lambda text: live_band(text, base_url)
+        predict = lambda case: live_band(case, base_url)
     else:
         domains = set()
         for case in cases:
-            domains.update(re.findall(r"[A-Za-z0-9.-]+\.example\b", case["text"].lower()))
+            scan_text = case["text"]
+            if case.get("input_type", "text") in {"eml", "text_file"}:
+                scan_text = (ROOT / scan_text).read_text(encoding="utf-8", errors="ignore")
+            domains.update(re.findall(r"[A-Za-z0-9.-]+\.example\b", scan_text.lower()))
         os.environ["DEMO_MODE"] = "1"
         os.environ["DEMO_FIXTURE_DOMAINS"] = ",".join(sorted(domains))
+        # Cases flagged registry_fixture=true run against the synthetic company master
+        # (DEMO_MODE only). Every other case sees no registry at all.
+        if any(case.get("registry_fixture", "").lower() == "true" for case in cases):
+            os.environ["MCA_DB_PATH"] = str(_synthetic_registry_db())
+        else:
+            os.environ["MCA_DB_PATH"] = str(ROOT / "eval" / "no-registry.sqlite3")
         sys.path.insert(0, str(ROOT))
         predict = local_band
 
     results = []
     for case in cases:
-        results.append({**case, "predicted_band": predict(case["text"])})
+        results.append({**case, "predicted_band": predict(case)})
     return results
 
 

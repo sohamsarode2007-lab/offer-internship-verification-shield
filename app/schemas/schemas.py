@@ -37,6 +37,12 @@ class OfferSchema(BaseModel):
     file_path: Optional[str] = None
     created_at: Optional[datetime.datetime] = None
 
+class Reason(BaseModel):
+    """One plain-language 'Why' row: text for students and its score impact ('+65', '−10' or None)."""
+    text: str
+    impact: Optional[str] = None
+
+
 class AnalyzeResponse(BaseModel):
     offer_id: Optional[int] = None
     overall_risk_score: float
@@ -46,4 +52,17 @@ class AnalyzeResponse(BaseModel):
     # Additive fields (rule_based_v2). Existing fields above are unchanged.
     risk_band: Optional[str] = None
     risk_factors: List[str] = []
+    # Plain-language version of risk_factors for the result screen.
+    reasons: List[Reason] = []
     scoring_model: Optional[str] = None
+    next_steps: List[str] = []
+    complaint_summary: str = ""
+    report_token: Optional[str] = None
+    reportable_indicators: List[dict] = Field(default_factory=list)
+    # Not displayed by the frontend. Which company-master snapshot produced the
+    # registry result: "synthetic" (demo-only fictional data), "mca_csv", or None
+    # when no registry record was consulted. Keeps demo results traceable.
+    registry_source: Optional[str] = None
+    # Company name extracted from the offer text, shown under the verdict. Returned in
+    # the response only; it is never stored.
+    company_name: Optional[str] = None

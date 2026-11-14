@@ -2,7 +2,7 @@
 
 # Tests
 pytest>=7.3
-httpx>=0.24
+httpx2
 
 # Demo fixtures / OCR robustness tests
 reportlab>=4.0

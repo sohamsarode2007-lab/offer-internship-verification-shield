@@ -1,5 +1,6 @@
 import os
 import logging
+import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -11,7 +12,10 @@ from slowapi.errors import RateLimitExceeded
 
 from app.api.limiter import limiter
 from app.api.routes.analyze import router as analyze_router
-from app.db.database import init_dev_db
+from app.api.routes.community import router as community_router
+from app.api.routes.institutions import router as institutions_router
+from app.db.database import init_dev_db, SessionLocal
+from app.services.community_reports import purge_expired
 
 # Log level comes from the LOG_LEVEL env var (default INFO). Nothing is forced to DEBUG.
 logging.basicConfig(
@@ -19,7 +23,7 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
 )
 
-DEFAULT_DEV_ORIGINS = "http://localhost:5173,http://localhost:3000"
+DEFAULT_DEV_ORIGINS = "http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000"
 ALLOWED_ORIGINS = [o.strip() for o in os.getenv("ALLOWED_ORIGINS", DEFAULT_DEV_ORIGINS).split(",") if o.strip()]
 
 
@@ -27,12 +31,35 @@ ALLOWED_ORIGINS = [o.strip() for o in os.getenv("ALLOWED_ORIGINS", DEFAULT_DEV_O
 async def lifespan(_app: FastAPI):
     # SQLite dev only; Postgres schema is managed by `alembic upgrade head`.
     init_dev_db()
-    yield
+    def run_retention_purge():
+        db = SessionLocal()
+        try:
+            purge_expired(db)
+        finally:
+            db.close()
+
+    async def retention_worker():
+        while True:
+            try:
+                await asyncio.to_thread(run_retention_purge)
+            except Exception as exc:
+                logging.getLogger(__name__).warning("Community retention purge failed: %s", type(exc).__name__)
+            await asyncio.sleep(3600)
+
+    task = asyncio.create_task(retention_worker())
+    try:
+        yield
+    finally:
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
 
 
 app = FastAPI(
     title="Offer & Internship Verification Shield API",
-    description="Rule-based checks for job and internship offers (no ML, no registry lookup).",
+    description="Rule-based offer checks using local MCA master data when configured (no remote registry queries; labelled demo fixtures are optional).",
     version="1.0.0",
     lifespan=lifespan,
 )
@@ -51,6 +78,8 @@ app.add_middleware(
 )
 
 app.include_router(analyze_router)
+app.include_router(community_router)
+app.include_router(institutions_router)
 
 
 @app.get("/health")
@@ -58,13 +87,21 @@ def health_check():
     return {"status": "ok", "service": "Verification Shield Backend"}
 
 
-# Serve a built frontend if one is placed in ./frontend (optional).
-frontend_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend")
-if not os.path.exists(frontend_dir):
-    frontend_dir = os.path.join(os.getcwd(), "frontend")
+# Serve only the production build. The Vite source index is never served directly.
+frontend_dist = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend", "dist")
+frontend_index = os.path.join(frontend_dist, "index.html")
+if os.path.isfile(frontend_index):
+    assets_dir = os.path.join(frontend_dist, "assets")
+    demo_dir = os.path.join(frontend_dist, "demo")
+    if os.path.isdir(assets_dir):
+        app.mount("/assets", StaticFiles(directory=assets_dir), name="frontend_assets")
+    if os.path.isdir(demo_dir):
+        app.mount("/demo", StaticFiles(directory=demo_dir), name="frontend_demo")
 
-if os.path.exists(frontend_dir):
-    @app.get("/")
-    def serve_frontend():
-        return FileResponse(os.path.join(frontend_dir, "index.html"))
-    app.mount("/ui", StaticFiles(directory=frontend_dir, html=True), name="frontend_ui")
+    @app.get("/", include_in_schema=False)
+    def serve_frontend_root():
+        return FileResponse(frontend_index)
+
+    @app.get("/{frontend_path:path}", include_in_schema=False)
+    def serve_frontend_route(frontend_path: str):
+        return FileResponse(frontend_index)

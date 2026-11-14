@@ -4,6 +4,10 @@
 row is marked `synthetic=true`; it is not a real-world benchmark and must not be
 reported as one.
 
+Rows with `input_type=eml` reference the synthetic RFC 5322 messages in
+`tests/fixtures/eml/`; the local evaluator parses those messages and feeds PDF
+attachments through the same ingestion path as `/analyze`.
+
 Run the local deterministic rule path (offline, using explicitly configured
 `.example` demo fixtures):
 
@@ -34,33 +38,83 @@ or updates expected bands from predictions.
 
 | Case | Hand calculation from the scoring table | Expected band |
 |---|---|---|
-| EC01 | Passing demo domain offsets the +10 structurally valid but unverified GSTIN: 0 | likely legitimate |
+| EC01 | Passing demo domain offsets the +10 unverified GSTIN: subtotal 0; no registry/authenticated-sender signal triggers the guard floor of 31 | insufficient evidence, verify manually |
 | EC02 | Payment +65; nearby urgency +20; +10 GSTIN and -10 domain: 85 | high risk |
 | EC03 | Payment +65; +10 GSTIN and -10 domain: 65 | high risk |
-| EC04 | Negated payment adds 0; +10 GSTIN and -10 domain: 0 | likely legitimate |
-| EC05 | Stipend VPA is inbound and fee mention is negated; +10 GSTIN and -10 domain: 0 | likely legitimate |
-| EC06 | Free-mail domain failure +30 and GSTIN/free-mail consistency failure +25: 55 | insufficient evidence, verify manually |
+| EC04 | Negated payment adds 0; +10 GSTIN and -10 domain: subtotal 0; external-verification guard floor 31 | insufficient evidence, verify manually |
+| EC05 | Inbound stipend and negated fee add 0; +10 GSTIN and -10 domain: subtotal 0; external-verification guard floor 31 | insufficient evidence, verify manually |
+| EC06 | Free-mail domain failure +30, GSTIN/free-mail consistency failure +25, and PAN-initial mismatch +10: 65. By hand, the weighted mod-36 sum for the first 14 GSTIN characters is 181; 181 mod 36 = 1, so the expected final character is Z. The GSTIN checksum passes and the PAN initial Z conflicts with claimed company initial A. | high risk |
 | EC07 | Missing registration +20; no usable domain and no registration +20: 40 | insufficient evidence, verify manually |
-| EC08 | No payment demand, so urgency adds 0; +10 GSTIN and -10 demo domain: 0 | likely legitimate |
+| EC08 | No payment demand, so urgency adds 0; +10 GSTIN and -10 domain: subtotal 0; no external signal raises score to 31 | insufficient evidence, verify manually |
 | EC09 | Payment +65; missing registration +20; no usable domain and no registration +20; capped at 100 | high risk |
 | EC10 | Missing registration +20; no usable domain and no registration +20: 40 | insufficient evidence, verify manually |
+| EC11 | +10 unverified GSTIN and -10 passing From domain = 0; aligned authenticated sender meets guard | likely legitimate |
+| EC12 | DMARC fail +30 and body/From domain mismatch +15; base 0; total 45 | insufficient evidence, verify manually |
+| EC13 | Mismatched Gmail Reply-To +25; failed auth signal does not meet guard; 25 is raised to 31 | insufficient evidence, verify manually |
+| EC14 | Protected-brand display spoof +25; failed auth signal does not meet guard; 25 is raised to 31 | insufficient evidence, verify manually |
+| EC15 | Topmost DMARC fail +30; forged lower pass ignored; guard raises 30 to 31 | insufficient evidence, verify manually |
+| EC16 | No Authentication-Results gives no points; no external signal raises 0 to 31 | insufficient evidence, verify manually |
+| EC17 | PDF attachment exposes a payment demand; +65 hard floor | high risk |
+| EC18 | Three matching indicators contribute +25; matching reported template +25; community cap gives +40. Missing registration +20 and passing demo domain -10 give 50 | insufficient evidence, verify manually |
+| EC19 | Payment demand +65; missing registration +20; passing domain -10; correlated community evidence +40; subtotal 115 capped at 100 | high risk |
+| EC20 | Synthetic registry: active, name-matched CIN gives a registry pass; 0 points; the -10 offsets have nothing to offset; the registry match satisfies the low-risk guard | likely legitimate |
+| EC21 | Synthetic registry: CIN belongs to a Struck Off company, registration fail +25; passing demo domain -10; subtotal 15; guard raises to 31 because the registration failed | insufficient evidence, verify manually |
+| EC22 | Synthetic registry: CIN is registered to a different company (Ashcombe Data Labs), registration fail +25; passing demo domain -10; subtotal 15; guard raises to 31 | insufficient evidence, verify manually |
+
+EC20–EC22 (`registry_fixture=true`, `input_type=text_file`) read the demo offers in
+`fixtures/demo/` and run with the synthetic company master
+(`fixtures/demo/synthetic_mca_master.csv`, fictional companies only) loaded into a
+temporary SQLite file in `DEMO_MODE`. All other cases run with no registry loaded.
+EC21 and EC22 are labelled `scam` but land in the manual-review band: a registry
+failure alone is worth +25, so without a payment demand they are abstentions, not
+high risk. That is the documented behaviour, not a miss.
+
+EC18 and EC19's `community_fixture=true` flag causes the local evaluator to seed three
+synthetic scam reports in an ephemeral SQLite database through the same
+single-use token and consent service flow. Its expected band was calculated
+from the documented scoring weights before evaluation. EC18 is the sole existing
+expectation that changed: `high risk` to `insufficient evidence, verify manually`
+because correlated indicators and a template match now contribute only +40 total
+(20 - 10 + 40 = 50). EC19 is a new payment-demand case; its payment signal still
+forces high risk even with community evidence present. No other expected bands
+changed.
+
+Step 0 hand re-derivation: the PAN-initial rule now runs only after checksum
+success. EC06 remains high risk because its checksum passes (weighted sum 181,
+remainder 1, expected final character Z), so the mismatch contributes +10. The
+incorporation contradiction rule adds no points to existing cases because none
+claims a founding year or company age. No existing expected band changed in Step
+0. EC11–EC17 are new synthetic email cases with expectations worked from the
+updated docstring before evaluation; truth labels remain synthetic assumptions.
 
 ## Known limitation: urgency without payment
 
-EC08's synthetic ground-truth label is `scam` (`soft_urgency`), but its actual
-band is `likely legitimate`. The rules add urgency points only when urgency is
-near an already detected payment demand; a deadline by itself earns no points.
-The expected band is still `likely legitimate` because that is what the documented
-scoring table produces. Thus EC08 is both a **dangerous miss** against its label
-and a **passing regression expectation**; these are separate comparisons.
+EC08 remains labelled `scam` (`soft_urgency`), and its actual band is now
+`insufficient evidence, verify manually`. Urgency points still apply only when
+urgency is near an already detected payment demand; a deadline by itself earns no
+points. However, its structural-only evidence no longer qualifies as low risk.
+The dangerous-miss count therefore drops from 1 to 0; EC08 is an abstention, not
+a likely-legitimate result. The synthetic label is a fixture assumption, not
+independent proof that a real offer with an acceptance deadline is fraudulent.
 
-A small candidate rule would add an independent +31-point manual-review signal
-for deadline/expiry language such as “position expires” even without a payment
-demand. That would move EC08 from 0 to 31, but it changes the existing EC08
-expected-band regression. It could also send legitimate offers with real
-acceptance deadlines or expiring positions to manual review. The rule is not
-implemented; changing existing regression behavior requires an explicit decision
-about that trade-off.
+An independent deadline penalty is not needed to move EC08 out of the low-risk
+band. Adding one could still over-flag legitimate offers with real acceptance
+deadlines or expiring positions, so urgency alone continues to contribute no
+points under the current scoring rules.
+
+## Expected-band changes in this revision
+
+The following expectations were hand-re-derived from the updated scoring rules
+before running tests. Truth labels are unchanged.
+
+| Cases | Previous band | New band | Reason |
+|---|---|---|---|
+| Eval EC01, EC04, EC05, EC08 | likely legitimate | insufficient evidence, verify manually | They have a passing domain and structurally valid GSTIN but no registry match or authenticated sender; the low-risk guard raises subtotal 0 to 31. |
+| Regression tests using `GOOD` with only domain + valid GSTIN (negated fee, no fee, inbound stipend, recipient-email variant) | likely legitimate | insufficient evidence, verify manually | Structural evidence is insufficient without an external verification signal. |
+
+The Emberlake demo document stays `likely legitimate` only when the synthetic
+company master is loaded in `DEMO_MODE`; its companies are fictional and the
+result is not a claim of live MCA verification.
 
 ## Held-out rule
 

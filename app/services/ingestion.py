@@ -31,7 +31,29 @@ def _get_easyocr_reader():
     return _EASYOCR_READER if _EASYOCR_READER is not False else None
 
 
+# OCR often splits an email address around "@" ("careers @quillmere.example",
+# "hr @ acme.example"). Rejoin only when the right-hand side is a domain with a TLD,
+# so text such as "meet @ 5pm" or "@handle" is never rewritten.
+_OCR_SPLIT_EMAIL = re.compile(
+    r"(?<![A-Za-z0-9._%+-])([A-Za-z0-9._%+-]+)[ \t]*@[ \t]*([A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,})\b"
+)
+
+
+def repair_ocr_emails(text: str) -> str:
+    """Remove OCR-inserted spaces around '@' in email addresses (OCR output only)."""
+    return _OCR_SPLIT_EMAIL.sub(r"\1@\2", text) if text else text
+
+
 def run_ocr_on_image(image_np: np.ndarray, filename: str = "document") -> str:
+    """
+    Executes real OCR on a preprocessed image numpy array (EasyOCR -> pytesseract ->
+    PaddleOCR) and repairs OCR-split email addresses in the result.
+    If all engines fail or produce empty output, raises ValueError.
+    """
+    return repair_ocr_emails(_run_ocr_engines(image_np, filename))
+
+
+def _run_ocr_engines(image_np: np.ndarray, filename: str = "document") -> str:
     """
     Executes real OCR on a preprocessed image numpy array.
     Tries EasyOCR -> pytesseract -> PaddleOCR in order.

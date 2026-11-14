@@ -20,12 +20,22 @@ import pytest  # noqa: E402
 from app.services import domain_verification as dv  # noqa: E402
 
 DEMO_DIR = Path(__file__).resolve().parent.parent / "fixtures" / "demo"
-DEMO_FIXTURE_DOMAINS = "emberlakeanalytics.example,brightpathedtech.example"
+DEMO_FIXTURE_DOMAINS = ("emberlakeanalytics.example,brightpathedtech.example,quillmeresoftware.example,"
+                        "tarnwicklogistics.example,halvornfintech.example")
+DEMO_LETTERS = ["legit_emberlake", "legit_brightpath_young_startup", "scam_fake_govt_scheme_fee",
+                "registry_name_match_quillmere", "registry_struck_off_tarnwick", "registry_cin_mismatch_halvorn",
+                "scam_shared_upi_corvane"]
 
 
 @pytest.fixture(autouse=True)
 def no_live_whois(monkeypatch):
     monkeypatch.setattr(dv, "_whois_creation_date", lambda domain: None)
+
+
+@pytest.fixture(autouse=True)
+def no_local_company_registry(monkeypatch, tmp_path):
+    """Never read a developer's data/mca_master.sqlite3; tests that need a registry set MCA_DB_PATH."""
+    monkeypatch.setenv("MCA_DB_PATH", str(tmp_path / "no-registry.sqlite3"))
 
 
 def _nxdomain(name, rtype):
@@ -67,9 +77,19 @@ def api_client(monkeypatch):
         engine.dispose()
 
 
+@pytest.fixture(scope="session")
+def synthetic_registry_db(tmp_path_factory):
+    """The synthetic company master loaded once per session (fictional companies only)."""
+    from scripts.load_mca_master import load_csv
+    db = tmp_path_factory.mktemp("registry") / "synthetic.sqlite3"
+    load_csv(DEMO_DIR / "synthetic_mca_master.csv", db, synthetic=True)
+    return db
+
+
 @pytest.fixture
-def demo_client(api_client, monkeypatch):
-    """api_client with DEMO_MODE fixtures for the two synthetic company domains."""
+def demo_client(api_client, synthetic_registry_db, monkeypatch):
+    """api_client in DEMO_MODE: fixture domains for the demo companies plus the synthetic registry."""
     monkeypatch.setenv("DEMO_MODE", "1")
     monkeypatch.setenv("DEMO_FIXTURE_DOMAINS", DEMO_FIXTURE_DOMAINS)
+    monkeypatch.setenv("MCA_DB_PATH", str(synthetic_registry_db))
     return api_client

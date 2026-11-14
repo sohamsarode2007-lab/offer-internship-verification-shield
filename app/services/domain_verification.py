@@ -1,11 +1,10 @@
 """
 Domain Verification Service
 
-IMPORTANT SCOPE: this checks the domain CLAIMED in the offer text (the contact
-email / website written in the document). It does NOT check who actually sent
-the message: that needs the original email headers (.eml upload with
-Received/DKIM/SPF results), which is future work. A scammer can write a real
-company's address into a fake letter, and this module cannot detect that.
+IMPORTANT SCOPE: this checks the domain supplied to it. For pasted text and
+document uploads that is the domain CLAIMED in the offer. The /analyze route
+uses the parsed From domain for original .eml uploads and reports the body-claimed
+domain separately. This module itself does not authenticate message headers.
 
 Checks (in order):
   1. Hostname syntax (regex) - invalid -> insufficient_information, no lookups.

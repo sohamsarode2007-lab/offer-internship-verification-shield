@@ -8,16 +8,13 @@ runner = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(runner)
 
 
-def test_report_separates_label_miss_from_expected_band_pass(capsys):
-    runner.report([{
-        "case_id": "EC08",
-        "case_type": "soft_urgency",
-        "truth": "scam",
-        "predicted_band": "likely legitimate",
-        "expected_band": "likely legitimate",
-    }])
+def test_report_shows_ec08_label_and_expected_band_separately(capsys, monkeypatch):
+    monkeypatch.setenv("DEMO_MODE", "0")
+    results = runner.evaluate(runner.load_cases())
+    runner.report(results)
     output = capsys.readouterr().out
-    assert "EC08" in output
-    assert "DANGEROUS MISS" in output
+    line = next(line for line in output.splitlines() if line.startswith("EC08"))
+    assert "scam" in line and "ABSTENTION" in line
+    assert line.count("insufficient evidence, verify manually") == 2
+    assert line.rstrip().endswith("PASS")
     assert "expected-vs-actual" in output
-    assert "PASS" in output

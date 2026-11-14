@@ -11,7 +11,7 @@ from alembic import context
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from app.db.database import Base, DATABASE_URL
-from app.models import Offer, VerificationResult, CheckResult  # noqa
+from app.models import Offer, VerificationResult, CheckResult, CommunityReport, CommunityIndicator, CommunityTemplateBand, CommunityToken, CommunityDispute, Institution, InstitutionObservation  # noqa
 
 config = context.config
 

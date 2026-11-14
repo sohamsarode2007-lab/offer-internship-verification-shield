@@ -32,6 +32,27 @@ been verified in this workspace.
   live DNS or company registry results.
 - The government-scheme document is also fictional and is labelled as a sample
   scam pattern in its source text.
+- **The demo company registry is synthetic.** `fixtures/demo/synthetic_mca_master.csv`
+  lists 13 fictional companies (invented names, made-up CINs in the real CIN format;
+  active, struck-off, dissolved and under-liquidation statuses). Loaded with
+  `scripts/load_mca_master.py --synthetic`, the database records `source=SYNTHETIC`
+  and the app consults it only when `DEMO_MODE=1`; outside demo mode it behaves as if
+  no registry is loaded. This demonstrates the full pipeline (CSV → loader → SQLite →
+  CIN lookup → scoring) with fictional data only.
+- In demo mode, synthetic registry results are displayed like any registry result,
+  **without a synthetic label on the website**: the details read
+  `Company registry match: <name>; Active; incorporated <date>.` for an active,
+  name-matched company; failures lead with the problem: `Company is <status> in
+  company registry records: <name>; incorporated <date>.` or `CIN belongs to a
+  different company in company registry records: ...`. The same wording is used for
+  real company-master data. No UI
+  text, API detail or page describes this data as official, live, MCA data or from
+  data.gov.in. Every such response carries the non-displayed API field
+  `registry_source: "synthetic"`, so a result can always be traced to the synthetic
+  snapshot. Presenters should state in the demo that the companies are fictional.
+- The official MCA company-master snapshot is **future scope**: its bulk download
+  requires eKYC, which this project has not completed. No official MCA data is
+  included in this repository or used by any deployment described here.
 
 ## Payment detection and scoring
 
@@ -43,35 +64,102 @@ been verified in this workspace.
 - The payment-demand signal is worth 65 points, with urgency near the demand worth
   20 additional points. A payment demand forces a high-risk score of at least 61.
   See the scoring table in `app/services/risk_scoring.py`.
-- **Known limitation:** urgency without a detected payment demand adds no score.
-  Synthetic case EC08 is labelled `scam` but scores `likely legitimate`: its demo
-  domain pass offsets the +10 valid-but-unverified GSTIN, and its deadline alone
-  is not weighted. This is reported as a dangerous miss even though the
-  rule-derived expected-band check passes. Adding +31 for expiry/deadline language
-  would move EC08 into manual review, but would change its existing regression
-  result and could send legitimate offer acceptance deadlines to manual review;
-  that rule has not been implemented.
+- **Known limitation:** urgency without a detected payment demand adds no points.
+  Synthetic case EC08 remains labelled `scam` but is now `insufficient evidence,
+  verify manually`: its deadline alone is not weighted, and it lacks an external
+  verification signal. Its dangerous-miss count is now zero because it is no
+  longer rated likely legitimate. This synthetic label is not independent proof
+  that a real offer deadline is fraudulent.
+- The low-risk band requires a passing domain, a present non-failing identifier,
+  and an externally verified signal. The available live external signal is an
+  active, name-matched CIN from the locally loaded MCA SQLite master data, or a
+  sender authenticated from an original `.eml` by DMARC pass and aligned DKIM.
+  The latter verifies the sender as recorded by the recipient's mail provider;
+  it does not establish who authored the message. Structural domain/GSTIN checks
+  alone are capped at manual review. The demo registry fixture is an explicit
+  demo-only exception for illustrating that path; it is not external verification.
+- `scripts/load_mca_master.py` imports a company-master CSV into local SQLite and
+  records its source (`MCA_CSV`, or `SYNTHETIC` with `--synthetic`). Rows marked
+  `Synthetic=true` are refused without `--synthetic`, and the two sources are never
+  mixed in one database. This workspace does not include official MCA data (future
+  scope, eKYC required); lookup behaviour is tested with temporary database rows
+  and the synthetic demo snapshot.
+- `/analyze` returns `next_steps` and `complaint_summary` based on its rule
+  results. These are automated guidance, not an official complaint filing.
+  High-risk results tell students who already paid to call the National Cyber
+  Crime Helpline 1930 and report at cybercrime.gov.in. `/analyze` also returns
+  `reasons`: the same rules as `risk_factors`, worded for students with each
+  rule's score impact. A report (and its token) is offered only for high risk
+  and insufficient evidence, never for a likely-legitimate result.
+- Sender authentication is available only for `.eml` uploads. It reads the
+  topmost Authentication-Results header and does not store or log headers.
+  Pasted text, PDFs, and images still check only the domain claimed in the content.
+- **Community indicator network is implemented.** `/analyze` offers a signed
+  24-hour token and a masked, deselectable list of scammer-role indicators.
+  Reports require version-2 consent; identifiers are stored as peppered,
+  key-versioned HMAC digests and template signatures are computed after
+  redacting names, identifiers, amounts and dates. Indicator thresholds are 3+
+  (+25) and 10+ (+40); template similarity >=0.8 adds +25. Correlated evidence
+  is the highest indicator bucket plus template evidence, capped at +40 total;
+  several identifiers do not stack. Community evidence alone cannot produce
+  high risk: if it alone crosses 60, the score is capped at manual review with
+  an explicit factor. Details disclose buckets only. Withdrawals delete a
+  report's contributions. Reports are not
+  independently verified and do not count as external verification. Disputed
+  indicators keep scoring during review; only a same-domain email-verified
+  domain dispute is temporarily suppressed. Inactive indicators expire after
+  24 months. Digests/signatures are pseudonymised, not anonymous; legal review
+  under the DPDP Act, 2023 and its Rules is required, including third-party
+  sender data. Demo rows count only in `DEMO_MODE=1`.
 - The model is `rule_based_v2`; it is a fixed rule table, not a trained ML model.
-  GSTIN/CIN checks are structural and do not query a live registry.
+  GSTIN checks are structural. CIN lookup uses a local company-master SQLite copy;
+  it does not contact a live service. An opted-in synthetic CIN fixture is
+  available only in demo mode and is labelled in output. A synthetic company-master
+  snapshot is also demo-only; its results are traceable via `registry_source`.
 
 ## OCR and rate limiting
 
-- **OCR was verified in CI** by successful run `43378004125` on 2026-11-13 UTC
-  (commit `ae741a05136f1c0496629df7840493fdb30ca9e7`). The log shows the OCR
-  binary-install step completed and the test suite finished `71 passed` with no
-  skipped tests. This includes the degraded-image robustness cases for the three
-  demo PDFs across clean, 3° rotation, blur, and JPEG quality 30 variants. No band
-  flips occurred. Passing cases do not print their extracted OCR text, so the logs
-  contain no extracted text to report; there is no flip-causing text. This verifies
-  the CI environment, not the previously blocked local Windows Tesseract install.
+- **OCR was verified in CI** by successful run `43403402979` on 2026-11-13 UTC (commit `51c6c2357ddf93566249e2287913d36a9b674263`). The log shows Tesseract and Poppler installed and the suite finished `143 passed` with no skipped tests or pytest warnings. This includes degraded-image robustness cases for the three demo PDFs across clean, 3° rotation, blur, and JPEG quality 30 variants. No band flips occurred; therefore there is no flip-causing extracted text to report. Passing cases do not print their OCR text. This verifies the CI environment, not the previously blocked local Windows Tesseract install.
 - `RATE_LIMIT` controls requests per IP. The default is `10/minute`; with
   `DEMO_MODE=1` and `RATE_LIMIT` unset, the default is `100/minute`.
 
+## VIT Pune placement cell (single-college simulation)
+
+- **This is a single-college simulation for VIT Pune.** One institution record,
+  "VIT Pune", is created automatically; there are no college codes, API keys or
+  `scripts/add_institution.py`. **Multiple colleges and a staff login for the
+  placement-cell page are future scope**; the page is currently open to anyone
+  who can reach the site.
+- **Every check is counted anonymously for VIT Pune.** Each successful
+  `/analyze` call records exactly one aggregate row: UTC ISO week, risk band and
+  rule-based scam category. The row holds no offer text, identifiers, file name,
+  company name or IP address and is not linked to the analysis, a report or a
+  person, so a report withdrawal does not remove it. Rows are deleted 24 months
+  after their week. Purpose: anonymous trend counts for the placement cell; every
+  count below five is shown as `<5`. A consented report adds no second row.
+  Enrollment is not verified and checks are not deduplicated by student, so counts
+  are checks, not verified unique students. The senders table comes from consented
+  community reports.
+- With `DEMO_MODE=1`, `run_demo.bat` seeds 45 simulated reports (senders table)
+  and 484 simulated checks (the same three fields) so the 12-week chart and
+  category summary are populated; checks made in demo mode are also demo-flagged.
+  Demo rows count only in demo mode. Two chart cells are deliberately below five.
+- `GET /placement-cell/dashboard` returns week-by-band and week-by-category
+  counts for 12 ISO weeks and replaces cells below five with `"<5"`, a
+  `category_summary` (per category: 12-week total, last 4 weeks, previous 8
+  weeks, trend word by a ±25% weekly-rate rule; `<5` applied to each count; no
+  trend word when the total is below five), `GET /placement-cell/weekly.csv`
+  with the full weekly data under the same rule, plus
+  `top_senders`: masked indicators reported in 3+ consented (consent v3)
+  reports, with type, count, first/last week, most common category and dispute
+  status. `GET /placement-cell/senders.csv` exports that list. Only masked
+  display forms are stored for consented reports (never raw emails, phones, UPI
+  IDs or account numbers); a non-free-mail sender domain is shown in full.
+  Consent v3 tells students the placement cell sees these masked details. Both
+  endpoints are limited to 30 requests/minute. Categories derive from payment-demand, domain,
+  sender-authentication and scheme-text rules; the README documents their
+  priority and mapping.
+
 ## Database and CI
 
-- **Postgres was verified in CI** by successful run `43378004125` on 2026-11-13
-  UTC (commit `ae741a05136f1c0496629df7840493fdb30ca9e7`). The job initialized a
-  `postgres:15` service; Alembic logged `PostgresqlImpl`, applied revisions 001
-  and 002, and `alembic check` reported `No new upgrade operations detected.` The
-  test step used the configured PostgreSQL `DATABASE_URL` and completed with
-  `71 passed, 3 warnings`.
+- **Postgres was verified in CI** by successful run `43403402979` on 2026-11-13 UTC (commit `51c6c2357ddf93566249e2287913d36a9b674263`). The job initialized a `postgres:15` service; Alembic logged `PostgresqlImpl`, applied revisions 001 through 004, and `alembic check` reported `No new upgrade operations detected.` The test step used the configured PostgreSQL `DATABASE_URL` and completed with `143 passed` and no pytest warnings.
