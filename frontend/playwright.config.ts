@@ -24,7 +24,12 @@ export default defineConfig({
   timeout: 90_000,
   expect: { timeout: 15_000 },
   outputDir: 'test-results',
-  use: { baseURL: 'http://127.0.0.1:5173', trace: 'retain-on-failure', ...devices['Desktop Chrome'] },
+  use: {
+    baseURL: 'http://127.0.0.1:5173', trace: 'retain-on-failure', ...devices['Desktop Chrome'],
+    // Optional: PLAYWRIGHT_CHANNEL=msedge (or chrome) uses an installed, signed browser. Needed on
+    // Windows PCs whose Application Control policy blocks Playwright's downloaded Chromium.
+    ...(process.env.PLAYWRIGHT_CHANNEL ? { channel: process.env.PLAYWRIGHT_CHANNEL } : {}),
+  },
   projects: [
     { name: 'desktop', use: { viewport: { width: 1440, height: 900 } } },
     { name: 'mobile', use: { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true } },

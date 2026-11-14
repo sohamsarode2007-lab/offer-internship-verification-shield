@@ -168,8 +168,26 @@ $env:VITE_DEMO = "1"
 npm run dev
 ```
 
-`VITE_DEMO=1` shows the three fictional text samples from `fixtures/demo/`;
-otherwise the sample row is hidden. Vite proxies backend routes to
+`VITE_DEMO=1` shows the fictional text samples from `fixtures/demo/`;
+otherwise the sample row is hidden.
+
+**Rollup runs as WebAssembly.** `frontend/package.json` has an npm `overrides`
+entry mapping `rollup` to `@rollup/wasm-node` (same version as the Rollup that
+Vite resolves), so Vite never loads Rollup's native `.node` binary. That binary
+is blocked by Windows Application Control on some PCs, which breaks
+`npm run build`, the frontend tests and `run_demo.bat`. The WebAssembly build is
+a little slower but behaves the same on every platform, including CI. When
+upgrading Vite, keep the override's version in step with the Rollup range Vite
+requires, then regenerate `package-lock.json`.
+
+Playwright's downloaded Chromium can be blocked by the same policy
+(`browserType.launch: spawn UNKNOWN`). Set `PLAYWRIGHT_CHANNEL=msedge` (or
+`chrome`) to run the end-to-end tests in an installed, signed browser:
+
+```powershell
+$env:PLAYWRIGHT_CHANNEL = "msedge"
+npm --prefix frontend run test:e2e
+``` Vite proxies backend routes to
 `http://127.0.0.1:8000`. The default backend `ALLOWED_ORIGINS` includes the Vite
 origin `http://127.0.0.1:5173` and `http://localhost:5173`.
 
