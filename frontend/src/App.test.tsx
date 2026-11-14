@@ -39,14 +39,55 @@ beforeEach(() => { vi.clearAllMocks(); window.history.replaceState({}, '', '/') 
 
 describe('analysis result', () => {
   it.each([
-    { band: 'high risk', className: styles.highRisk },
-    { band: 'insufficient evidence, verify manually', className: styles.manual },
-    { band: 'likely legitimate', className: styles.likely },
-  ])('renders the  verdict plate', async ({ band, className }) => {
+    { band: 'high risk', title: 'High risk', className: styles.highRisk },
+    { band: 'insufficient evidence, verify manually', title: 'Insufficient evidence', className: styles.manual },
+    { band: 'likely legitimate', title: 'Likely legitimate', className: styles.likely },
+  ])('renders the verdict plate in sentence case ($title)', async ({ band, title, className }) => {
     await showResult(payload({ risk_band: band }))
-    const heading = screen.getByRole('heading', { name: band })
+    const heading = screen.getByRole('heading', { name: title })
     expect(heading.parentElement).toHaveClass(className)
     expect(screen.getByText('72', { exact: true })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: band })).not.toBeInTheDocument()
+  })
+
+  it('shows "Verify manually before you proceed" under an insufficient-evidence verdict', async () => {
+    await showResult(payload({ risk_band: 'insufficient evidence, verify manually' }))
+    const plate = screen.getByRole('heading', { name: 'Insufficient evidence' }).parentElement!
+    expect(within(plate).getByText('Verify manually before you proceed')).toHaveClass(styles.verdictSubline)
+  })
+
+  it.each([
+    { band: 'high risk', shown: true },
+    { band: 'insufficient evidence, verify manually', shown: true },
+    { band: 'likely legitimate', shown: false },
+  ])('offers "Report this scam" only for high risk or insufficient evidence ($band)', async ({ band, shown }) => {
+    await showResult(payload({ risk_band: band, report_token: 'signed-report-token-is-long-enough', reportable_indicators: indicators }))
+    expect(Boolean(screen.queryByRole('button', { name: 'Report this scam' }))).toBe(shown)
+  })
+
+  it('lists plain-language reasons with the score impact in a right-aligned column', async () => {
+    await showResult(payload({ risk_band: 'insufficient evidence, verify manually', reasons: [
+      { text: 'The company is listed as struck off in the company register', impact: '+25' },
+      { text: "The company's email domain exists and can receive email", impact: '−10' },
+      { text: "We couldn't verify this company's registration, so we can't call it legitimate yet.", impact: '+16' },
+    ] }))
+    const why = screen.getByRole('table', { name: 'Why' })
+    const rows = within(why).getAllByRole('row').slice(1)
+    expect(rows).toHaveLength(3)
+    expect(within(rows[2]).getByText("We couldn't verify this company's registration, so we can't call it legitimate yet.")).toBeInTheDocument()
+    const impact = within(rows[0]).getByText('+25')
+    expect(impact).toHaveClass(styles.impact)
+    const css = readFileSync(resolve(__dirname, 'App.module.css'), 'utf8')
+    expect(css).toMatch(/\.whyTable td\.impact \{[^}]*text-align: right/)
+    for (const engineWord of ['offset', 'score floor', "'likely legitimate'"]) expect(why.textContent).not.toContain(engineWord)
+  })
+
+  it('shows the demo-fixture note as small steel text', async () => {
+    await showResult(payload({ checks: [{ check_name: 'domain_verification', status: 'pass', details: '[DEMO FIXTURE — not a live DNS result] x.example.' }] }))
+    const note = screen.getByText('Demo fixture, not a live check')
+    expect(note.tagName).toBe('SPAN')
+    const css = readFileSync(resolve(__dirname, 'App.module.css'), 'utf8')
+    expect(css).toMatch(/\.demoNote \{[^}]*color: var\(--steel\)[^}]*font-size: 12px/)
   })
 
   it('renders ledger names, status glyphs and details in API order', async () => {
@@ -70,7 +111,7 @@ describe('analysis result', () => {
     await showResult(payload({ risk_band: 'likely legitimate', company_name: 'Quillmere Software Private Limited' }))
     const line = screen.getByText('Checked: Quillmere Software Private Limited')
     expect(line).toHaveClass(styles.checkedCompany)
-    const plate = screen.getByRole('heading', { name: 'likely legitimate' }).parentElement!
+    const plate = screen.getByRole('heading', { name: 'Likely legitimate' }).parentElement!
     expect(plate.nextElementSibling).toBe(line)
     const css = readFileSync(resolve(__dirname, 'App.module.css'), 'utf8')
     expect(css).toMatch(/\.checkedCompany \{[^}]*color: var\(--steel\)/)

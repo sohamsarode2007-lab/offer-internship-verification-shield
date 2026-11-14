@@ -17,13 +17,13 @@ test('demo analysis, reporting, dashboard, and public screens', async ({ page },
   await expect(page.getByText('Try a sample:')).toBeVisible()
 
   const samples = [
-    { button: 'Emberlake offer', key: 'legit_emberlake.txt', band: 'likely legitimate', shot: 'sample-emberlake-result' },
-    { button: 'Brightpath internship', key: 'legit_brightpath_young_startup.txt', band: 'insufficient evidence, verify manually', shot: 'sample-brightpath-result' },
-    { button: 'Government scheme', key: 'scam_fake_govt_scheme_fee.txt', band: 'high risk', shot: 'result' },
+    { button: 'Emberlake offer', key: 'legit_emberlake.txt', band: 'Likely legitimate', shot: 'sample-emberlake-result' },
+    { button: 'Brightpath internship', key: 'legit_brightpath_young_startup.txt', band: 'Insufficient evidence', shot: 'sample-brightpath-result' },
+    { button: 'Government scheme', key: 'scam_fake_govt_scheme_fee.txt', band: 'High risk', shot: 'result' },
     // Synthetic company-register cases (fictional companies; backend runs with the synthetic snapshot in DEMO_MODE).
-    { button: 'Quillmere internship', key: 'registry_name_match_quillmere.txt', band: 'likely legitimate', shot: 'sample-quillmere-result' },
-    { button: 'Tarnwick internship', key: 'registry_struck_off_tarnwick.txt', band: 'insufficient evidence, verify manually', shot: 'sample-tarnwick-result' },
-    { button: 'Halvorn internship', key: 'registry_cin_mismatch_halvorn.txt', band: 'insufficient evidence, verify manually', shot: 'sample-halvorn-result' },
+    { button: 'Quillmere internship', key: 'registry_name_match_quillmere.txt', band: 'Likely legitimate', shot: 'sample-quillmere-result' },
+    { button: 'Tarnwick internship', key: 'registry_struck_off_tarnwick.txt', band: 'Insufficient evidence', shot: 'sample-tarnwick-result' },
+    { button: 'Halvorn internship', key: 'registry_cin_mismatch_halvorn.txt', band: 'Insufficient evidence', shot: 'sample-halvorn-result' },
   ]
   for (const [index, sample] of samples.entries()) {
     if (index > 0) await page.getByRole('button', { name: 'Check another offer' }).click()

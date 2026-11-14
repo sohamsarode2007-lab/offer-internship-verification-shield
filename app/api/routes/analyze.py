@@ -27,15 +27,22 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="", tags=["analyze"])
 
 
-def build_user_guidance(risk_band: str, checks: list[dict], risk_factors: list[str]):
+BAND_LABELS = {
+    "likely legitimate": "Likely legitimate",
+    "insufficient evidence, verify manually": "Insufficient evidence (verify manually before you proceed)",
+    "high risk": "High risk",
+}
+# Bands for which a student may report the sender to warn others.
+REPORTABLE_BANDS = {"high risk", "insufficient evidence, verify manually"}
+
+
+def build_user_guidance(risk_band: str, checks: list[dict], reasons: list[dict]):
     """Return actionable, non-legal advice without repeating submitted text."""
-    payment = next((c for c in checks if c.get("check_name") == "payment_detection"), {})
-    registry = next((c for c in checks if c.get("check_name") == "gstin_verification"), {})
-    if payment.get("status") == "fail":
+    if risk_band == "high risk":
         next_steps = [
             "Do not send money or share OTPs, passwords, or banking credentials.",
             "Save the offer, messages, payment instructions, and transaction receipts.",
-            "If you already paid, contact your bank or UPI provider promptly and report the transaction to the official cybercrime channel.",
+            "If you've already paid, call the National Cyber Crime Helpline 1930 immediately and report at cybercrime.gov.in.",
         ]
     elif risk_band == "likely legitimate":
         next_steps = [
@@ -48,10 +55,9 @@ def build_user_guidance(risk_band: str, checks: list[dict], risk_factors: list[s
             "Contact the employer using independently located contact details, not links or numbers in the offer.",
             "Do not pay fees or share sensitive identity or banking information while details remain unverified.",
         ]
-    concerns = [factor.split(":", 1)[0].rstrip(".") for factor in risk_factors[:3]]
-    if registry.get("status") == "fail" and registry.get("details"):
-        concerns.insert(0, registry["details"].split(".", 1)[0])
-    summary = (f"Automated review result: {risk_band}. " +
+    # Concerns are the plain-language reasons that added risk (no engine wording).
+    concerns = [r["text"].rstrip(".") for r in reasons if (r.get("impact") or "").startswith("+")][:4]
+    summary = (f"Automated review result: {BAND_LABELS.get(risk_band, risk_band)}. " +
                ("Observed concerns: " + "; ".join(dict.fromkeys(concerns)) + "."
                 if concerns else "No rule-based warning was detected; independently verify the offer."))
     return next_steps, summary
@@ -203,15 +209,18 @@ def analyze_offer(
         f"Completeness: {completeness_percentage}%."
     )
     next_steps, complaint_summary = build_user_guidance(
-        risk_band, check_dicts, scoring_res["risk_factors"]
+        risk_band, check_dicts, scoring_res["reasons"]
     )
 
-    # The token carries only the band and rule-based category, so that a consented
-    # report can be counted on the VIT Pune dashboard; nothing is recorded without consent.
-    report_token, reportable_indicators = community_reports.issue_report_token(
-        db, report_indicators, signature,
-        band=risk_band, scam_category=institution_dashboard.classify_scam(check_dicts, raw_text),
-    )
+    # Reporting is offered only for high risk and insufficient evidence, never for a
+    # likely-legitimate result. The token carries only the band and rule-based category,
+    # so a consented report can be counted on the VIT Pune page; nothing is recorded without consent.
+    report_token, reportable_indicators = None, []
+    if risk_band in REPORTABLE_BANDS:
+        report_token, reportable_indicators = community_reports.issue_report_token(
+            db, report_indicators, signature,
+            band=risk_band, scam_category=institution_dashboard.classify_scam(check_dicts, raw_text),
+        )
     if report_token:
         try:
             db.commit()
@@ -227,6 +236,7 @@ def analyze_offer(
         summary=summary_msg,
         risk_band=risk_band,
         risk_factors=scoring_res["risk_factors"],
+        reasons=scoring_res["reasons"],
         scoring_model=scoring_res["scoring_model"],
         next_steps=next_steps,
         complaint_summary=complaint_summary,

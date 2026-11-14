@@ -35,6 +35,8 @@ export interface AnalyzeResponse {
   summary: string
   risk_band?: string | null
   risk_factors: string[]
+  /** Plain-language 'Why' rows with score impact ('+65', '−10' or null). */
+  reasons?: { text: string; impact: string | null }[]
   scoring_model?: string | null
   next_steps: string[]
   complaint_summary: string

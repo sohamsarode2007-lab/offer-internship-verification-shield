@@ -88,6 +88,48 @@ def _fmt(points: float) -> str:
     return f"{points:+g}"
 
 
+def _impact(points: float) -> Optional[str]:
+    """Score impact for the 'Why' column: '+65', '−10' (true minus sign), or None for no change."""
+    if not points:
+        return None
+    return f"+{points:g}" if points > 0 else f"−{abs(points):g}"
+
+
+def _domain_reason(details: str) -> str:
+    d = details.casefold()
+    if "free mailbox" in d:
+        return "The contact email is a free personal mailbox (like Gmail), not a company address"
+    if "lookalike" in d:
+        return "The email domain imitates another company's name"
+    if "registered only" in d or "newly registered" in d:
+        return "The email domain was registered only days ago"
+    return "The email domain doesn't exist or can't receive email"
+
+
+def _registration_fail_reason(details: str) -> str:
+    import re as _re
+    match = _re.match(r"Company is (.+?) in company registry records", details)
+    if match:
+        return f"The company is listed as {match.group(1).lower()} in the company register"
+    if details.startswith("CIN belongs to a different company"):
+        return "The registration number (CIN) belongs to a different company"
+    if "free mailbox" in details.casefold():
+        return "A registration number is given, but replies go to a free personal mailbox"
+    return "The registration number isn't valid"
+
+
+def _community_reason(details: str) -> str:
+    parts = []
+    if "10+ students" in details:
+        parts.append("Reported by 10+ students")
+    elif "3+ students" in details:
+        parts.append("Reported by 3+ students")
+    if "similar to a reported scam template" in details:
+        parts.append("the wording matches a scam letter other students reported" if parts
+                     else "The wording matches a scam letter other students reported")
+    return "; ".join(parts) or "Other students reported details from this letter"
+
+
 def calculate_risk_score(
     check_results: List[Dict[str, Any]],
     facts: Optional[Dict[str, Any]] = None
@@ -126,6 +168,12 @@ def calculate_risk_score(
     has_external_signal = registry_verified or sender_authenticated or synthetic_registry
 
     factors: List[str] = []
+    # Plain-language 'Why' rows for students: (text, score impact). No engine wording.
+    reasons: List[Dict[str, Optional[str]]] = []
+
+    def reason(text: str, points: float = 0.0):
+        reasons.append({"text": text, "impact": _impact(points)})
+
     payment_points = 0.0
     other_points = 0.0
 
@@ -136,33 +184,44 @@ def calculate_risk_score(
         demands = pay.get("demands") or []
         shown = f": {', '.join(repr(d) for d in demands[:3])}" if demands else ""
         factors.append(f"Upfront payment demand detected ({_fmt(W_PAYMENT)}){shown}")
+        reason("The letter asks you to pay money before you join", W_PAYMENT)
         urgency = pay.get("urgency") or []
         if urgency:
             payment_points += W_URGENCY
             factors.append(f"Urgency language near the payment demand ({_fmt(W_URGENCY)}): {', '.join(urgency)}")
+            reason(f"It pressures you to pay quickly (\"{urgency[0]}\")", W_URGENCY)
 
     # Domain
     if domain_status == "fail":
         other_points += W_DOMAIN_FAIL
         factors.append(f"Contact domain failed checks ({_fmt(W_DOMAIN_FAIL)}): {domain.get('details', '')}".rstrip(": "))
+        reason(_domain_reason(domain.get("details") or ""), W_DOMAIN_FAIL)
 
     # Registration number
     if reg_status == "fail":
         other_points += W_REG_FAIL
         kind = "company registry checks" if reg.get("registry_checked") is True else "structural checks"
         factors.append(f"Registration number failed {kind} ({_fmt(W_REG_FAIL)}): {reg.get('details', '')}".rstrip(": "))
+        reason(_registration_fail_reason(reg.get("details") or ""), W_REG_FAIL)
     elif reg_present and reg_status != "pass":
         other_points += W_REG_UNVERIFIED
         factors.append(
             f"Registration number is structurally valid but was not verified against the GST/MCA registry "
             f"({_fmt(W_REG_UNVERIFIED)})"
         )
+        reason("We couldn't match the registration number to a company record", W_REG_UNVERIFIED)
     elif not reg_present:
         other_points += W_REG_MISSING
         factors.append(f"No GSTIN, CIN or LLPIN in the offer ({_fmt(W_REG_MISSING)})")
+        reason("The letter gives no company registration number (GSTIN or CIN)", W_REG_MISSING)
     consistency_points = float(reg.get("consistency_risk_points", 0) or 0)
     if consistency_points:
         other_points += consistency_points
+        notes_text = " ".join(reg.get("consistency_notes") or [reg.get("details") or ""])
+        if "+10" in notes_text:
+            reason("The GST number doesn't match the company's name", 10)
+        if "+15" in notes_text:
+            reason("The founding year in the letter doesn't match the company's registration date", 15)
         if "consistency_notes" in reg:
             factors.extend(note.strip().rstrip(".") for note in reg["consistency_notes"])
         else:
@@ -173,16 +232,19 @@ def calculate_risk_score(
     if auth_points:
         other_points += auth_points
         factors.append(f"Sender authentication risk (+{auth_points:g}): {auth.get('details', '')}")
+        reason("The email's sender checks failed or point to a different sender", auth_points)
     community = by_name.get("community_reports", {})
     community_points = min(40.0, max(0.0, float(community.get("risk_points", community.get("score", 0)) or 0)))
     if community_points:
         other_points += community_points
         factors.append(f"Community report signals (+{community_points:g}): {community.get('details', '')}")
+        reason(_community_reason(community.get("details") or ""), community_points)
 
     no_usable_domain = domain_status in ("not_applicable", "insufficient_information")
     if no_usable_domain and not reg_present:
         other_points += W_NO_IDENTIFIERS
         factors.append(f"No usable contact domain and no registration number to check ({_fmt(W_NO_IDENTIFIERS)})")
+        reason("There's no company email, website or registration number to check", W_NO_IDENTIFIERS)
 
     # Offsets: only against non-payment points.
     if domain_status == "pass":
@@ -190,6 +252,7 @@ def calculate_risk_score(
         if reduction > 0:
             other_points -= reduction
             factors.append(f"Contact domain passed DNS checks ({_fmt(-reduction)}, offsets non-payment points only)")
+        reason("The company's email domain exists and can receive email", -reduction)
     if reg_status == "pass":
         label = "Company registry match" if synthetic_registry else "MCA registry pass"
         reduction = min(G_REGISTRY_PASS, other_points)
@@ -198,16 +261,21 @@ def calculate_risk_score(
             factors.append(f"{label} ({_fmt(-reduction)})")
         else:
             factors.append(f"{label} ({_fmt(-G_REGISTRY_PASS)} offset; score floor is 0)")
+        name = reg.get("registry_company_name")
+        reason(f"The company is registered and active: {name}" if name else "The company is registered and active",
+               -reduction)
     if auth.get("status") == "pass" and auth.get("dmarc_status") == "pass" and auth.get("dkim_aligned") is True:
         reduction = min(10.0, other_points)
         if reduction > 0:
             other_points -= reduction
         applied = f"applied {_fmt(-reduction)}" if reduction < 10.0 else _fmt(-reduction)
         factors.append(f"DMARC pass with aligned DKIM ({_fmt(-10.0)} signal; {applied}, non-payment only)")
+        reason("The email really came from the company's own domain", -reduction)
 
     unbounded_score = payment_points + other_points
     score = unbounded_score
     if has_payment and score < PAYMENT_FLOOR:
+        reason("Any request for money makes this high risk", PAYMENT_FLOOR - score)
         score = PAYMENT_FLOOR
         factors.append(f"Payment demand override: score raised to {PAYMENT_FLOOR:g} (high risk)")
     score = max(0.0, min(100.0, score))
@@ -222,6 +290,7 @@ def calculate_risk_score(
         and auth.get("status") != "fail"
     )
     if community_alone_crossed_high:
+        reason("Reports from other students alone aren't enough to call this high risk", min(score, 60.0) - score)
         score = min(score, 60.0)
         factors.append("Reported by other students; not enough independent evidence to call this high risk.")
 
@@ -237,6 +306,11 @@ def calculate_risk_score(
         if not has_external_signal:
             missing.append("no externally verified registry match or authenticated sender was found")
         if missing:
+            registration_gap = (not reg_present or reg_status == "fail" or not has_external_signal)
+            reason("We couldn't verify this company's registration, so we can't call it legitimate yet."
+                   if registration_gap else
+                   "We couldn't verify the company's email domain, so we can't call it legitimate yet.",
+                   GUARD_SCORE - score)
             score = GUARD_SCORE
             factors.append(
                 f"Raised to {GUARD_SCORE:g}: 'likely legitimate' requires a passing domain, a valid "
@@ -246,6 +320,8 @@ def calculate_risk_score(
     risk_band = band_for(score)
     category = {BAND_LEGIT: "likely_legitimate", BAND_MANUAL: "insufficient_evidence_verify_manually",
                 BAND_HIGH: "high_risk"}[risk_band]
+    if risk_band == BAND_LEGIT and pay_status == "pass":
+        reason("No payment was requested")
 
     total_checks = sum(c.get("status") != "not_applicable" for c in check_results)
     evaluated = [c for c in check_results if c.get("status") in ("pass", "fail")]
@@ -258,4 +334,5 @@ def calculate_risk_score(
         "risk_band": risk_band,
         "scoring_model": SCORING_MODEL,
         "risk_factors": factors,
+        "reasons": reasons,
     }

@@ -92,7 +92,7 @@ def _result(status: str, domain: Optional[str], points: int, details: str, **met
 
 def not_applicable() -> Dict[str, Any]:
     return _result("not_applicable", None, 0,
-                   "Upload the original .eml email to check its actual sender and provider authentication results.")
+                   "Upload the original email (.eml) to check who sent it.")
 
 
 def _auth_signature(header: str):

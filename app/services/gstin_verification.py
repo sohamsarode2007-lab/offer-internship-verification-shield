@@ -241,7 +241,7 @@ def _gstin_cin_state_note(gstin: Optional[str], cin: Optional[str]) -> Optional[
     roc_state = ROC_STATE_CODES.get(cin[6:8])
     if not gst_state or not roc_state:
         return f"GSTIN state code {gstin[:2]} and CIN RoC code {cin[6:8]} are shown for information only."
-    relation = "consistent" if gst_state == roc_state else "differ"
+    relation = "are consistent" if gst_state == roc_state else "differ"
     return (f"GSTIN state: {gst_state} ({gstin[:2]}); CIN RoC location: {roc_state} "
             f"({cin[6:8]}): these locations {relation}; informational only, not a verification failure.")
 

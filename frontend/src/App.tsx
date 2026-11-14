@@ -75,7 +75,7 @@ function EvidenceLedger({ checks }: { checks: CheckResult[] }) {
     const demoMarker = details.includes('[DEMO FIXTURE')
     return <tr className={styles.ledgerRow} key={`${check.check_name}-${index}`} style={{ '--row-index': index } as React.CSSProperties}>
       <th scope="row">{labelByCheck[check.check_name] ?? check.check_name.replaceAll('_', ' ')}</th>
-      <td><span className={styles.status}><span aria-hidden="true">{statusGlyph[check.status]}</span> {statusText[check.status]}</span>{demoMarker && <strong className={styles.demoNote}>Demo fixture, not a live check</strong>}{details && <details className={styles.details}><summary>Details</summary><p>{details}</p></details>}</td>
+      <td><span className={styles.status}><span aria-hidden="true">{statusGlyph[check.status]}</span> {statusText[check.status]}</span>{demoMarker && <span className={styles.demoNote}>Demo fixture, not a live check</span>}{details && <details className={styles.details}><summary>Details</summary><p>{details}</p></details>}</td>
     </tr>
   })}</tbody></table></div></section>
 }
@@ -135,18 +135,35 @@ function ReportDialog({ token, indicators, onClose }: { token: string; indicator
   </div></div>
 }
 
+const verdictText: Record<string, { title: string; subline?: string }> = {
+  'likely legitimate': { title: 'Likely legitimate' },
+  'insufficient evidence, verify manually': { title: 'Insufficient evidence', subline: 'Verify manually before you proceed' },
+  'high risk': { title: 'High risk' },
+}
+const REPORTABLE_BANDS = new Set(['high risk', 'insufficient evidence, verify manually'])
+
+function WhyList({ result }: { result: AnalyzeResponse }) {
+  const reasons = result.reasons ?? []
+  if (reasons.length) {
+    return <section className={styles.why}><h2>Why</h2><table className={styles.whyTable} aria-label="Why"><thead className={styles.visuallyHidden}><tr><th scope="col">Reason</th><th scope="col">Score impact</th></tr></thead><tbody>{reasons.map((r, i) => <tr key={i}><td>{r.text}</td><td className={styles.impact}>{r.impact ?? ''}</td></tr>)}</tbody></table></section>
+  }
+  return result.risk_factors?.length > 0 ? <section className={styles.why}><h2>Why</h2><ul>{result.risk_factors.map((factor, i) => <li key={i}>{factor}</li>)}</ul></section> : null
+}
+
 function Result({ result, onClear }: { result: AnalyzeResponse; onClear: () => void }) {
   const [reportOpen, setReportOpen] = useState(false)
   const band = result.risk_band
+  const verdict = band ? verdictText[band] ?? { title: band.charAt(0).toUpperCase() + band.slice(1) } : null
+  const canReport = Boolean(result.report_token && band && REPORTABLE_BANDS.has(band))
   return <section className={styles.result} aria-live="polite">
-    <div className={styles.resultSide}>{band && <div className={`${styles.verdict} ${bandClass(band)}`}><h1>{band}</h1><p className={styles.score}><span>{Number.isInteger(result.overall_risk_score) ? result.overall_risk_score : result.overall_risk_score.toFixed(1)}</span> / 100</p><p className={styles.completeness}>{result.completeness_percentage}% information completeness</p></div>}
+    <div className={styles.resultSide}>{band && verdict && <div className={`${styles.verdict} ${bandClass(band)}`}><h1>{verdict.title}</h1>{verdict.subline && <p className={styles.verdictSubline}>{verdict.subline}</p>}<p className={styles.score}><span>{Number.isInteger(result.overall_risk_score) ? result.overall_risk_score : result.overall_risk_score.toFixed(1)}</span> / 100</p><p className={styles.completeness}>{result.completeness_percentage}% information completeness</p></div>}
       {result.company_name?.trim() && <p className={styles.checkedCompany}>Checked: {result.company_name.trim()}</p>}
       {result.next_steps?.length > 0 && <section className={styles.guidance}><h2>What to do next</h2><ul>{result.next_steps.map((step, i) => <li key={i}>{step}</li>)}</ul></section>}
-      <div className={styles.actions}>{result.report_token && <button onClick={() => setReportOpen(true)}>Report this scam</button>}<button className={styles.secondaryButton} onClick={onClear}>Check another offer</button></div>
+      <div className={styles.actions}>{canReport && <button onClick={() => setReportOpen(true)}>Report this scam</button>}<button className={styles.secondaryButton} onClick={onClear}>Check another offer</button></div>
       {result.complaint_summary?.trim() && <Complaint summary={result.complaint_summary}/>}
     </div>
-    <div className={styles.evidenceSide}>{result.risk_factors?.length > 0 && <section className={styles.why}><h2>Why</h2><ul>{result.risk_factors.map((factor, i) => <li key={i}>{factor}</li>)}</ul></section>}<EvidenceLedger checks={result.checks ?? []}/></div>
-    {reportOpen && result.report_token && <ReportDialog token={result.report_token} indicators={result.reportable_indicators ?? []} onClose={() => setReportOpen(false)}/>}
+    <div className={styles.evidenceSide}><WhyList result={result}/><EvidenceLedger checks={result.checks ?? []}/></div>
+    {reportOpen && canReport && result.report_token && <ReportDialog token={result.report_token} indicators={result.reportable_indicators ?? []} onClose={() => setReportOpen(false)}/>}
   </section>
 }
 

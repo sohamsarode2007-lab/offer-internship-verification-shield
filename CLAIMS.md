@@ -86,6 +86,11 @@ been verified in this workspace.
   and the synthetic demo snapshot.
 - `/analyze` returns `next_steps` and `complaint_summary` based on its rule
   results. These are automated guidance, not an official complaint filing.
+  High-risk results tell students who already paid to call the National Cyber
+  Crime Helpline 1930 and report at cybercrime.gov.in. `/analyze` also returns
+  `reasons`: the same rules as `risk_factors`, worded for students with each
+  rule's score impact. A report (and its token) is offered only for high risk
+  and insufficient evidence, never for a likely-legitimate result.
 - Sender authentication is available only for `.eml` uploads. It reads the
   topmost Authentication-Results header and does not store or log headers.
   Pasted text, PDFs, and images still check only the domain claimed in the content.
