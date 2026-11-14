@@ -13,18 +13,30 @@ browser once the server answers). Stop it with Ctrl+C.
 
 The script needs `.venv` (Python 3.11 with `requirements-dev.txt`) and Node.js on PATH; it stops
 with a message if either is missing. It sets demo mode and the demo domains, builds the synthetic
-company registry, seeds the demo community reports (safe to repeat), builds the frontend with the
-sample buttons only when it is missing or out of date, and starts one server for the API and
-website. Demo state lives in the git-ignored `data/demo/` folder; delete it to start fresh.
+company registry, seeds the simulated VIT Pune reports (safe to repeat), builds the frontend with
+the sample buttons only when it is missing or out of date, and starts one server for the API and
+website. Demo state lives in the git-ignored `data/demo/` folder; delete it to start fresh (the
+simulated reports are dated relative to the day they are first seeded).
 
 Suggested walkthrough (use the "Try a sample" buttons, or upload the matching PDFs below):
 
-1. **Emberlake offer**: registry match, demo domain and no fee: 0, likely legitimate.
-2. **Brightpath internship**: genuine-looking startup with no registration number: 31, verify manually.
-3. **Tarnwick internship**: the CIN belongs to a struck-off company: 31, verify manually.
-4. **Government scheme**: fee demand with UPI details and a deadline: 100, high risk.
-   Then click **Report this scam** to show the consented community report flow.
-5. **How it works**: what each check does and does not prove.
+1. **Emberlake offer**: registry match, demo domain and no fee: 0, Likely legitimate. "Why" lists
+   what was verified; there is no "Report this scam" button for a likely-legitimate result.
+2. **Brightpath internship**: genuine-looking startup with no registration number: 31,
+   Insufficient evidence ("Verify manually before you proceed").
+3. **Tarnwick internship**: the CIN belongs to a struck-off company: 31, Insufficient evidence.
+4. **Government scheme**: fee demand with UPI details and a deadline: 100, High risk.
+   Then click **Report this scam** to show the consented report flow (consent version 3 tells
+   the student that VIT's placement cell sees the details in masked form).
+5. **Student check → placement cell**: click **Corvane internship**. It asks for a security
+   deposit via UPI to `careerdesk.fees@ybl`, a sender other students already reported: 100,
+   High risk, and "Why" shows **Reported by 3+ students**.
+6. Open **VIT Pune placement cell**. The same sender, `careerd•••@ybl`, is in **Senders targeting
+   VIT students** (6 reports; 7 if you reported it in step 5). The table lists only senders with
+   3 or more reports; the simulated sender with 2 reports is not shown, and one sender is marked
+   "Disputed by the company, under review".
+7. Click **Export warning list** to download the same list as CSV (masked forms only).
+8. **How it works**: what each check does and does not prove.
 
 Tell your audience that every company in the demo is fictional. The PDFs have a real text layer,
 so PDF uploads need no OCR. Image uploads (PNG/JPG scans) need Tesseract OCR installed locally
@@ -43,6 +55,8 @@ registration number, phone number, account number and domain in them is fictiona
 | `registry_name_match_quillmere.txt` / `.pdf` | CIN matches an active company with the same name in the synthetic registry |
 | `registry_struck_off_tarnwick.txt` / `.pdf` | CIN belongs to a company whose registry status is Struck Off |
 | `registry_cin_mismatch_halvorn.txt` / `.pdf` | Offer claims one company but quotes the CIN of a different company |
+| `scam_shared_upi_corvane.txt` / `.pdf` | Deposit demand to a UPI ID other (simulated) students already reported |
+| `vit_simulated_senders.csv` | Simulated VIT Pune reports for the placement-cell page |
 | `synthetic_mca_master.csv` | Synthetic company master: 13 fictional companies for the registry demo |
 
 ## Synthetic company registry
@@ -94,10 +108,17 @@ Notes:
   `[DEMO FIXTURE — not a live DNS result]`, so the output always says it is a fixture.
 - Without `DEMO_MODE`, the `.example` domains fail the MX check (NXDOMAIN), which is the correct
   live behaviour.
-- `scam_reports.csv` contains synthetic community-network examples with reserved `.example`
-  domains. With `DEMO_MODE=1` and an environment-provided `INDICATOR_PEPPER`, run
-  `python scripts/seed_demo_reports.py`. It uses the normal token/consent service path; rows are
-  marked demo and ignored outside demo mode.
+- `vit_simulated_senders.csv` defines the simulated VIT Pune reports: 8 **fictional** senders
+  (a made-up gmail.com recruiter address, two lookalike `.example` domains, two UPI IDs, a phone
+  number, a disputed domain and one sender with only 2 reports), 45 reports in all, spread over
+  the last 12 weeks in campaign-like waves. With `DEMO_MODE=1` and an environment-provided
+  `INDICATOR_PEPPER`, `python scripts/seed_demo_reports.py` writes them exactly like consented
+  reports (HMAC, masked form, week, category, VIT Pune observation), flagged demo so they count
+  only in demo mode. The senders table, weekly chart and category table all come from these
+  reports; chart and table cells below five are shown as `<5`.
+- `scam_shared_upi_corvane.txt` / `.pdf` shares the seeded UPI sender. Hand-derived band:
+  payment +65, contact domain NXDOMAIN +30, no registration number +20, UPI reported by 3–9
+  students +25 = 140, capped at 100: High risk.
 - The six PDFs are generated from the `.txt` files by `scripts/make_demo_pdfs.py` (reportlab, A4)
   as offer-letter layouts (company header, identifiers, date, subject, body, signature block) with
   a real text layer, so the demo exercises the PDF upload path without OCR. Tests check each PDF

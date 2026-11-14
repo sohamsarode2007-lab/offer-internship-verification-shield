@@ -102,6 +102,7 @@ input[type='checkbox'] { width: 18px; height: 18px; accent-color: var(--platinum
 .sendersSection { margin-bottom: 40px; }
 .sendersHead { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 .sendersHead h2 { margin-top: 0; }
+.sendersSection > .help { margin: 4px 0 18px; }
 .exportLink { display: inline-flex; align-items: center; min-height: 40px; padding: 8px 14px; border: 1px solid var(--graphite); border-radius: 2px; background: var(--basalt); color: var(--platinum); font-size: 14px; font-weight: 600; text-decoration: none; }
 .exportLink:hover { background: var(--graphite); }
 .sendersSection .ledger tbody th { width: auto; color: var(--platinum); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }

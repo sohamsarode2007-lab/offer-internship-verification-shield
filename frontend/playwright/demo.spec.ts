@@ -24,6 +24,8 @@ test('demo analysis, reporting, dashboard, and public screens', async ({ page },
     { button: 'Quillmere internship', key: 'registry_name_match_quillmere.txt', band: 'Likely legitimate', shot: 'sample-quillmere-result' },
     { button: 'Tarnwick internship', key: 'registry_struck_off_tarnwick.txt', band: 'Insufficient evidence', shot: 'sample-tarnwick-result' },
     { button: 'Halvorn internship', key: 'registry_cin_mismatch_halvorn.txt', band: 'Insufficient evidence', shot: 'sample-halvorn-result' },
+    // Shares a simulated VIT sender (careerdesk.fees@ybl); reported below, then seen on the placement-cell page.
+    { button: 'Corvane internship', key: 'scam_shared_upi_corvane.txt', band: 'High risk', shot: 'sample-corvane-result' },
   ]
   for (const [index, sample] of samples.entries()) {
     if (index > 0) await page.getByRole('button', { name: 'Check another offer' }).click()
@@ -31,10 +33,11 @@ test('demo analysis, reporting, dashboard, and public screens', async ({ page },
     await expect(page.getByLabel('Paste offer text')).not.toHaveValue('')
     await expect(page.getByText(`Sample loaded: ${sample.key.replace('.txt', '')}`)).toBeVisible()
     await page.getByRole('button', { name: 'Check offer' }).click()
-    await expect(page.getByRole('heading', { name: sample.band })).toBeVisible()
+    await expect(page.getByRole('heading', { name: sample.band, exact: true })).toBeVisible()
+    if (sample.band === 'Likely legitimate') await expect(page.getByRole('button', { name: 'Report this scam' })).toHaveCount(0)
+    if (sample.button === 'Corvane internship') await expect(page.getByRole('table', { name: 'Why' }).getByText('Reported by 3+ students')).toBeVisible()
     await capture(page, testInfo, sample.shot)
   }
-
 
   await page.getByRole('button', { name: 'Report this scam' }).click()
   const dialog = page.getByRole('dialog')
@@ -76,9 +79,20 @@ test('demo analysis, reporting, dashboard, and public screens', async ({ page },
 
   await page.goto('/dashboard')
   await expect(page.getByRole('heading', { name: 'VIT Pune placement cell' })).toBeVisible()
+  const senders = page.getByRole('table', { name: 'Senders targeting VIT students' })
+  await expect(senders).toBeVisible()
+  await expect(page.getByText('Shown only after 3 or more students report the same sender.')).toBeVisible()
+  // The sender the student just checked (Corvane letter) is on the warning list, masked.
+  await expect(senders.getByRole('rowheader', { name: 'careerd•••@ybl' })).toBeVisible()
+  await expect(senders.getByText('Disputed by the company, under review')).toBeVisible()
+  await expect(senders.getByText(/talentbridge-jobs\.example/)).toHaveCount(0)   // only 2 reports: never shown
   await expect(page.getByRole('heading', { name: 'Results by week' })).toBeVisible()
   await expect(page.getByRole('table', { name: 'Scam categories by week' })).toBeVisible()
   await capture(page, testInfo, 'dashboard')
+  const downloadPromise = page.waitForEvent('download')
+  await page.getByRole('link', { name: 'Export warning list' }).click()
+  const download = await downloadPromise
+  expect(download.suggestedFilename()).toBe('vit-pune-warning-list.csv')
 
   await page.goto('/how-it-works')
   await expect(page.getByRole('heading', { name: 'What this checks' })).toBeVisible()
