@@ -17,6 +17,12 @@ Rules:
      UPI handle (or up to ~60 chars after it), within one sentence. Ignored when that
      span talks about stipend/salary/reimbursement (money flowing TO the candidate).
   4. Urgency is reported only when it appears within +/-250 chars of a demand.
+  5. Disguised-fee phrasing (BGV / certificate / courier-insurance / slot-booking /
+     ID-card / interview / bond-notarisation / medical-test fees, "pay 2000 rupees",
+     "Rs 4,500 is payable", Hinglish "fees bharna hoga" / "500 rupaye bhejiye") is
+     matched by EXTRA_FEE_PATTERNS with the same negation handling. These broader
+     patterns are skipped when the same sentence says the company bears the cost, or
+     talks about stipend/salary/reimbursement (money flowing to the candidate).
 
 Returns status 'fail' (demand found), 'pass' (none found) or 'not_applicable'
 (no text), plus 'urgency': [matched urgency terms near a demand].
@@ -41,6 +47,35 @@ SCAM_PHRASE_PATTERNS = [
     r"(?:pay|send|transfer|remit|deposit)\s+(?:rs\.?|inr|₹)\s*[\d,]+",
 ]
 _SCAM_RE = re.compile("|".join(f"(?:{p})" for p in SCAM_PHRASE_PATTERNS), re.IGNORECASE)
+
+# Disguised fee names. Each must be a fee/charge/deposit NOUN attached to the name, so
+# a bare mention ("carry your ID card", "medical test is not required") never matches.
+_FEE_NAMES = (
+    r"(?:bgv|certificate|id[-\s]?card|interview|slot\s+(?:booking|confirmation)|"
+    r"seat\s+(?:booking|confirmation|reservation)|offer[-\s]letter|courier(?:\s+insurance)?|"
+    r"insurance|medical(?:\s+test)?|notari[sz]ation|stamp\s+(?:paper|duty)|uniform|"
+    r"software(?:\s+licen[sc]e)?|licen[sc]e|access|assessment|exam|"
+    r"training[-\s]cum[-\s]internship|internship)"
+)
+_AMOUNT = r"(?:rs\.?|inr|\u20b9)\s*[\d,]+"
+_NOT_HI = r"(?!\s*(?:\w+\s+){0,3}(?:nahi|nahin|nhi)\b)"  # Hinglish "...nahi hai" = negated
+EXTRA_FEE_PATTERNS = [
+    _FEE_NAMES + r"\s+(?:fees?|charges?|deposit)\b",
+    r"(?:fees?|charges?)\s+of\s+" + _AMOUNT,
+    _AMOUNT + r"\s+(?:is|are)\s+(?:payable|applicable|required|due|chargeable)",
+    r"(?:pay|send|transfer|remit|deposit)\s+(?:a\s+sum\s+of\s+)?[\d,]{3,}\s*(?:rupees?|rupaye|rs\b\.?|inr)",
+    # Hinglish
+    r"\d[\d,]*\s*(?:rupees?|rupaye|rs\.?)\s+(?:bhej\w*|jama\s+kar\w*|de(?:na|ne)\s+(?:hoga|honge))" + _NOT_HI,
+    r"(?:fees?|charges?|paise|paisa)\s+(?:bhar\w*|jama\s+kar\w*|bhej\w*|de(?:na|ne)\s+(?:hoga|honge))" + _NOT_HI,
+]
+_EXTRA_RE = re.compile("|".join(f"(?:{p})" for p in EXTRA_FEE_PATTERNS), re.IGNORECASE)
+# The broader patterns are skipped when the sentence says the company covers the cost.
+_COMPANY_BEARS_RE = re.compile(
+    r"\b(?:bears?|borne|bearing|covers?|covered|at\s+its\s+own\s+cost|free\s+of\s+cost|"
+    r"at\s+no\s+(?:extra\s+)?cost|paid\s+by\s+the\s+company|waived|waiver|exempt(?:ed)?)\b"
+    r"|\b(?:we|company|employer|organi[sz]ation)\s+(?:will\s+)?(?:pay|credit|transfer|send|provide)",
+    re.IGNORECASE,
+)
 
 _NEGATION_RE = re.compile(
     # "no" followed by "." is the abbreviation for number ("Ref No. 12"), not a negation.
@@ -124,6 +159,15 @@ def _find_phrase_demands(text: str, spans) -> List[Dict[str, Any]]:
     for m in _SCAM_RE.finditer(text):
         s, _ = _sentence_of(spans, m.start())
         if _is_negated(text, s, m.start()):
+            continue
+        demands.append({"kind": "phrase", "match": re.sub(r"\s+", " ", m.group(0).strip()),
+                        "start": m.start(), "end": m.end()})
+    for m in _EXTRA_RE.finditer(text):
+        s, e = _sentence_of(spans, m.start())
+        if _is_negated(text, s, m.start()):
+            continue
+        sentence = text[s:e]
+        if _COMPANY_BEARS_RE.search(sentence) or _INBOUND_MONEY_RE.search(sentence):
             continue
         demands.append({"kind": "phrase", "match": re.sub(r"\s+", " ", m.group(0).strip()),
                         "start": m.start(), "end": m.end()})

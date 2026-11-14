@@ -64,6 +64,14 @@ been verified in this workspace.
 - The payment-demand signal is worth 65 points, with urgency near the demand worth
   20 additional points. A payment demand forces a high-risk score of at least 61.
   See the scoring table in `app/services/risk_scoring.py`.
+- Payment detection also matches disguised fee names (BGV, certificate, courier-insurance,
+  slot/seat booking, ID-card, interview, bond-notarisation, medical-test and similar
+  fees), amount-first phrasing ("Rs 4,500 is payable"), "pay 2000 rupees", and a small
+  set of Hinglish phrasings ("fees bharna hoga", "500 rupaye bhejiye"). These patterns
+  are hand-written, were checked only against hand-written synthetic sentences
+  (`tests/test_payment_euphemisms.py`) and carry the same negation handling as the
+  original rules; they are not validated on real-world messages. They are skipped
+  when the sentence says the company bears the cost or the fee is waived.
 - **Known limitation:** urgency without a detected payment demand adds no points.
   Synthetic case EC08 remains labelled `scam` but is now `insufficient evidence,
   verify manually`: its deadline alone is not weighted, and it lacks an external
