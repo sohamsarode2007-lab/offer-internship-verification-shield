@@ -100,7 +100,8 @@ def seed_vit_simulation(db: Session, today: date | None = None) -> int:
         for template_band, bucket in cr._signature_bands(signature):
             db.add(CommunityTemplateBand(report_id=report_id, band=template_band, bucket=bucket))
         db.flush()
-        record_check_observation(db, band, sender["category"], iso_week, is_demo=True, report_id=report_id)
+        record_check_observation(db, band, sender["category"], iso_week, is_demo=True, report_id=report_id,
+                                 is_simulated=True)
         added += 1
 
     for sender in senders:
@@ -121,8 +122,9 @@ def seed_vit_simulation(db: Session, today: date | None = None) -> int:
 # ── Simulated CHECKS (demo only) ─────────────────────────────────────────────
 # In production the VIT Pune chart counts consented reports only. In DEMO_MODE these
 # simulated checks (week, band, category; no report, no text, no indicators) fill the
-# 12-week chart and category table. They are deterministic, flagged is_demo, and have
-# report_id NULL, which is how they are recognised for idempotency.
+# 12-week chart and category table. They are deterministic, flagged is_demo and
+# is_simulated (report_id NULL); is_simulated is how they are recognised for idempotency
+# (real checks made in DEMO_MODE are is_demo but never is_simulated).
 BAND_LEGIT = "likely legitimate"
 # Two cells are deliberately kept below five to show the "<5" rule:
 #   likely legitimate in the oldest week, high risk in the second week (no reports that week).
@@ -154,7 +156,7 @@ def seed_vit_checks(db: Session, today: date | None = None) -> int:
 
     if os.getenv("DEMO_MODE") != "1":
         raise RuntimeError("Simulated VIT checks can only be seeded with DEMO_MODE=1.")
-    already = db.query(InstitutionObservation).filter(InstitutionObservation.is_demo.is_(True),
+    already = db.query(InstitutionObservation).filter(InstitutionObservation.is_simulated.is_(True),
                                                       InstitutionObservation.report_id.is_(None)).first()
     if already:
         return 0
@@ -168,7 +170,8 @@ def seed_vit_checks(db: Session, today: date | None = None) -> int:
             for category, count in categories.items():
                 for _ in range(count):
                     db.add(InstitutionObservation(institution_id=institution.id, report_id=None, iso_week=iso_week,
-                                                  band=band, scam_category=category, is_demo=True))
+                                                  band=band, scam_category=category, is_demo=True,
+                                                  is_simulated=True))
                     added += 1
     db.commit()
     return added

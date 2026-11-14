@@ -128,5 +128,7 @@ class InstitutionObservation(Base):
     band = Column(String(50), nullable=False, index=True)
     scam_category = Column(String(50), nullable=False, index=True)
     is_demo = Column(Boolean, default=False, nullable=False)
+    # True only for rows written by app/services/demo_seed.py (never for a real check).
+    is_simulated = Column(Boolean, default=False, nullable=False)
     institution = relationship("Institution", back_populates="observations")
     report = relationship("CommunityReport", back_populates="observations")

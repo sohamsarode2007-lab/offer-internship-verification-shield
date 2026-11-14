@@ -33,7 +33,7 @@ def get_institution(db: Session) -> Institution:
 
 
 def record_check_observation(db: Session, band: str, scam_category: str, iso_week: str,
-                             is_demo: bool, report_id: str | None = None) -> None:
+                             is_demo: bool, report_id: str | None = None, is_simulated: bool = False) -> None:
     """One anonymous VIT Pune trend row: ISO week, band and category only.
 
     Every /analyze call records one (report_id stays NULL: not linked to anything).
@@ -44,7 +44,8 @@ def record_check_observation(db: Session, band: str, scam_category: str, iso_wee
     if scam_category not in CATEGORIES:
         scam_category = "other"
     db.add(InstitutionObservation(institution_id=get_institution(db).id, report_id=report_id,
-                                  iso_week=iso_week, band=band, scam_category=scam_category, is_demo=is_demo))
+                                  iso_week=iso_week, band=band, scam_category=scam_category, is_demo=is_demo,
+                                  is_simulated=is_simulated))
 
 
 TREND_RETENTION_WEEKS = 104  # 24 months

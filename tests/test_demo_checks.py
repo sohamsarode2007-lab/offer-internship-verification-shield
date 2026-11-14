@@ -46,7 +46,7 @@ def demo_db(api_client, monkeypatch):
 
 def test_checks_are_idempotent_and_demo_only(demo_db, monkeypatch):
     from app.models.models import InstitutionObservation
-    checks = demo_db.query(InstitutionObservation).filter(InstitutionObservation.is_demo.is_(True),
+    checks = demo_db.query(InstitutionObservation).filter(InstitutionObservation.is_simulated.is_(True),
                                                           InstitutionObservation.report_id.is_(None))
     assert checks.count() == sum(_plan_totals())
     assert demo_seed.seed_vit_checks(demo_db) == 0
