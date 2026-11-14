@@ -92,15 +92,11 @@ def test_dashboard_shows_seeded_senders_in_demo_mode(seeded, api_client):
     assert shown["nimbuslearn-hiring.example"]["dispute_status"] == "disputed by the company, under review"
     assert all("placement.desk.vit" not in s["indicator"] for s in body["top_senders"])
 
-    # The chart and the category table come from the same 45 simulated reports.
+    # The chart includes the simulated reports' weeks. (Exact seeded row counts are pinned in
+    # test_seeding_is_idempotent_and_demo_flagged and tests/test_demo_checks.py; the chart total
+    # itself also grows with every check made in demo mode, so it has no fixed bound.)
     weeks = body["weeks"]
-    band_total = sum(c["count"] for c in body["by_week_band"] if isinstance(c["count"], int))
-    category_total = sum(c["count"] for c in body["by_week_category"] if isinstance(c["count"], int))
     assert any(isinstance(c["count"], int) for c in body["by_week_band"])        # some weeks are visible
-    # In demo mode the chart holds the 45 reports plus, once seeded, the simulated checks
-    # (tests/test_demo_checks.py); never more than that.
-    limit = 45 + sum(sum(sum(c.values()) for c in demo_seed._weekly_check_plan(w).values()) for w in range(12))
-    assert band_total <= limit and category_total <= limit
     first_weeks = {s["first_week"] for s in body["top_senders"]}
     assert first_weeks <= set(weeks)
 
