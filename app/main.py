@@ -87,6 +87,23 @@ def health_check():
     return {"status": "ok", "service": "Verification Shield Backend"}
 
 
+@app.get("/ready")
+def readiness_check():
+    """Deep check: the database answers. Use /health for liveness (no dependencies)."""
+    from fastapi import HTTPException
+    from sqlalchemy import text
+
+    db = SessionLocal()
+    try:
+        db.execute(text("SELECT 1"))
+    except Exception as exc:
+        logging.getLogger(__name__).warning("Readiness check failed: %s", type(exc).__name__)
+        raise HTTPException(status_code=503, detail="database unavailable")
+    finally:
+        db.close()
+    return {"status": "ready"}
+
+
 # Serve only the production build. The Vite source index is never served directly.
 frontend_dist = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend", "dist")
 frontend_index = os.path.join(frontend_dist, "index.html")
