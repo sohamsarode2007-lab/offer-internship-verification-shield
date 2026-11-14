@@ -1,0 +1,9 @@
+key,indicator_type,value,reports,high_risk_reports,category,disputed,template
+gmail_recruiter,email,placement.desk.vit@gmail.com,12,10,free_mailbox_impersonation,false,"Greetings from the campus hiring desk. You are shortlisted for a work from home analyst role. Share your resume and pay the onboarding charge to receive the appointment letter."
+quillmere_lookalike,domain,quillmere-careers.example,9,6,lookalike_domain,false,"Quillmere careers team here. Your profile matched our graduate trainee opening. Reply with documents to complete background verification before the batch closes."
+emberlake_lookalike,domain,emberlake-hr-desk.example,5,3,lookalike_domain,false,"Emberlake HR desk invites you to a virtual induction. Submit your bank details and identity proof through the portal to activate your intern account."
+upi_careerdesk,upi,careerdesk.fees@ybl,6,6,security_deposit,false,"Selected for the paid training programme. Deposit the kit amount through UPI to secure your laptop and joining kit before dispatch."
+upi_jobverify,upi,jobverify.payments@paytm,3,3,registration_fee,false,"Your job application needs a one time registration payment through UPI so the verification team can process your file today."
+phone_recruiter,phone,+91 98765 43210,4,3,fake_government_scheme,false,"Government skill mission placement call. WhatsApp the coordinator on the given number and pay the document fee to receive your posting order."
+disputed_domain,domain,nimbuslearn-hiring.example,4,2,registration_fee,true,"Nimbuslearn hiring cell confirms your seat in the summer internship. Complete the enrolment payment to lock the offer."
+below_threshold,email,onboarding@talentbridge-jobs.example,2,2,training_or_kit_fee,false,"Talentbridge onboarding needs the training material fee before your first session can be scheduled."

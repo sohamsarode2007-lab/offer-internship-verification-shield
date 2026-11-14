@@ -88,9 +88,11 @@ shows that it is under review. Only a domain dispute verified through a
 one-time link sent to that same domain is temporarily excluded from scoring.
 Configure SMTP to deliver those links. Dispute contact email is retained for
 12 months after resolution. Reports can be withdrawn with their one-time code;
-inactive indicators expire after 24 months. Demo reports can be seeded only
-with `DEMO_MODE=1` using `python scripts/seed_demo_reports.py`; they count only
-in demo mode.
+inactive indicators expire after 24 months. Simulated VIT Pune reports (8
+fictional senders in `fixtures/demo/vit_simulated_senders.csv`, 45 reports over
+12 weeks) can be seeded only with `DEMO_MODE=1` using
+`python scripts/seed_demo_reports.py` (idempotent; `run_demo.bat` runs it); they
+are flagged demo and count only in demo mode.
 
 HMACed identifiers and MinHash signatures are pseudonymised, not anonymous.
 The DPDP Act, 2023 and its Rules, including the lawful basis for third-party

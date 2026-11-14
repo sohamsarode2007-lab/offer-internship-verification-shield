@@ -1,10 +1,8 @@
-"""Seed synthetic community reports through the same consent/token service flow.
+"""Seed the simulated VIT Pune community reports (fictional senders; DEMO_MODE=1 only).
 
-Requires DEMO_MODE=1 and an operator-provided INDICATOR_PEPPER. The committed
-fixture contains only synthetic .example domains and a fictional UPI handle.
+Requires DEMO_MODE=1 and an operator-provided INDICATOR_PEPPER. Idempotent: running it
+again adds nothing. See app/services/demo_seed.py and fixtures/demo/vit_simulated_senders.csv.
 """
-import csv
-import json
 import os
 import sys
 from pathlib import Path
@@ -20,32 +18,15 @@ def main():
         raise SystemExit("Set INDICATOR_PEPPER in the environment; no default pepper is used.")
 
     from app.db.database import SessionLocal, init_dev_db
-    from app.models.models import CommunityReport
-    from app.services import community_reports
-    from app.services.fact_extraction import extract_facts
-    from app.services.payment_detection import detect_payment_demand
+    from app.services.demo_seed import seed_vit_simulation
 
     init_dev_db()
     db = SessionLocal()
-    added = 0
     try:
-        with (ROOT / "fixtures" / "demo" / "scam_reports.csv").open(encoding="utf-8", newline="") as source:
-            rows = list(csv.DictReader(source))
-        for row in rows:
-            text = row["text"]
-            facts = extract_facts(text)
-            indicators = community_reports.extract_indicators(text, None, detect_payment_demand(facts))
-            signature = community_reports.minhash_signature(text)
-            signature_json = json.dumps(signature)
-            if db.query(CommunityReport).filter_by(signature=signature_json, is_demo=True).first():
-                continue
-            token, _ = community_reports.issue_report_token(db, indicators, signature)
-            selected = [x["indicator_type"] + ":" + x["digest"] for x in indicators]
-            community_reports.accept_report(db, token, selected, True, community_reports.CONSENT_VERSION)
-            added += 1
+        added = seed_vit_simulation(db)
     finally:
         db.close()
-    print(f"Added {added} synthetic demo report(s).")
+    print(f"Added {added} simulated VIT Pune report(s).")
 
 
 if __name__ == "__main__":

@@ -34,6 +34,7 @@ LETTERS = [
     "registry_name_match_quillmere",
     "registry_struck_off_tarnwick",
     "registry_cin_mismatch_halvorn",
+    "scam_shared_upi_corvane",
 ]
 
 MARGIN_X, MARGIN_TOP, MARGIN_BOTTOM = 64, 64, 64
