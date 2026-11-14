@@ -1,8 +1,9 @@
 """VIT Pune placement-cell dashboard: category rules and weekly k-anonymous queries.
 
 Single-college simulation. There is exactly one institution, "VIT Pune", created
-automatically; every consented community report is attributed to it. Multiple
-colleges and a staff login for the dashboard are future scope.
+automatically. Every /analyze call adds one anonymous trend row (ISO week, band,
+scam category; see docs/PRIVACY_DESIGN.md). The senders table comes from consented
+community reports. Multiple colleges and a staff login are future scope.
 """
 import os
 import re
@@ -31,15 +32,29 @@ def get_institution(db: Session) -> Institution:
     return institution
 
 
-def record_report_observation(db: Session, report_id: str, band: str, scam_category: str,
-                              iso_week: str, is_demo: bool) -> None:
-    """Attribute one consented report to VIT Pune (week, band and category only)."""
+def record_check_observation(db: Session, band: str, scam_category: str, iso_week: str,
+                             is_demo: bool, report_id: str | None = None) -> None:
+    """One anonymous VIT Pune trend row: ISO week, band and category only.
+
+    Every /analyze call records one (report_id stays NULL: not linked to anything).
+    report_id is set only for the simulated demo reports in app/services/demo_seed.py.
+    """
     if band not in BANDS:
         return
     if scam_category not in CATEGORIES:
         scam_category = "other"
     db.add(InstitutionObservation(institution_id=get_institution(db).id, report_id=report_id,
                                   iso_week=iso_week, band=band, scam_category=scam_category, is_demo=is_demo))
+
+
+TREND_RETENTION_WEEKS = 104  # 24 months
+
+
+def purge_old_observations(db: Session, today: date | None = None) -> int:
+    """Delete trend rows older than 24 months (by ISO week; 'YYYY-Www' sorts correctly)."""
+    cutoff = last_weeks(today, TREND_RETENTION_WEEKS + 1)[0]
+    return db.query(InstitutionObservation).filter(InstitutionObservation.iso_week < cutoff).delete(
+        synchronize_session=False)
 
 
 def _include_demo() -> bool:

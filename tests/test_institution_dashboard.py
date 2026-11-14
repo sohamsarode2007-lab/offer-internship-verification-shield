@@ -88,61 +88,12 @@ def test_dashboard_suppresses_cells_below_five(api_client):
     gen.close()
 
 
-def test_analyze_without_consent_records_no_observation(api_client, monkeypatch):
-    from app.models.models import InstitutionObservation, Offer
-    monkeypatch.setenv("INDICATOR_PEPPER", "test-pepper-" + uuid.uuid4().hex)
-    gen, db = _test_db()
-    before = db.query(InstitutionObservation).count()
-    gen.close()
-    response = api_client.post("/analyze", data={"text": PAYMENT_TEXT})
-    assert response.status_code == 200, response.text
-    assert response.json()["report_token"]
-    gen, db = _test_db()
-    try:
-        assert db.query(InstitutionObservation).count() == before
-        assert all(offer.raw_text is None and offer.company_name is None for offer in db.query(Offer).all())
-    finally:
-        gen.close()
-
-
 def test_former_college_code_field_is_ignored(api_client):
     # The college-code field no longer exists; an extra form field changes nothing.
     response = api_client.post("/analyze", data={"text": "A small remote internship is open.",
                                                   "institution_code": "ANYTHING"})
     assert response.status_code == 200
     assert "institution" not in response.text.casefold()
-
-
-def test_consented_report_counts_for_vit_pune_and_withdrawal_removes_it(api_client, monkeypatch):
-    from app.models.models import InstitutionObservation
-    monkeypatch.setenv("INDICATOR_PEPPER", "test-pepper-" + uuid.uuid4().hex)
-    gen, db = _test_db()
-    before = db.query(InstitutionObservation).count()
-    gen.close()
-    analysis = api_client.post("/analyze", data={"text": PAYMENT_TEXT}).json()
-    selected = [i["id"] for i in analysis["reportable_indicators"]]
-    from app.services.community_reports import CONSENT_VERSION
-    reported = api_client.post("/report", json={"report_token": analysis["report_token"], "consent": True,
-        "consent_version": CONSENT_VERSION, "selected_indicators": selected})
-    assert reported.status_code == 200, reported.text
-    gen, db = _test_db()
-    try:
-        assert db.query(InstitutionObservation).count() == before + 1
-        observation = db.query(InstitutionObservation).order_by(InstitutionObservation.id.desc()).first()
-        assert observation.institution.name == "VIT Pune"
-        assert re.fullmatch(r"\d{4}-W\d{2}", observation.iso_week)
-        assert observation.band == analysis["risk_band"]
-        assert observation.scam_category == "registration_fee"
-        assert {c.name for c in InstitutionObservation.__table__.columns} == {
-            "id", "institution_id", "report_id", "iso_week", "band", "scam_category", "is_demo"}
-    finally:
-        gen.close()
-    assert api_client.post("/report/withdraw", json={"code": reported.json()["withdrawal_code"]}).status_code == 200
-    gen, db = _test_db()
-    try:
-        assert db.query(InstitutionObservation).count() == before
-    finally:
-        gen.close()
 
 
 def test_add_institution_script_is_gone():

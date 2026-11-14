@@ -118,8 +118,9 @@ Notes:
 - The same script also seeds **484 simulated checks** for VIT Pune (week, band and category
   only; no text, no indicators), demo-flagged and idempotent, so the 12-week chart and category
   table are populated: mostly insufficient evidence and likely legitimate, with high risk rising
-  from 6 to about 15 checks a week. Chart and table therefore count checks plus reports in demo
-  mode; outside demo mode they count consented reports only. Two chart cells are deliberately
+  from 6 to about 15 checks a week. They have exactly the fields a real check records (every
+  `/analyze` adds one anonymous week/band/category row), so the demo behaves like the real app;
+  checks you run during the demo are added too. Two chart cells are deliberately
   below five (likely legitimate in the oldest week, high risk in the second week) to show the
   `<5` rule; the smaller categories (training/kit fee, fake government scheme, sender spoofing)
   also stay below five in most weeks. Every week in which a listed sender was last reported has

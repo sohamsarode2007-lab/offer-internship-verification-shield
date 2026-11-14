@@ -175,6 +175,9 @@ def analyze_offer(
         for c in check_dicts
     ]
 
+    # Rule-based scam category, computed in memory (the text is not stored).
+    scam_category = institution_dashboard.classify_scam(check_dicts, raw_text)
+
     # Persistence: verdict + check results only. raw_text / file_path / names are not stored.
     try:
         db_offer = Offer(title=None, company_name=None, raw_text=None, file_path=None)
@@ -197,6 +200,11 @@ def analyze_offer(
                 score=c_schema.score,
                 details=c_schema.details,
             ))
+        # One anonymous VIT Pune trend row per check: ISO week, band, category only
+        # (no text, identifiers, file name, IP or link to this analysis). See PRIVACY_DESIGN.md.
+        institution_dashboard.record_check_observation(
+            db, risk_band, scam_category, institution_dashboard.current_iso_week(),
+            is_demo=os.getenv("DEMO_MODE") == "1")
         db.commit()
         offer_id = db_offer.id
     except Exception as e:
@@ -219,7 +227,7 @@ def analyze_offer(
     if risk_band in REPORTABLE_BANDS:
         report_token, reportable_indicators = community_reports.issue_report_token(
             db, report_indicators, signature,
-            band=risk_band, scam_category=institution_dashboard.classify_scam(check_dicts, raw_text),
+            band=risk_band, scam_category=scam_category,
         )
     if report_token:
         try:

@@ -22,7 +22,7 @@ from sqlalchemy.orm import Session
 
 from app.models.models import CommunityDispute, CommunityIndicator, CommunityReport, CommunityTemplateBand
 from app.services import community_reports as cr
-from app.services.institution_dashboard import record_report_observation
+from app.services.institution_dashboard import record_check_observation
 
 SENDERS_CSV = Path(__file__).resolve().parents[2] / "fixtures" / "demo" / "vit_simulated_senders.csv"
 SEED_NAMESPACE = uuid.UUID("6f1d2b4e-9a57-4c1e-8f0b-5a3e2d7c9b10")
@@ -100,7 +100,7 @@ def seed_vit_simulation(db: Session, today: date | None = None) -> int:
         for template_band, bucket in cr._signature_bands(signature):
             db.add(CommunityTemplateBand(report_id=report_id, band=template_band, bucket=bucket))
         db.flush()
-        record_report_observation(db, report_id, band, sender["category"], iso_week, is_demo=True)
+        record_check_observation(db, band, sender["category"], iso_week, is_demo=True, report_id=report_id)
         added += 1
 
     for sender in senders:

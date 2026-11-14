@@ -264,7 +264,7 @@ def accept_report(db: Session, token: str, selected: list[str], consent: bool, c
         signature=json.dumps(signature), created_at=now, last_seen_at=now,
         withdrawal_code_hash=hashlib.sha256(code.encode()).hexdigest(), is_demo=os.getenv("DEMO_MODE") == "1")
     db.add(report)
-    from app.services.institution_dashboard import current_iso_week, record_report_observation
+    from app.services.institution_dashboard import current_iso_week
     week = current_iso_week(now.date())
     category = payload.get("scam_category") or "other"
     for digest in set(selected):
@@ -275,9 +275,7 @@ def accept_report(db: Session, token: str, selected: list[str], consent: bool, c
             masked_display=item.get("masked"), iso_week=week, scam_category=category))
     for band, bucket in _signature_bands(signature):
         db.add(CommunityTemplateBand(report_id=report_id, band=band, bucket=bucket))
-    if payload.get("band"):
-        db.flush()
-        record_report_observation(db, report_id, payload["band"], category, week, report.is_demo)
+    # The check behind this report was already counted once by /analyze; no second trend row.
     db.commit()
     return {"status": "reported", "withdrawal_code": code}
 
@@ -362,6 +360,8 @@ def purge_expired(db: Session, now: datetime | None = None):
         db.delete(report)
     db.query(CommunityDispute).filter(CommunityDispute.resolved_at.is_not(None),
         CommunityDispute.resolved_at < now - timedelta(days=365)).delete(synchronize_session=False)
+    from app.services.institution_dashboard import purge_old_observations
+    purge_old_observations(db, now.date())
     db.commit()
 
 

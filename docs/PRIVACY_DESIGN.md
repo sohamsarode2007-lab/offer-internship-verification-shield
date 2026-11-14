@@ -55,9 +55,33 @@ For each indicator the student selects in a **consented** report, store exactly:
 Raw email addresses, phone numbers, UPI IDs and account numbers are **never
 stored**; the masked form is computed in memory and is the only readable form
 kept. A normal `/analyze` stores none of this: indicators are written only when
-a student consents to a report. Each consented report also adds one VIT Pune
-observation (ISO week, risk band, scam category) for the weekly chart and
-category table. Withdrawing a report deletes its indicators and its observation.
+a student consents to a report. Withdrawing a report deletes its indicators.
+
+### Anonymous trend counts (every check)
+
+**Purpose:** anonymous weekly trend counts for the VIT Pune placement cell
+(the 12-week results chart and the category summary).
+
+Every successful `/analyze` call records exactly **one** aggregate row for
+VIT Pune with three fields only:
+
+| Field | Content |
+| --- | --- |
+| ISO week | `YYYY-Www` (no date or time) |
+| risk band | likely legitimate / insufficient evidence / high risk |
+| scam category | one rule-based category, e.g. `registration_fee` |
+
+The row has no offer text, no indicators or identifiers, no file name, no
+company name, no IP address and no link to the analysis record, a report or
+a person. The category is computed in memory from the check results and the
+text, which are then discarded as before. Because the row is unlinked, a
+report withdrawal does not remove it. Checks made with `DEMO_MODE=1` are
+flagged demo and count only in demo mode.
+
+**Disclosure:** the placement-cell page and its CSV export show these counts
+only as aggregates, and every count below five is shown as `<5`.
+**Retention:** rows older than 24 months (by ISO week) are deleted by the
+same hourly retention worker.
 
 The VIT Pune placement cell page lists a sender only after **3 or more**
 distinct consented reports of the same indicator, showing its masked form,
@@ -130,7 +154,8 @@ suppressed while pending manual review. Store the dispute contact email only
 for follow-up, and delete it 12 months after resolution. The dispute reason
 must not be used to submit offer text or unrelated personal information.
 
-Indicators and their report contributions not seen for 24 months are deleted
+Anonymous trend rows (ISO week, band, category) are deleted 24 months after
+their ISO week. Indicators and their report contributions not seen for 24 months are deleted
 automatically. Report-level withdrawal removes that report's contribution
 immediately. Dispute state does not exempt records from the 24-month
 inactivity rule. An application retention worker runs hourly, and requests

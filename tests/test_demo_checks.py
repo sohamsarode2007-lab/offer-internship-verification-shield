@@ -90,6 +90,7 @@ def test_simulated_checks_hidden_outside_demo_mode(demo_db, api_client, monkeypa
     monkeypatch.delenv("DEMO_MODE")
     body = api_client.get("/placement-cell/dashboard").json()
     weeks = body["weeks"]
-    legit_recent = next(c["count"] for c in body["by_week_band"]
-                        if c["week"] == weeks[-1] and c["band"] == "likely legitimate")
-    assert legit_recent == "<5"
+    # An older week: real checks made by other tests only ever land in the current week.
+    legit_older = next(c["count"] for c in body["by_week_band"]
+                       if c["week"] == weeks[-6] and c["band"] == "likely legitimate")
+    assert legit_older == "<5"

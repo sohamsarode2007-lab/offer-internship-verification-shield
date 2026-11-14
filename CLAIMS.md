@@ -130,18 +130,20 @@ been verified in this workspace.
   `scripts/add_institution.py`. **Multiple colleges and a staff login for the
   placement-cell page are future scope**; the page is currently open to anyone
   who can reach the site.
-- Every community report a student consents to is attributed to VIT Pune. Each
-  consented report adds one observation: UTC ISO week, risk band and rule-based
-  scam category, linked to the report so withdrawal removes it. A normal
-  `/analyze` without a consented report records nothing for the dashboard.
-  Enrollment is not verified and reports are not deduplicated by student, so
-  counts are reports, not verified unique students.
-- **Demo data on this page is simulated.** With `DEMO_MODE=1`, `run_demo.bat`
-  seeds 45 simulated reports (the senders table) and 484 simulated checks
-  (week, band, category only) so the 12-week chart and category table are
-  populated; two chart cells are deliberately below five to show suppression.
-  Outside demo mode the chart and table count consented reports only; the app
-  does not record ordinary checks for the dashboard.
+- **Every check is counted anonymously for VIT Pune.** Each successful
+  `/analyze` call records exactly one aggregate row: UTC ISO week, risk band and
+  rule-based scam category. The row holds no offer text, identifiers, file name,
+  company name or IP address and is not linked to the analysis, a report or a
+  person, so a report withdrawal does not remove it. Rows are deleted 24 months
+  after their week. Purpose: anonymous trend counts for the placement cell; every
+  count below five is shown as `<5`. A consented report adds no second row.
+  Enrollment is not verified and checks are not deduplicated by student, so counts
+  are checks, not verified unique students. The senders table comes from consented
+  community reports.
+- With `DEMO_MODE=1`, `run_demo.bat` seeds 45 simulated reports (senders table)
+  and 484 simulated checks (the same three fields) so the 12-week chart and
+  category summary are populated; checks made in demo mode are also demo-flagged.
+  Demo rows count only in demo mode. Two chart cells are deliberately below five.
 - `GET /placement-cell/dashboard` returns week-by-band and week-by-category
   counts for 12 ISO weeks and replaces cells below five with `"<5"`, plus
   `top_senders`: masked indicators reported in 3+ consented (consent v3)

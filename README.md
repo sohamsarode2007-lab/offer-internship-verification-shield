@@ -93,9 +93,8 @@ fictional senders in `fixtures/demo/vit_simulated_senders.csv`, 45 reports over
 12 weeks) can be seeded only with `DEMO_MODE=1` using
 `python scripts/seed_demo_reports.py` (idempotent; `run_demo.bat` runs it); they
 are flagged demo and count only in demo mode. The same script seeds 484
-simulated checks (week, band, category only) so the demo's 12-week chart and
-category table are populated; outside demo mode those count consented reports
-only.
+simulated checks with the same three fields every real check records (week,
+band, category) so the demo's 12-week chart and category summary are populated.
 
 HMACed identifiers and MinHash signatures are pseudonymised, not anonymous.
 The DPDP Act, 2023 and its Rules, including the lawful basis for third-party
@@ -108,11 +107,12 @@ keeps older digests matchable until they expire.
 
 This build simulates one college, **VIT Pune**. Its institution record is
 created automatically; there are no college codes or API keys. Every
-community report a student consents to is attributed to VIT Pune and recorded
-as one observation: ISO week (`YYYY-Www`), risk band and one scam category,
-linked to the report so a withdrawal removes it. A normal `/analyze` stores no
-observation. Reports are not deduplicated by student and enrollment is not
-verified, so counts are reports, not unique students.
+successful `/analyze` call records one anonymous trend row for VIT Pune: ISO
+week (`YYYY-Www`), risk band and one scam category. No text, identifiers, file
+name, company name or IP address is stored with it, and it is not linked to the
+analysis or to any report. Rows are deleted 24 months after their week. Checks
+are not deduplicated by student and enrollment is not verified, so counts are
+checks, not unique students. See [the privacy design](docs/PRIVACY_DESIGN.md).
 
 Multiple colleges and a staff login for this page are future scope; until then
 the page is open and shows only aggregate data.
