@@ -99,6 +99,82 @@ def last_weeks(today: date | None = None, count: int = 12) -> list[str]:
     return weeks
 
 
+SENDER_THRESHOLD = 3
+DISPUTED_STATUS = "disputed by the company, under review"
+SENDER_CSV_COLUMNS = ("indicator", "type", "reports", "first_week", "last_week", "most_common_category",
+                      "dispute_status")
+
+
+def top_senders(db: Session) -> list[dict]:
+    """Senders (masked indicators) reported by 3+ distinct consented v3 reports, by count.
+
+    Only masked display forms leave this function; digests are used for grouping and
+    dispute lookup only. Withdrawn reports never count; demo reports count only in DEMO_MODE.
+    """
+    from collections import Counter
+    from app.models.models import CommunityDispute, CommunityIndicator, CommunityReport
+    from app.services.community_reports import CONSENT_VERSION
+
+    query = db.query(CommunityIndicator.indicator_type, CommunityIndicator.digest, CommunityIndicator.key_version,
+                     CommunityIndicator.report_id, CommunityIndicator.masked_display,
+                     CommunityIndicator.iso_week, CommunityIndicator.scam_category).join(CommunityReport).filter(
+        CommunityReport.withdrawn.is_(False),
+        CommunityReport.consent_version >= CONSENT_VERSION,
+        CommunityIndicator.masked_display.isnot(None),
+    )
+    if not _include_demo():
+        query = query.filter(CommunityReport.is_demo.is_(False))
+
+    groups: dict[tuple, dict] = {}
+    for kind, digest, version, report_id, display, week, category in query.all():
+        group = groups.setdefault((kind, digest, version), {
+            "indicator_type": kind, "indicator": display, "reports": set(), "weeks": [], "categories": Counter()})
+        group["reports"].add(report_id)
+        if week:
+            group["weeks"].append(week)
+        if category:
+            group["categories"][category] += 1
+
+    disputed = {(d.indicator_type, d.digest, d.key_version)
+                for d in db.query(CommunityDispute).filter(CommunityDispute.resolved_at.is_(None)).all()}
+    senders = []
+    for key, group in groups.items():
+        count = len(group["reports"])
+        if count < SENDER_THRESHOLD:
+            continue
+        category = (sorted(group["categories"].items(), key=lambda kv: (-kv[1], kv[0]))[0][0]
+                    if group["categories"] else "other")
+        senders.append({
+            "indicator": group["indicator"],
+            "indicator_type": group["indicator_type"],
+            "reports": count,
+            "first_week": min(group["weeks"]) if group["weeks"] else None,
+            "last_week": max(group["weeks"]) if group["weeks"] else None,
+            "most_common_category": category,
+            "dispute_status": DISPUTED_STATUS if key in disputed else None,
+        })
+    senders.sort(key=lambda s: (-s["reports"], s["indicator_type"], s["indicator"]))
+    return senders
+
+
+def _csv_safe(value) -> str:
+    """Prevent spreadsheet formula injection (cells starting with = + - @)."""
+    text = "" if value is None else str(value)
+    return "'" + text if text[:1] in ("=", "+", "-", "@") else text
+
+
+def senders_csv(db: Session) -> str:
+    import csv
+    import io
+    out = io.StringIO()
+    writer = csv.writer(out, lineterminator="\r\n")
+    writer.writerow(SENDER_CSV_COLUMNS)
+    for s in top_senders(db):
+        writer.writerow([_csv_safe(s["indicator"]), s["indicator_type"], s["reports"], s["first_week"] or "",
+                         s["last_week"] or "", s["most_common_category"], s["dispute_status"] or "not disputed"])
+    return out.getvalue()
+
+
 def dashboard(db: Session, today: date | None = None) -> dict:
     institution = get_institution(db)
     db.commit()
@@ -117,6 +193,8 @@ def dashboard(db: Session, today: date | None = None) -> dict:
     category_counts = {(week, category): count for week, category, count in category_rows}
     return {
         "institution": institution.name,
+        "sender_threshold": SENDER_THRESHOLD,
+        "top_senders": top_senders(db),
         "weeks": weeks,
         "by_week_band": [{"week": week, "band": band,
                           "count": (n if n >= 5 else "<5")}

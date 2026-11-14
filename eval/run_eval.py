@@ -132,7 +132,7 @@ def _seed_eval_community(case, community_reports):
             signature = community_reports.minhash_signature(fixture)
             token, _ = community_reports.issue_report_token(db, indicators, signature)
             selected = [x["indicator_type"] + ":" + x["digest"] for x in indicators]
-            community_reports.accept_report(db, token, selected, True, 2)
+            community_reports.accept_report(db, token, selected, True, community_reports.CONSENT_VERSION)
     return db
 
 

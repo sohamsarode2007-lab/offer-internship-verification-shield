@@ -55,7 +55,7 @@ export interface ReportableIndicator {
 export interface ReportRequest {
   report_token: string
   consent: true
-  consent_version: 2
+  consent_version: 3
   selected_indicators: string[]
 }
 
@@ -78,8 +78,19 @@ export type ScamCategory = 'registration_fee' | 'security_deposit' | 'training_o
 export type DashboardCount = number | '<5'
 export interface WeekBandCount { week: string; band: RiskBand; count: DashboardCount }
 export interface WeekCategoryCount { week: string; category: ScamCategory; count: DashboardCount }
+export interface TopSender {
+  indicator: string
+  indicator_type: DisputeIndicatorType
+  reports: number
+  first_week: string | null
+  last_week: string | null
+  most_common_category: ScamCategory
+  dispute_status: string | null
+}
 export interface InstitutionDashboard {
   institution: string
+  sender_threshold: number
+  top_senders: TopSender[]
   weeks: string[]
   by_week_band: WeekBandCount[]
   by_week_category: WeekCategoryCount[]

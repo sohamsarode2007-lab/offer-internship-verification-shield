@@ -70,6 +70,11 @@ class CommunityIndicator(Base):
     key_version = Column(Integer, nullable=False)
     created_at = Column(DateTime(timezone=True), default=utc_now, nullable=False)
     last_seen_at = Column(DateTime(timezone=True), default=utc_now, nullable=False)
+    # Consented reports only (see docs/PRIVACY_DESIGN.md): the masked display form the
+    # student saw, never a raw value; plus the report's ISO week and scam category.
+    masked_display = Column(String(120), nullable=True)
+    iso_week = Column(String(8), nullable=True, index=True)
+    scam_category = Column(String(50), nullable=True)
     report = relationship("CommunityReport", back_populates="indicators")
 
 

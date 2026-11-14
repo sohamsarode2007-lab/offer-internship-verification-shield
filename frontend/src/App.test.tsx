@@ -111,14 +111,48 @@ describe('interface errors', () => {
   })
 })
 
+describe('VIT Pune placement cell page', () => {
+  const dashboardData = {
+    institution: 'VIT Pune', sender_threshold: 3, weeks: ['2026-W46'], by_week_band: [], by_week_category: [],
+    top_senders: [
+      { indicator: 'pl•••@gmail.com', indicator_type: 'email', reports: 12, first_week: '2026-W36', last_week: '2026-W46', most_common_category: 'free_mailbox_impersonation', dispute_status: null },
+      { indicator: 'brightpath-hiring.example', indicator_type: 'domain', reports: 4, first_week: '2026-W40', last_week: '2026-W44', most_common_category: 'registration_fee', dispute_status: 'disputed by the company, under review' },
+    ],
+  } as const
+  it('loads without a key and shows the senders table above the chart', async () => {
+    vi.mocked(api.loadDashboard).mockResolvedValueOnce(structuredClone(dashboardData) as never)
+    window.history.replaceState({}, '', '/dashboard')
+    render(<App />)
+    expect(await screen.findByRole('heading', { name: 'VIT Pune placement cell' })).toBeInTheDocument()
+    expect(screen.queryByLabelText(/API key/i)).not.toBeInTheDocument()
+    const senders = await screen.findByRole('heading', { name: 'Senders targeting VIT students' })
+    const chart = screen.getByRole('heading', { name: 'Results by week' })
+    expect(senders.compareDocumentPosition(chart) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(screen.getByText('Shown only after 3 or more students report the same sender.')).toBeInTheDocument()
+    const table = screen.getByRole('table', { name: 'Senders targeting VIT students' })
+    expect(within(table).getByText('pl•••@gmail.com')).toBeInTheDocument()
+    expect(within(table).getByText('12')).toBeInTheDocument()
+    expect(within(table).getByText('Disputed by the company, under review')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Export warning list' })).toHaveAttribute('href', expect.stringContaining('/placement-cell/senders.csv'))
+    expect(vi.mocked(api.loadDashboard)).toHaveBeenCalledWith()
+  })
+  it('names the page in the navigation and has no college-code field', () => {
+    render(<App />)
+    expect(screen.getByRole('link', { name: 'VIT Pune placement cell' })).toHaveAttribute('href', '/dashboard')
+    expect(screen.queryByLabelText(/college/i)).not.toBeInTheDocument()
+  })
+})
+
 describe('community report consent', () => {
-  it('matches the version 2 text in the privacy design', () => {
+  it('matches the version 3 text in the privacy design', () => {
     const path = [resolve(process.cwd(), '../docs/PRIVACY_DESIGN.md'), resolve(process.cwd(), 'docs/PRIVACY_DESIGN.md')].find(existsSync)!
     const doc = readFileSync(path, 'utf8')
-    const quote = doc.match(/> Share these details[\s\S]*?code we give you\./)?.[0]
+    const quote = doc.match(/> Share these details[\s\S]*?so it can warn other students\./)?.[0]
     expect(quote).toBeTruthy()
     expect(quote!.split('\n').map(line => line.replace(/^>\s?/, '').trim()).join(' ').replace(/\s+/g, ' ')).toBe(CONSENT_TEXT)
-    expect(CONSENT_VERSION).toBe(2)
+    expect(CONSENT_VERSION).toBe(3)
+    expect(doc).toContain('version `3`')
+    expect(CONSENT_TEXT.endsWith("VIT's placement cell will see these details in masked form so it can warn other students.")).toBe(true)
   })
 
   it('allows deselection, requires consent and does not store the withdrawal code', async () => {
@@ -133,7 +167,7 @@ describe('community report consent', () => {
     expect(screen.getByRole('button', { name: 'Report scam' })).toBeEnabled()
     await user.click(screen.getByRole('button', { name: 'Report scam' }))
     expect(await screen.findByText('once-only-secret-code-123456')).toBeInTheDocument()
-    expect(vi.mocked(api.submitReport)).toHaveBeenCalledWith(expect.objectContaining({ consent: true, consent_version: 2, selected_indicators: ['phone:two'] }))
+    expect(vi.mocked(api.submitReport)).toHaveBeenCalledWith(expect.objectContaining({ consent: true, consent_version: 3, selected_indicators: ['phone:two'] }))
     expect(localStorage.length).toBe(0)
     expect(sessionStorage.length).toBe(0)
   })

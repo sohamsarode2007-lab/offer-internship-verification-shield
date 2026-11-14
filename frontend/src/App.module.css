@@ -94,6 +94,16 @@ input[type='checkbox'] { width: 18px; height: 18px; accent-color: var(--platinum
 .dashboardPage > .help { margin-top: 10px; }
 .dashboardResults { margin-top: 46px; }
 .dashboardResults h2 { margin-top: 34px; }
+.sendersSection { margin-bottom: 40px; }
+.sendersHead { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.sendersHead h2 { margin-top: 0; }
+.exportLink { display: inline-flex; align-items: center; min-height: 40px; padding: 8px 14px; border: 1px solid var(--graphite); border-radius: 2px; background: var(--basalt); color: var(--platinum); font-size: 14px; font-weight: 600; text-decoration: none; }
+.exportLink:hover { background: var(--graphite); }
+.sendersSection .ledger tbody th { width: auto; color: var(--platinum); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.sendersSection .ledger td { font-size: 14px; }
+.numeric { text-align: right; font-variant-numeric: tabular-nums; }
+.disputed { color: var(--steel); font-style: italic; }
+.emptyNote { color: var(--steel); font-size: 14px; }
 .chartPanel { padding: 18px 0; border-block: 1px solid var(--graphite); }
 .chartLegend { display: flex; flex-wrap: wrap; gap: 22px; margin: 0 0 14px; color: var(--steel); font-size: 13px; }
 .chartLegend span { display: inline-flex; align-items: center; gap: 8px; }

@@ -1,7 +1,7 @@
 import { FormEvent, useEffect, useId, useMemo, useRef, useState } from 'react'
-import { analyze, loadDashboard, submitDispute, submitReport, withdrawReport } from './api/client'
+import { analyze, loadDashboard, SENDERS_CSV_URL, submitDispute, submitReport, withdrawReport } from './api/client'
 import { CONSENT_TEXT, CONSENT_VERSION } from './consent'
-import type { AnalyzeResponse, CheckResult, InstitutionDashboard, ReportableIndicator, RiskBand, ScamCategory } from './api/types'
+import type { AnalyzeResponse, CheckResult, InstitutionDashboard, ReportableIndicator, RiskBand, ScamCategory, TopSender } from './api/types'
 import styles from './App.module.css'
 
 const labelByCheck: Record<string, string> = {
@@ -170,6 +170,21 @@ function TrendChart({ dashboard }: { dashboard: InstitutionDashboard }) {
   return <div className={styles.chartPanel}><div className={styles.chartLegend}>{bands.map((band, i) => <span key={band}><i className={`${styles.legendMark} ${[styles.highMark, styles.manualMark, styles.legitMark][i]}`}>{i === 2 && <svg className={styles.legendHatch} viewBox="0 0 16 12" aria-hidden="true"><defs><pattern id="legendHatchPattern" width="5" height="5" patternUnits="userSpaceOnUse"><rect width="5" height="5" fill="var(--obsidian)"/><path d="M-1 1 L1 -1 M0 5 L5 0 M4 6 L6 4" stroke="var(--graphite)" strokeWidth="1.5"/></pattern></defs><rect width="16" height="12" fill="url(#legendHatchPattern)" stroke="var(--graphite)"/></svg>}</i>{band}</span>)}</div><div className={styles.chartScroll}><svg className={styles.chart} viewBox="0 0 900 190" role="img" aria-labelledby="chart-title chart-desc"><title id="chart-title">Results by week</title><desc id="chart-desc">Grouped weekly counts for high risk, insufficient evidence, and likely legitimate results. Missing bars indicate suppressed counts below five; the category table shows those cells as &lt;5.</desc><defs><pattern id="hatch" width="6" height="6" patternUnits="userSpaceOnUse"><path d="M-1 1 L1 -1 M0 6 L6 0 M5 7 L7 5" stroke="var(--graphite)" strokeWidth="1.5"/></pattern></defs><line x1="38" y1="150" x2="890" y2="150" stroke="var(--graphite)"/>{groups.map((rows, wi) => { const x = 50 + wi * 70; return <g key={dashboard.weeks[wi]}><text x={x + 22} y="173" textAnchor="middle" className={styles.axisText}>{dashboard.weeks[wi].slice(5)}</text>{rows.map(row => { const bi = bands.indexOf(row.band); const n = typeof row.count === 'number' ? row.count : 0; const h = n / max * 110; const bx = x + bi * 19; const fill = bi === 0 ? 'var(--white)' : bi === 1 ? 'var(--obsidian)' : 'url(#hatch)'; return <rect key={row.band} x={bx} y={150 - h} width="13" height={Math.max(n ? 1 : 0, h)} fill={fill} stroke={bi === 1 ? 'var(--platinum)' : 'var(--graphite)'}><title>{row.band}, {row.count === '<5' ? '<5 results, value suppressed' : `${row.count} results`}, {dashboard.weeks[wi]}</title></rect> })}</g> })}</svg></div><p className={styles.help}>A missing bar means the count is below five and has been suppressed. The category table displays these cells as &lt;5.</p></div>
 }
 
+const senderTypeLabels: Record<TopSender['indicator_type'], string> = {
+  email: 'Email', domain: 'Email domain', upi: 'UPI ID', phone: 'Phone', bank: 'Bank account',
+}
+
+function SendersTable({ dashboard }: { dashboard: InstitutionDashboard }) {
+  const senders = dashboard.top_senders ?? []
+  return <section className={styles.sendersSection} aria-labelledby="senders-title">
+    <div className={styles.sendersHead}><h2 id="senders-title">Senders targeting VIT students</h2><a className={styles.exportLink} href={SENDERS_CSV_URL} download>Export warning list</a></div>
+    <p className={styles.help}>Shown only after {dashboard.sender_threshold ?? 3} or more students report the same sender.</p>
+    {senders.length ? <div className={styles.ledgerWrap}><table className={styles.ledger} aria-label="Senders targeting VIT students"><thead><tr><th scope="col">Sender</th><th scope="col">Type</th><th scope="col" className={styles.numeric}>Reports</th><th scope="col">Seen</th><th scope="col">Most common</th><th scope="col">Status</th></tr></thead><tbody>{senders.map(s => <tr className={styles.ledgerRow} key={`${s.indicator_type}:${s.indicator}`}>
+      <th scope="row">{s.indicator}</th><td>{senderTypeLabels[s.indicator_type] ?? s.indicator_type}</td><td className={styles.numeric}>{s.reports}</td><td>{s.first_week === s.last_week ? s.first_week : `${s.first_week} – ${s.last_week}`}</td><td>{categoryLabels[s.most_common_category] ?? s.most_common_category}</td><td>{s.dispute_status ? <span className={styles.disputed}>Disputed by the company, under review</span> : '—'}</td>
+    </tr>)}</tbody></table></div> : <p className={styles.emptyNote}>No sender has been reported by {dashboard.sender_threshold ?? 3} or more students yet.</p>}
+  </section>
+}
+
 function DashboardPage() {
   const [dashboard, setDashboard] = useState<InstitutionDashboard | null>(null); const [error, setError] = useState('')
   useEffect(() => {
@@ -178,7 +193,7 @@ function DashboardPage() {
       .catch(err => { if (active) setError(err instanceof Error ? err.message : 'The dashboard could not be loaded.') })
     return () => { active = false }
   }, [])
-  return <section className={styles.dashboardPage}><h1>VIT Pune placement cell</h1><p>Trends from scam reports that VIT students chose to share. Counts are reports, not verified unique students.</p>{!dashboard && !error && <p className={styles.help} role="status">Loading…</p>}{error && <p role="alert" className={styles.error}>{error}</p>}{dashboard && <div className={styles.dashboardResults}><h2>Results by week</h2><TrendChart dashboard={dashboard}/><h2>Scam categories by week</h2><div className={styles.tableScroll} tabIndex={0} aria-label="Scrollable scam categories by week"><table className={styles.categoryTable} aria-label="Scam categories by week"><thead><tr><th scope="col">Category</th>{dashboard.weeks.map(w => <th scope="col" key={w}>{w}</th>)}</tr></thead><tbody>{Object.entries(categoryLabels).map(([category, label]) => <tr key={category}><th scope="row">{label}</th>{dashboard.weeks.map(week => { const count = dashboard.by_week_category.find(row => row.week === week && row.category === category)?.count ?? '<5'; return <td key={week} title={count === '<5' ? 'Counts under five are suppressed to protect privacy.' : `${count} analyses`}>{count}</td>})}</tr>)}</tbody></table></div></div>}</section>
+  return <section className={styles.dashboardPage}><h1>VIT Pune placement cell</h1><p>Trends from scam reports that VIT students chose to share. Counts are reports, not verified unique students.</p>{!dashboard && !error && <p className={styles.help} role="status">Loading…</p>}{error && <p role="alert" className={styles.error}>{error}</p>}{dashboard && <div className={styles.dashboardResults}><SendersTable dashboard={dashboard}/><h2>Results by week</h2><TrendChart dashboard={dashboard}/><h2>Scam categories by week</h2><div className={styles.tableScroll} tabIndex={0} aria-label="Scrollable scam categories by week"><table className={styles.categoryTable} aria-label="Scam categories by week"><thead><tr><th scope="col">Category</th>{dashboard.weeks.map(w => <th scope="col" key={w}>{w}</th>)}</tr></thead><tbody>{Object.entries(categoryLabels).map(([category, label]) => <tr key={category}><th scope="row">{label}</th>{dashboard.weeks.map(week => { const count = dashboard.by_week_category.find(row => row.week === week && row.category === category)?.count ?? '<5'; return <td key={week} title={count === '<5' ? 'Counts under five are suppressed to protect privacy.' : `${count} analyses`}>{count}</td>})}</tr>)}</tbody></table></div></div>}</section>
 }
 
 function HowPage() {

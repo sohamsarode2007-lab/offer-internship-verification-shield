@@ -40,6 +40,32 @@ reports. It stores no offer text, names, student identity, raw indicator
 values, or IP addresses. The only contact email stored is the contact address
 on a dispute, retained until 12 months after that dispute is resolved.
 
+### Per-indicator data for the VIT Pune placement cell (consented reports only)
+
+For each indicator the student selects in a **consented** report, store exactly:
+
+| Field | Content |
+| --- | --- |
+| type | `email`, `domain`, `upi`, `phone` or `bank` |
+| digest | the existing peppered HMAC (with `key_version`) |
+| masked display form | the same masking the student saw in the report flow: email `pl•••@gmail.com` (first 2 characters of the local part), UPI `careerd•••@ybl` (first 7 characters), phone `+91 ••••••1234`, bank `••••1234 + IFSC`; at least one character of a short local part is always hidden, so a full address or UPI ID is never shown. **Only a non-free-mail sender domain is shown in full** (free-mail domains are never extracted as domain indicators). |
+| ISO week | `YYYY-Www` of the report |
+| scam category | the rule-based category of the analysed letter |
+
+Raw email addresses, phone numbers, UPI IDs and account numbers are **never
+stored**; the masked form is computed in memory and is the only readable form
+kept. A normal `/analyze` stores none of this: indicators are written only when
+a student consents to a report. Each consented report also adds one VIT Pune
+observation (ISO week, risk band, scam category) for the weekly chart and
+category table. Withdrawing a report deletes its indicators and its observation.
+
+The VIT Pune placement cell page lists a sender only after **3 or more**
+distinct consented reports of the same indicator, showing its masked form,
+type, report count, first and last week, most common category and dispute
+status. Senders with fewer reports never appear. The CSV export contains the
+same fields only. Only reports given under consent version 3 (which names the
+placement cell) are shown there.
+
 If `INDICATOR_PEPPER` is unset, report creation and matching are disabled; do
 not fall back to a checked-in or default secret. Rotation assigns a new
 `key_version`: new reports use the new pepper, while old digests remain
@@ -49,13 +75,13 @@ only after all digests using that version have expired or been removed.
 ## Consent
 
 Before the report is sent, show the exact masked selected indicators. Require
-an unchecked-by-default checkbox with this exact wording, version `2`:
+an unchecked-by-default checkbox with this exact wording, version `3`:
 
-> Share these details to warn other students: the payment and contact details you selected above, and a scrambled fingerprint of the letter's wording with names and numbers removed. We don't store the letter, your name or your contact details. You can withdraw this report later with the code we give you.
+> Share these details to warn other students: the payment and contact details you selected above, and a scrambled fingerprint of the letter's wording with names and numbers removed. We don't store the letter, your name or your contact details. You can withdraw this report later with the code we give you. VIT's placement cell will see these details in masked form so it can warn other students.
 
-Store `consent_version=2` with each accepted report. Version 1 is obsolete and
-must not be accepted or included in the codebase. No report is accepted without
-affirmative consent.
+Store `consent_version=3` with each accepted report. Only version 3 is
+accepted; versions 1 and 2 are obsolete (version 2 did not mention the
+placement cell). No report is accepted without affirmative consent.
 
 The response to `/report` includes a one-time withdrawal code. `POST
 /report/withdraw {code}` is the report consent-withdrawal mechanism: it deletes
@@ -129,6 +155,7 @@ independent evidence that the offer is fraudulent.
 | Infer wording from template signatures | Obtain signatures and compare against known letters | Redact names, emails, phone, VPA, accounts, amounts and dates before MinHash; store only 128 values; access controls and expiry | Signature linkage and similarity inference remain possible; it is pseudonymous, not anonymous. |
 | Abuse disputes to suppress scam reports | File false company disputes | Disputed indicators keep scoring; only a domain verified through a same-domain one-time link is temporarily suppressed; rate limits and review | Validly controlled domains can still suppress their domain temporarily while review is pending. |
 | Harvest a candidate's own details | Place candidate email/phone in a letter and induce reporting | Role-based extraction excludes To/Cc/Dear lines and candidate details; only eligible masked values are selectable; tests enforce exclusions | Ambiguous or deliberately misleading prose may still confuse extraction, so student review and deselection remain necessary. |
+| Read the placement-cell senders list | Open the VIT Pune placement cell page or its CSV export | Masked forms only; a sender appears only at 3+ consented v3 reports; disputes shown; CSV cells starting with `=`, `+`, `-` or `@` are prefixed to prevent spreadsheet formula injection | **There is no staff login yet** (single-college simulation; login is future scope), so anyone who can reach the site can read the masked list. Full sender domains are visible by design. |
 
 ## Honest limits and legal review
 

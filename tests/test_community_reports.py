@@ -35,7 +35,7 @@ def candidate(kind="upi", value="rky.verma@ybl"):
 
 def store_report(db, item=None, text="Acme offers a role and asks candidates to submit fees."):
     token, preview = cr.issue_report_token(db, [item] if item else [], cr.minhash_signature(text))
-    result = cr.accept_report(db, token, [item["indicator_type"] + ":" + item["digest"]] if item else [], True, 2)
+    result = cr.accept_report(db, token, [item["indicator_type"] + ":" + item["digest"]] if item else [], True, cr.CONSENT_VERSION)
     return result, preview
 
 
@@ -69,30 +69,32 @@ def test_masked_preview_and_deselected_indicator_is_not_stored(db):
     token, preview = cr.issue_report_token(db, [upi, phone], cr.minhash_signature("Pay a fee for this role."))
     assert any(x["masked"] == "rky.ver•••@ybl" for x in preview)
     selected = ["upi:" + upi["digest"]]
-    cr.accept_report(db, token, selected, True, 2)
+    cr.accept_report(db, token, selected, True, cr.CONSENT_VERSION)
     rows = db.query(CommunityIndicator).all()
     assert len(rows) == 1
     assert rows[0].indicator_type == "upi"
     assert db.query(CommunityIndicator).filter_by(digest=phone["digest"]).count() == 0
 
 
-def test_report_consent_is_required_and_only_version_two_is_valid(db):
+def test_report_consent_is_required_and_only_version_three_is_valid(db):
     token, _ = cr.issue_report_token(db, [], cr.minhash_signature("A template text has sufficient words to compare."))
     with pytest.raises(ValueError, match="consent"):
-        cr.accept_report(db, token, [], False, 2)
-    with pytest.raises(ValueError, match="consent"):
-        cr.accept_report(db, token, [], True, 1)
-    assert cr.CONSENT_VERSION == 2
+        cr.accept_report(db, token, [], False, cr.CONSENT_VERSION)
+    for obsolete in (1, 2):
+        with pytest.raises(ValueError, match="consent"):
+            cr.accept_report(db, token, [], True, obsolete)
+    assert cr.CONSENT_VERSION == 3
+    cr.accept_report(db, token, [], True, 3)
 
 
 def test_report_token_tamper_reuse_and_expiry_are_rejected(db):
     token, _ = cr.issue_report_token(db, [], cr.minhash_signature("A sufficiently long synthetic letter template."))
     tampered = token[:-1] + ("0" if token[-1] != "0" else "1")
     with pytest.raises(ValueError, match="invalid report token"):
-        cr.accept_report(db, tampered, [], True, 2)
-    cr.accept_report(db, token, [], True, 2)
+        cr.accept_report(db, tampered, [], True, cr.CONSENT_VERSION)
+    cr.accept_report(db, token, [], True, cr.CONSENT_VERSION)
     with pytest.raises(ValueError, match="already used"):
-        cr.accept_report(db, token, [], True, 2)
+        cr.accept_report(db, token, [], True, cr.CONSENT_VERSION)
 
     expired, _ = cr.issue_report_token(db, [], cr.minhash_signature("A second synthetic letter template."))
     payload = cr._decode_token(expired, "test-secret-pepper")
@@ -103,7 +105,7 @@ def test_report_token_tamper_reuse_and_expiry_are_rejected(db):
     body = base64.urlsafe_b64encode(json.dumps(payload, separators=(",", ":"), sort_keys=True).encode()).decode().rstrip("=")
     sig = hmac.new(b"test-secret-pepper", ("report-token:" + body).encode(), hashlib.sha256).hexdigest()
     with pytest.raises(ValueError, match="expired"):
-        cr.accept_report(db, body + "." + sig, [], True, 2)
+        cr.accept_report(db, body + "." + sig, [], True, cr.CONSENT_VERSION)
 
 
 def test_indicator_thresholds_are_three_then_ten_reports(db):
@@ -130,7 +132,7 @@ def test_correlated_indicator_and_template_evidence_caps_at_forty(db):
     for _ in range(3):
         token, _ = cr.issue_report_token(db, items, signature)
         selected = [x["indicator_type"] + ":" + x["digest"] for x in items]
-        cr.accept_report(db, token, selected, True, 2)
+        cr.accept_report(db, token, selected, True, cr.CONSENT_VERSION)
     incoming = [dict(x) for x in items]
     match = cr.lookup_community(db, incoming, signature)
     assert match["risk_points"] == 40
@@ -195,7 +197,7 @@ def test_redacted_min_hash_template_match_scores_a_lightly_edited_copy(db):
     edited_sig = cr.minhash_signature(edited)
     assert cr.similarity(original_sig, edited_sig) >= 0.8
     token, _ = cr.issue_report_token(db, [], original_sig)
-    cr.accept_report(db, token, [], True, 2)
+    cr.accept_report(db, token, [], True, cr.CONSENT_VERSION)
     match = cr.lookup_community(db, [], edited_sig)
     assert match["risk_points"] == 25
     assert "similar to a reported scam template" in match["details"]

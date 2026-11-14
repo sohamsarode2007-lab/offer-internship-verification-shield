@@ -65,13 +65,15 @@ scammer-role details: payment destinations in a payment demand, phones in HR
 contact lines, and the sender address/domain (From header for `.eml`, contact
 line otherwise). Candidate To/Cc/Dear details are excluded. Review the masked
 list and send only selected IDs to `POST /report`; no report is saved until the
-student supplies `consent: true` and `consent_version: 2`.
+student supplies `consent: true` and `consent_version: 3` (versions 1 and 2 are
+rejected).
 
 The checkbox wording is: “Share these details to warn other students: the
 payment and contact details you selected above, and a scrambled fingerprint of
 the letter's wording with names and numbers removed. We don't store the letter,
 your name or your contact details. You can withdraw this report later with the
-code we give you.” The response gives a one-time withdrawal code for
+code we give you. VIT's placement cell will see these details in masked form so
+it can warn other students.” The response gives a one-time withdrawal code for
 `POST /report/withdraw`. Report tokens expire after 24 hours. Indicators use
 peppered HMAC digests; template matching uses a 128-value MinHash after masking
 names and identifiers, amounts, and dates. The service does not store offer
@@ -115,7 +117,13 @@ Invoke-RestMethod -Uri http://localhost:8000/placement-cell/dashboard
 ```
 
 The response contains week-by-band and week-by-category counts for 12 weeks;
-any cell below five is returned as `"<5"`. The endpoint is limited to 30
+any cell below five is returned as `"<5"`. It also contains `top_senders`:
+masked indicators (type, report count, first and last week, most common
+category, dispute status) reported in **3 or more** consented reports, sorted by
+count; senders with fewer reports never appear. `GET /placement-cell/senders.csv`
+exports the same list as the "warning list". Only masked forms are stored and
+shown; a non-free-mail sender domain is shown in full. See
+[the privacy design](docs/PRIVACY_DESIGN.md). Both endpoints are limited to 30
 requests per minute.
 Category rules use the existing check results and follow this priority:
 

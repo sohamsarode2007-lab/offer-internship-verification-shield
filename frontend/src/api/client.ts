@@ -31,7 +31,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       if (path === '/report' && (lower.includes('expired') || lower.includes('already used') || lower.includes('invalid report token'))) {
         message = 'This report token expired or was already used. Check the offer again to create a new report.'
       } else if (path === '/report' && lower.includes('consent')) {
-        message = 'Consent is required. Review and select the version 2 consent checkbox before submitting the report.'
+        message = 'Consent is required. Review and select the consent checkbox before submitting the report.'
       } else if (path === '/report' && lower.includes('selected indicators')) {
         message = 'The selected details do not match this analysis. Start a new check and choose from the masked details shown.'
       } else if (path === '/report/withdraw') {
@@ -64,3 +64,4 @@ export function submitDispute(payload: DisputeRequest) {
 export function loadDashboard() {
   return request<InstitutionDashboard>('/placement-cell/dashboard')
 }
+export const SENDERS_CSV_URL = `${API_BASE}/placement-cell/senders.csv`

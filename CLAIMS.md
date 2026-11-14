@@ -132,8 +132,14 @@ been verified in this workspace.
   Enrollment is not verified and reports are not deduplicated by student, so
   counts are reports, not verified unique students.
 - `GET /placement-cell/dashboard` returns week-by-band and week-by-category
-  counts for 12 ISO weeks and replaces cells below five with `"<5"`. It is
-  limited to 30 requests/minute. Categories derive from payment-demand, domain,
+  counts for 12 ISO weeks and replaces cells below five with `"<5"`, plus
+  `top_senders`: masked indicators reported in 3+ consented (consent v3)
+  reports, with type, count, first/last week, most common category and dispute
+  status. `GET /placement-cell/senders.csv` exports that list. Only masked
+  display forms are stored for consented reports (never raw emails, phones, UPI
+  IDs or account numbers); a non-free-mail sender domain is shown in full.
+  Consent v3 tells students the placement cell sees these masked details. Both
+  endpoints are limited to 30 requests/minute. Categories derive from payment-demand, domain,
   sender-authentication and scheme-text rules; the README documents their
   priority and mapping.
 

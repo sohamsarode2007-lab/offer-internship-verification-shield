@@ -1,4 +1,4 @@
-﻿import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { analyze, submitReport, withdrawReport, ApiError } from './client'
 
 afterEach(() => vi.unstubAllGlobals())
@@ -22,12 +22,12 @@ describe('backend error translation', () => {
 
   it.each([
     ['/report', 'report token expired or already used', 'This report token expired or was already used. Check the offer again to create a new report.'],
-    ['/report', 'current consent is required', 'Consent is required. Review and select the version 2 consent checkbox before submitting the report.'],
+    ['/report', 'current consent is required', 'Consent is required. Review and select the consent checkbox before submitting the report.'],
     ['/report/withdraw', 'invalid or already-used withdrawal code', 'That withdrawal code is invalid or already used. Check the code you saved; a report can be withdrawn once.'],
   ])('explains what to do for %s errors', async (path, detail, message) => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response(400, detail)))
     const request = path === '/report'
-      ? submitReport({ report_token: 'report-token-that-is-long-enough', consent: true, consent_version: 2, selected_indicators: [] })
+      ? submitReport({ report_token: 'report-token-that-is-long-enough', consent: true, consent_version: 3, selected_indicators: [] })
       : withdrawReport({ code: 'withdrawal-code-that-is-long-enough' })
     await expect(request).rejects.toThrow(message)
   })

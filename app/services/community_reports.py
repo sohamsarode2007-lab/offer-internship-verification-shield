@@ -18,7 +18,7 @@ from app.models.models import (CommunityDispute, CommunityIndicator, CommunityRe
 from app.services import payment_detection
 from app.utils.email_domains import is_free_mailbox, is_upi_handle
 
-CONSENT_VERSION = 2
+CONSENT_VERSION = 3  # v3 adds: the VIT placement cell sees the details in masked form
 MINHASH_SIZE = 128
 BAND_SIZE = 8
 PHONE_RE = re.compile(r"(?<!\w)(?:\+?91[\s().-]?)?[6-9]\d{9}(?!\w)")
@@ -69,21 +69,31 @@ def normalize(kind: str, value: str) -> str:
     return value
 
 
+def _visible_prefix(local: str, cap: int) -> str:
+    """The first `cap` characters (as in the report flow), but always hide at least one,
+    so a short local part is never shown in full."""
+    return local[:max(1, min(cap, len(local) - 1))]
+
+
 def masked(kind: str, value: str) -> str:
+    """Display form shown in the report flow and on the placement-cell page.
+
+    Never the full value, except a sender domain: domain indicators are only
+    extracted for non-free-mail domains, and those are shown in full.
+    """
     if kind == "upi":
         local, handle = value.split("@", 1)
-        return local[:7] + "•••@" + handle
+        return _visible_prefix(local, 7) + "•••@" + handle
     if kind == "email":
         local, domain = value.split("@", 1)
-        return local[:2] + "•••@" + domain
+        return _visible_prefix(local, 2) + "•••@" + domain.casefold()
     if kind == "phone":
         digits = re.sub(r"\D", "", value)
         return "+91 ••••••" + digits[-4:]
     if kind == "bank":
         account, ifsc = value.split("|", 1)
-        return "••••" + account[-4:] + " + " + ifsc
-    labels = value.split(".")
-    return labels[0][:2] + "•••." + labels[-1]
+        return "••••" + account[-4:] + " + " + ifsc.upper()
+    return value.strip().casefold().rstrip(".")
 
 
 def _contact_line(line: str) -> bool:
@@ -254,17 +264,20 @@ def accept_report(db: Session, token: str, selected: list[str], consent: bool, c
         signature=json.dumps(signature), created_at=now, last_seen_at=now,
         withdrawal_code_hash=hashlib.sha256(code.encode()).hexdigest(), is_demo=os.getenv("DEMO_MODE") == "1")
     db.add(report)
+    from app.services.institution_dashboard import current_iso_week, record_report_observation
+    week = current_iso_week(now.date())
+    category = payload.get("scam_category") or "other"
     for digest in set(selected):
         item = by_id[digest]
+        # The token carries only the masked display form, never the raw value.
         db.add(CommunityIndicator(report_id=report_id, indicator_type=item["indicator_type"],
-            digest=item["digest"], key_version=item["key_version"], created_at=now, last_seen_at=now))
+            digest=item["digest"], key_version=item["key_version"], created_at=now, last_seen_at=now,
+            masked_display=item.get("masked"), iso_week=week, scam_category=category))
     for band, bucket in _signature_bands(signature):
         db.add(CommunityTemplateBand(report_id=report_id, band=band, bucket=bucket))
     if payload.get("band"):
-        from app.services.institution_dashboard import current_iso_week, record_report_observation
         db.flush()
-        record_report_observation(db, report_id, payload["band"], payload.get("scam_category") or "other",
-                                  current_iso_week(now.date()), report.is_demo)
+        record_report_observation(db, report_id, payload["band"], category, week, report.is_demo)
     db.commit()
     return {"status": "reported", "withdrawal_code": code}
 
