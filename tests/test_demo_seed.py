@@ -97,7 +97,10 @@ def test_dashboard_shows_seeded_senders_in_demo_mode(seeded, api_client):
     band_total = sum(c["count"] for c in body["by_week_band"] if isinstance(c["count"], int))
     category_total = sum(c["count"] for c in body["by_week_category"] if isinstance(c["count"], int))
     assert any(isinstance(c["count"], int) for c in body["by_week_band"])        # some weeks are visible
-    assert band_total <= 45 and category_total <= 45
+    # In demo mode the chart holds the 45 reports plus, once seeded, the simulated checks
+    # (tests/test_demo_checks.py); never more than that.
+    limit = 45 + sum(sum(sum(c.values()) for c in demo_seed._weekly_check_plan(w).values()) for w in range(12))
+    assert band_total <= limit and category_total <= limit
     first_weeks = {s["first_week"] for s in body["top_senders"]}
     assert first_weeks <= set(weeks)
 
