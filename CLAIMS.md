@@ -136,6 +136,12 @@ been verified in this workspace.
   `/analyze` without a consented report records nothing for the dashboard.
   Enrollment is not verified and reports are not deduplicated by student, so
   counts are reports, not verified unique students.
+- **Demo data on this page is simulated.** With `DEMO_MODE=1`, `run_demo.bat`
+  seeds 45 simulated reports (the senders table) and 484 simulated checks
+  (week, band, category only) so the 12-week chart and category table are
+  populated; two chart cells are deliberately below five to show suppression.
+  Outside demo mode the chart and table count consented reports only; the app
+  does not record ordinary checks for the dashboard.
 - `GET /placement-cell/dashboard` returns week-by-band and week-by-category
   counts for 12 ISO weeks and replaces cells below five with `"<5"`, plus
   `top_senders`: masked indicators reported in 3+ consented (consent v3)

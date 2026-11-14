@@ -92,7 +92,10 @@ inactive indicators expire after 24 months. Simulated VIT Pune reports (8
 fictional senders in `fixtures/demo/vit_simulated_senders.csv`, 45 reports over
 12 weeks) can be seeded only with `DEMO_MODE=1` using
 `python scripts/seed_demo_reports.py` (idempotent; `run_demo.bat` runs it); they
-are flagged demo and count only in demo mode.
+are flagged demo and count only in demo mode. The same script seeds 484
+simulated checks (week, band, category only) so the demo's 12-week chart and
+category table are populated; outside demo mode those count consented reports
+only.
 
 HMACed identifiers and MinHash signatures are pseudonymised, not anonymous.
 The DPDP Act, 2023 and its Rules, including the lawful basis for third-party

@@ -4,10 +4,10 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
-const capture = (page: import('@playwright/test').Page, testInfo: import('@playwright/test').TestInfo, name: string) => {
+const capture = (page: import('@playwright/test').Page, testInfo: import('@playwright/test').TestInfo, name: string, fullPage = false) => {
   const dir = path.join(root, 'docs', 'screenshots')
   mkdirSync(dir, { recursive: true })
-  return page.screenshot({ path: path.join(dir, `${name}-${testInfo.project.name}.png`), animations: 'disabled' })
+  return page.screenshot({ path: path.join(dir, `${name}-${testInfo.project.name}.png`), animations: 'disabled', fullPage })
 }
 
 test('demo analysis, reporting, dashboard, and public screens', async ({ page }, testInfo) => {
@@ -88,7 +88,8 @@ test('demo analysis, reporting, dashboard, and public screens', async ({ page },
   await expect(senders.getByText(/talentbridge-jobs\.example/)).toHaveCount(0)   // only 2 reports: never shown
   await expect(page.getByRole('heading', { name: 'Results by week' })).toBeVisible()
   await expect(page.getByRole('table', { name: 'Scam categories by week' })).toBeVisible()
-  await capture(page, testInfo, 'dashboard')
+  // Full page, so the senders table, the 12-week chart and the category table are all in the image.
+  await capture(page, testInfo, 'dashboard', true)
   const downloadPromise = page.waitForEvent('download')
   await page.getByRole('link', { name: 'Export warning list' }).click()
   const download = await downloadPromise

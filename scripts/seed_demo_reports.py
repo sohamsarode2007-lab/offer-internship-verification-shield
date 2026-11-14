@@ -1,4 +1,4 @@
-"""Seed the simulated VIT Pune community reports (fictional senders; DEMO_MODE=1 only).
+"""Seed the simulated VIT Pune reports (fictional senders) and simulated checks (DEMO_MODE=1 only).
 
 Requires DEMO_MODE=1 and an operator-provided INDICATOR_PEPPER. Idempotent: running it
 again adds nothing. See app/services/demo_seed.py and fixtures/demo/vit_simulated_senders.csv.
@@ -18,15 +18,16 @@ def main():
         raise SystemExit("Set INDICATOR_PEPPER in the environment; no default pepper is used.")
 
     from app.db.database import SessionLocal, init_dev_db
-    from app.services.demo_seed import seed_vit_simulation
+    from app.services.demo_seed import seed_vit_checks, seed_vit_simulation
 
     init_dev_db()
     db = SessionLocal()
     try:
         added = seed_vit_simulation(db)
+        checks = seed_vit_checks(db)
     finally:
         db.close()
-    print(f"Added {added} simulated VIT Pune report(s).")
+    print(f"Added {added} simulated VIT Pune report(s) and {checks} simulated check(s).")
 
 
 if __name__ == "__main__":

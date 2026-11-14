@@ -114,8 +114,16 @@ Notes:
   the last 12 weeks in campaign-like waves. With `DEMO_MODE=1` and an environment-provided
   `INDICATOR_PEPPER`, `python scripts/seed_demo_reports.py` writes them exactly like consented
   reports (HMAC, masked form, week, category, VIT Pune observation), flagged demo so they count
-  only in demo mode. The senders table, weekly chart and category table all come from these
-  reports; chart and table cells below five are shown as `<5`.
+  only in demo mode. The senders table comes from these reports.
+- The same script also seeds **484 simulated checks** for VIT Pune (week, band and category
+  only; no text, no indicators), demo-flagged and idempotent, so the 12-week chart and category
+  table are populated: mostly insufficient evidence and likely legitimate, with high risk rising
+  from 6 to about 15 checks a week. Chart and table therefore count checks plus reports in demo
+  mode; outside demo mode they count consented reports only. Two chart cells are deliberately
+  below five (likely legitimate in the oldest week, high risk in the second week) to show the
+  `<5` rule; the smaller categories (training/kit fee, fake government scheme, sender spoofing)
+  also stay below five in most weeks. Every week in which a listed sender was last reported has
+  a visible high-risk bar.
 - `scam_shared_upi_corvane.txt` / `.pdf` shares the seeded UPI sender. Hand-derived band:
   payment +65, contact domain NXDOMAIN +30, no registration number +20, UPI reported by 3–9
   students +25 = 140, capped at 100: High risk.

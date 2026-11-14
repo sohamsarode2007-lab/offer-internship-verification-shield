@@ -116,3 +116,59 @@ def seed_vit_simulation(db: Session, today: date | None = None) -> int:
                 reason="Simulated demo dispute: the company says this sender is theirs."))
     db.commit()
     return added
+
+
+# ── Simulated CHECKS (demo only) ─────────────────────────────────────────────
+# In production the VIT Pune chart counts consented reports only. In DEMO_MODE these
+# simulated checks (week, band, category; no report, no text, no indicators) fill the
+# 12-week chart and category table. They are deterministic, flagged is_demo, and have
+# report_id NULL, which is how they are recognised for idempotency.
+BAND_LEGIT = "likely legitimate"
+# Two cells are deliberately kept below five to show the "<5" rule:
+#   likely legitimate in the oldest week, high risk in the second week (no reports that week).
+DELIBERATE_SMALL = {(0, BAND_LEGIT): 3, (1, BAND_HIGH): 4}
+
+
+def _weekly_check_plan(week_index: int) -> dict[str, dict[str, int]]:
+    """Checks for one week (0 = oldest of 12) as {band: {category: count}}."""
+    wobble = (0, 2, -1, 1, 3, -2, 0, 2, 1, -1, 2, 0)[week_index]
+    legit = DELIBERATE_SMALL.get((week_index, BAND_LEGIT), 12 + wobble)
+    manual = 18 + (wobble // 2)
+    high = DELIBERATE_SMALL.get((week_index, BAND_HIGH), round(6 + week_index * 0.85))   # rises 6 -> 15
+    plan = {BAND_LEGIT: {"no_red_flags": legit}}
+    spoof = week_index % 3 == 0 and 2 or 1
+    plan[BAND_MANUAL] = {"sender_spoofing": spoof, "lookalike_domain": 5, "free_mailbox_impersonation": 5}
+    plan[BAND_MANUAL]["other"] = manual - sum(plan[BAND_MANUAL].values())
+    reg = max(1, round(high * 0.40))
+    dep = max(1, round(high * 0.35))
+    gov = max(0, round(high * 0.15))
+    plan[BAND_HIGH] = {"registration_fee": reg, "security_deposit": dep, "fake_government_scheme": gov,
+                       "training_or_kit_fee": max(0, high - reg - dep - gov)}
+    return plan
+
+
+def seed_vit_checks(db: Session, today: date | None = None) -> int:
+    """Insert the simulated VIT Pune checks once. Returns how many were added (0 if already seeded)."""
+    from app.models.models import InstitutionObservation
+    from app.services.institution_dashboard import get_institution
+
+    if os.getenv("DEMO_MODE") != "1":
+        raise RuntimeError("Simulated VIT checks can only be seeded with DEMO_MODE=1.")
+    already = db.query(InstitutionObservation).filter(InstitutionObservation.is_demo.is_(True),
+                                                      InstitutionObservation.report_id.is_(None)).first()
+    if already:
+        return 0
+    today = today or datetime.now(timezone.utc).date()
+    institution = get_institution(db)
+    added = 0
+    for week_index in range(12):
+        year, week, _ = _week_start(today, 11 - week_index).isocalendar()
+        iso_week = f"{year}-W{week:02d}"
+        for band, categories in _weekly_check_plan(week_index).items():
+            for category, count in categories.items():
+                for _ in range(count):
+                    db.add(InstitutionObservation(institution_id=institution.id, report_id=None, iso_week=iso_week,
+                                                  band=band, scam_category=category, is_demo=True))
+                    added += 1
+    db.commit()
+    return added
