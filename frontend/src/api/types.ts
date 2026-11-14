@@ -89,8 +89,17 @@ export interface TopSender {
   most_common_category: ScamCategory
   dispute_status: string | null
 }
+export interface CategorySummaryRow {
+  category: ScamCategory
+  total: DashboardCount
+  last_4_weeks: DashboardCount
+  previous_8_weeks: DashboardCount
+  /** null when the 12-week total is below five (no trend shown for suppressed counts). */
+  trend: 'Rising' | 'Falling' | 'Steady' | null
+}
 export interface InstitutionDashboard {
   institution: string
+  category_summary: CategorySummaryRow[]
   sender_threshold: number
   top_senders: TopSender[]
   weeks: string[]

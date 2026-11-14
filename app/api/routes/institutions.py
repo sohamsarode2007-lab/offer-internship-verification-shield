@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.api.limiter import limiter
 from app.db.database import get_db
-from app.services.institution_dashboard import dashboard, senders_csv
+from app.services.institution_dashboard import dashboard, senders_csv, weekly_csv
 
 router = APIRouter(prefix="/placement-cell", tags=["placement-cell"])
 
@@ -26,4 +26,13 @@ def placement_cell_senders_csv(request: Request, db: Session = Depends(get_db)):
     """Warning list export: masked senders with 3+ reports only (same fields as the page)."""
     return Response(content=senders_csv(db), media_type="text/csv; charset=utf-8",
                     headers={"Content-Disposition": 'attachment; filename="vit-pune-warning-list.csv"',
+                             "Cache-Control": "no-store"})
+
+
+@router.get("/weekly.csv")
+@limiter.limit("30/minute")
+def placement_cell_weekly_csv(request: Request, db: Session = Depends(get_db)):
+    """Full 12-week data (week x band and week x category), counts below five shown as '<5'."""
+    return Response(content=weekly_csv(db), media_type="text/csv; charset=utf-8",
+                    headers={"Content-Disposition": 'attachment; filename="vit-pune-weekly-data.csv"',
                              "Cache-Control": "no-store"})

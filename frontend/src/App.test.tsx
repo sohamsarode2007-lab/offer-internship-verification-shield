@@ -155,6 +155,10 @@ describe('interface errors', () => {
 describe('VIT Pune placement cell page', () => {
   const dashboardData = {
     institution: 'VIT Pune', sender_threshold: 3, weeks: ['2026-W46'], by_week_band: [], by_week_category: [],
+    category_summary: [
+      { category: 'registration_fee', total: 61, last_4_weeks: 28, previous_8_weeks: 33, trend: 'Rising' },
+      { category: 'sender_spoofing', total: '<5', last_4_weeks: '<5', previous_8_weeks: '<5', trend: null },
+    ],
     top_senders: [
       { indicator: 'pl•••@gmail.com', indicator_type: 'email', reports: 12, first_week: '2026-W36', last_week: '2026-W46', most_common_category: 'free_mailbox_impersonation', dispute_status: null },
       { indicator: 'brightpath-hiring.example', indicator_type: 'domain', reports: 4, first_week: '2026-W40', last_week: '2026-W44', most_common_category: 'registration_fee', dispute_status: 'disputed by the company, under review' },
@@ -176,6 +180,21 @@ describe('VIT Pune placement cell page', () => {
     expect(within(table).getByText('Disputed by the company, under review')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Export warning list' })).toHaveAttribute('href', expect.stringContaining('/placement-cell/senders.csv'))
     expect(vi.mocked(api.loadDashboard)).toHaveBeenCalledWith()
+  })
+  it('shows one row per category with totals and a trend word instead of a week grid', async () => {
+    vi.mocked(api.loadDashboard).mockResolvedValueOnce(structuredClone(dashboardData) as never)
+    window.history.replaceState({}, '', '/dashboard')
+    render(<App />)
+    const table = await screen.findByRole('table', { name: 'Scam categories' })
+    const headers = within(table).getAllByRole('columnheader').map(h => h.textContent)
+    expect(headers).toEqual(['Category', '12 weeks', 'Last 4 weeks', 'Previous 8 weeks', 'Trend'])
+    const [, reg, spoof] = within(table).getAllByRole('row')
+    expect(within(reg).getByRole('rowheader')).toHaveTextContent('Registration fee')
+    expect(reg).toHaveTextContent('61'); expect(reg).toHaveTextContent('Rising')
+    expect(within(spoof).getAllByText('<5')).toHaveLength(3)
+    expect(within(spoof).getByText('—')).toBeInTheDocument()
+    expect(screen.queryByRole('table', { name: 'Scam categories by week' })).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Export weekly data' })).toHaveAttribute('href', expect.stringContaining('/placement-cell/weekly.csv'))
   })
   it('names the page in the navigation and has no college-code field', () => {
     render(<App />)

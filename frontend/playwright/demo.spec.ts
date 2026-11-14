@@ -87,7 +87,7 @@ test('demo analysis, reporting, dashboard, and public screens', async ({ page },
   await expect(senders.getByText('Disputed by the company, under review')).toBeVisible()
   await expect(senders.getByText(/talentbridge-jobs\.example/)).toHaveCount(0)   // only 2 reports: never shown
   await expect(page.getByRole('heading', { name: 'Results by week' })).toBeVisible()
-  await expect(page.getByRole('table', { name: 'Scam categories by week' })).toBeVisible()
+  await expect(page.getByRole('table', { name: 'Scam categories', exact: true })).toBeVisible()
   // Full page, so the senders table, the 12-week chart and the category table are all in the image.
   await capture(page, testInfo, 'dashboard', true)
   const downloadPromise = page.waitForEvent('download')

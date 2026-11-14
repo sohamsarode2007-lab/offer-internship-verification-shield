@@ -121,12 +121,11 @@ input[type='checkbox'] { width: 18px; height: 18px; accent-color: var(--platinum
 .chartScroll { overflow-x: auto; }
 .chart { display: block; width: 100%; min-width: 740px; height: auto; }
 .axisText { fill: var(--steel); font: 12px var(--font-body); }
-.tableScroll { overflow: auto; max-height: 560px; border: 1px solid var(--graphite); }
-.categoryTable { width: 100%; border-collapse: collapse; white-space: nowrap; font-size: 13px; }
-.categoryTable th, .categoryTable td { padding: 10px 12px; border-bottom: 1px solid var(--graphite); text-align: left; }
-.categoryTable thead { position: sticky; top: 0; background: var(--basalt); }
-.categoryTable tbody th { font-weight: 500; }
-.categoryTable td { font-variant-numeric: tabular-nums; }
+.categorySection { margin-top: 40px; }
+.categorySection > .help { margin: 4px 0 18px; }
+.categorySection .ledger tbody th { width: auto; }
+.categorySection .ledger td { font-size: 14px; }
+.ledger th.numeric, .ledger td.numeric { text-align: right; }
 .howPage { max-width: 800px; }
 .howPage > h1 { margin-bottom: 18px; }
 .howPage .lede { margin-bottom: 44px; }

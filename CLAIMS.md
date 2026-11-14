@@ -145,7 +145,11 @@ been verified in this workspace.
   category summary are populated; checks made in demo mode are also demo-flagged.
   Demo rows count only in demo mode. Two chart cells are deliberately below five.
 - `GET /placement-cell/dashboard` returns week-by-band and week-by-category
-  counts for 12 ISO weeks and replaces cells below five with `"<5"`, plus
+  counts for 12 ISO weeks and replaces cells below five with `"<5"`, a
+  `category_summary` (per category: 12-week total, last 4 weeks, previous 8
+  weeks, trend word by a ±25% weekly-rate rule; `<5` applied to each count; no
+  trend word when the total is below five), `GET /placement-cell/weekly.csv`
+  with the full weekly data under the same rule, plus
   `top_senders`: masked indicators reported in 3+ consented (consent v3)
   reports, with type, count, first/last week, most common category and dispute
   status. `GET /placement-cell/senders.csv` exports that list. Only masked

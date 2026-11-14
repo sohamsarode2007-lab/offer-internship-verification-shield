@@ -191,10 +191,49 @@ def senders_csv(db: Session) -> str:
     return out.getvalue()
 
 
-def dashboard(db: Session, today: date | None = None) -> dict:
-    institution = get_institution(db)
-    db.commit()
-    weeks = last_weeks(today)
+SUPPRESSION_THRESHOLD = 5
+TREND_RATIO = 1.25  # weekly rate change needed to call a trend Rising or Falling
+
+
+def _shown(n: int):
+    return n if n >= SUPPRESSION_THRESHOLD else "<5"
+
+
+def trend_word(last_4: int, previous_8: int) -> str:
+    """Compare weekly rates: last 4 weeks vs the 8 weeks before them."""
+    recent, earlier = last_4 / 4, previous_8 / 8
+    if earlier == 0:
+        return "Rising" if recent > 0 else "Steady"
+    if recent >= earlier * TREND_RATIO:
+        return "Rising"
+    if recent <= earlier / TREND_RATIO:
+        return "Falling"
+    return "Steady"
+
+
+def category_summary(weeks: list[str], category_counts: dict) -> list[dict]:
+    """One row per category: 12-week total, last 4 weeks, previous 8 weeks and a trend word.
+
+    Every count below five is shown as "<5". A category whose 12-week total is below
+    five gets no trend word (None) and sorts after the visible ones, alphabetically,
+    so neither reveals the suppressed numbers.
+    """
+    rows = []
+    for category in CATEGORIES:
+        per_week = [category_counts.get((week, category), 0) for week in weeks]
+        last_4, previous_8 = sum(per_week[-4:]), sum(per_week[:-4])
+        total = last_4 + previous_8
+        rows.append({"category": category, "total": _shown(total), "last_4_weeks": _shown(last_4),
+                     "previous_8_weeks": _shown(previous_8),
+                     "trend": trend_word(last_4, previous_8) if total >= SUPPRESSION_THRESHOLD else None,
+                     "_sort": total if total >= SUPPRESSION_THRESHOLD else -1})
+    rows.sort(key=lambda r: (-r["_sort"], r["category"]))
+    for r in rows:
+        del r["_sort"]
+    return rows
+
+
+def _weekly_counts(db: Session, institution: Institution, weeks: list[str]):
     base = [InstitutionObservation.institution_id == institution.id,
             InstitutionObservation.iso_week.in_(weeks)]
     if not _include_demo():
@@ -207,17 +246,46 @@ def dashboard(db: Session, today: date | None = None) -> dict:
         func.count(InstitutionObservation.id)).filter(*base).group_by(
             InstitutionObservation.iso_week, InstitutionObservation.scam_category).all()
     category_counts = {(week, category): count for week, category, count in category_rows}
+    return band_counts, category_counts
+
+
+def dashboard(db: Session, today: date | None = None) -> dict:
+    institution = get_institution(db)
+    db.commit()
+    weeks = last_weeks(today)
+    band_counts, category_counts = _weekly_counts(db, institution, weeks)
     return {
         "institution": institution.name,
         "sender_threshold": SENDER_THRESHOLD,
         "top_senders": top_senders(db),
         "weeks": weeks,
-        "by_week_band": [{"week": week, "band": band,
-                          "count": (n if n >= 5 else "<5")}
-                         for week in weeks for band in BANDS
-                         for n in [band_counts.get((week, band), 0)]],
+        "by_week_band": [{"week": week, "band": band, "count": _shown(band_counts.get((week, band), 0))}
+                         for week in weeks for band in BANDS],
+        # Full weekly category data stays in the API and in GET /placement-cell/weekly.csv.
         "by_week_category": [{"week": week, "category": category,
-                              "count": (n if n >= 5 else "<5")}
-                             for week in weeks for category in CATEGORIES
-                             for n in [category_counts.get((week, category), 0)]],
+                              "count": _shown(category_counts.get((week, category), 0))}
+                             for week in weeks for category in CATEGORIES],
+        "category_summary": category_summary(weeks, category_counts),
     }
+
+
+WEEKLY_CSV_COLUMNS = ("week", "breakdown", "value", "count")
+
+
+def weekly_csv(db: Session, today: date | None = None) -> str:
+    """Full 12-week data: one row per week x band and week x category, with '<5' applied."""
+    import csv
+    import io
+    institution = get_institution(db)
+    db.commit()
+    weeks = last_weeks(today)
+    band_counts, category_counts = _weekly_counts(db, institution, weeks)
+    out = io.StringIO()
+    writer = csv.writer(out, lineterminator="\r\n")
+    writer.writerow(WEEKLY_CSV_COLUMNS)
+    for week in weeks:
+        for band in BANDS:
+            writer.writerow([week, "band", band, _shown(band_counts.get((week, band), 0))])
+        for category in CATEGORIES:
+            writer.writerow([week, "category", category, _shown(category_counts.get((week, category), 0))])
+    return out.getvalue()

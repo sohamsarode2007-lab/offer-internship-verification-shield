@@ -65,3 +65,4 @@ export function loadDashboard() {
   return request<InstitutionDashboard>('/placement-cell/dashboard')
 }
 export const SENDERS_CSV_URL = `${API_BASE}/placement-cell/senders.csv`
+export const WEEKLY_CSV_URL = `${API_BASE}/placement-cell/weekly.csv`

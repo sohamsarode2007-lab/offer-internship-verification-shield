@@ -121,8 +121,14 @@ the page is open and shows only aggregate data.
 Invoke-RestMethod -Uri http://localhost:8000/placement-cell/dashboard
 ```
 
-The response contains week-by-band and week-by-category counts for 12 weeks;
-any cell below five is returned as `"<5"`. It also contains `top_senders`:
+The response contains week-by-band and week-by-category counts for 12 weeks
+and a `category_summary` with one row per category: 12-week total, last 4
+weeks, previous 8 weeks and a trend word (`Rising`/`Falling`/`Steady`,
+comparing the weekly rate of the last 4 weeks with the 8 before them; ±25%),
+sorted by total. Every count below five is returned as `"<5"`; a category whose
+12-week total is below five gets no trend word and sorts after the others.
+`GET /placement-cell/weekly.csv` exports the full weekly data (week × band and
+week × category) with the same `<5` rule. It also contains `top_senders`:
 masked indicators (type, report count, first and last week, most common
 category, dispute status) reported in **3 or more** consented reports, sorted by
 count; senders with fewer reports never appear. `GET /placement-cell/senders.csv`
