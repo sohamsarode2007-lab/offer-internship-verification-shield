@@ -7,7 +7,7 @@ import styles from './App.module.css'
 const labelByCheck: Record<string, string> = {
   sender_authentication: 'Who sent it', domain_verification: 'Email domain',
   gstin_verification: 'Company registration', payment_detection: 'Payment request',
-  community_reports: 'Reports from other students',
+  community_reports: 'Reports from other job seekers',
 }
 const statusText: Record<CheckResult['status'], string> = {
   pass: 'Passed', fail: 'Failed', insufficient_information: 'Not enough information', not_applicable: 'Not applicable',
@@ -21,7 +21,7 @@ const categoryLabels: Record<ScamCategory, string> = {
 const bandClass = (band?: string | null) => band === 'high risk' ? styles.highRisk : band === 'likely legitimate' ? styles.likely : styles.manual
 
 function Header() {
-  return <header className={styles.header}><a className={styles.brand} href="/">Offer shield</a><nav aria-label="Main navigation"><a href="/how-it-works">How it works</a><a href="/dashboard">VIT Pune placement cell</a></nav></header>
+  return <header className={styles.header}><a className={styles.brand} href="/">Offer shield</a><nav aria-label="Main navigation"><a href="/how-it-works">How it works</a><a href="/dashboard">Scam trends</a></nav></header>
 }
 function Footer() {
   return <footer className={styles.footer}><span>Check independently before you pay or share sensitive details.</span><nav aria-label="Support links"><a href="/withdraw">Withdraw a report</a><a href="/dispute">Dispute an indicator</a></nav></footer>
@@ -131,7 +131,7 @@ function ReportDialog({ token, indicators, onClose }: { token: string; indicator
       <label className={styles.consent}><input type="checkbox" checked={consented} onChange={e => setConsented(e.target.checked)}/><span>{CONSENT_TEXT}</span></label>
       {error && <p className={styles.error} role="alert">{error}</p>}
       <div className={styles.actions}><button type="button" className={styles.secondaryButton} onClick={() => setStep(1)}>Back</button><button onClick={submit} disabled={!selected.size || !consented || busy}>{busy ? 'Sending…' : 'Report scam'}</button></div>
-    </> : <><h2 id="report-title">Reported</h2><p>Future students who receive the same details will be warned.</p><div className={styles.withdrawCode}><span>Withdrawal code</span><strong>{withdrawalCode}</strong></div><button className={styles.secondaryButton} onClick={copyCode}>Copy code</button><p className={styles.help}>Save this code. It’s the only way to withdraw this report, and we can’t show it again.</p><button className={styles.textButton} onClick={onClose}>Close</button></>}
+    </> : <><h2 id="report-title">Reported</h2><p>Future job seekers who receive the same details will be warned.</p><div className={styles.withdrawCode}><span>Withdrawal code</span><strong>{withdrawalCode}</strong></div><button className={styles.secondaryButton} onClick={copyCode}>Copy code</button><p className={styles.help}>Save this code. It’s the only way to withdraw this report, and we can’t show it again.</p><button className={styles.textButton} onClick={onClose}>Close</button></>}
   </div></div>
 }
 
@@ -194,11 +194,11 @@ const senderTypeLabels: Record<TopSender['indicator_type'], string> = {
 function SendersTable({ dashboard }: { dashboard: InstitutionDashboard }) {
   const senders = dashboard.top_senders ?? []
   return <section className={styles.sendersSection} aria-labelledby="senders-title">
-    <div className={styles.sendersHead}><h2 id="senders-title">Senders targeting VIT students</h2><a className={styles.exportLink} href={SENDERS_CSV_URL} download>Export warning list</a></div>
-    <p className={styles.help}>Shown only after {dashboard.sender_threshold ?? 3} or more students report the same sender.</p>
-    {senders.length ? <div className={styles.ledgerWrap}><table className={styles.ledger} aria-label="Senders targeting VIT students"><thead><tr><th scope="col">Sender</th><th scope="col">Type</th><th scope="col" className={styles.numeric}>Reports</th><th scope="col">Seen</th><th scope="col">Most common</th><th scope="col">Status</th></tr></thead><tbody>{senders.map(s => <tr className={styles.ledgerRow} key={`${s.indicator_type}:${s.indicator}`}>
+    <div className={styles.sendersHead}><h2 id="senders-title">Reported senders</h2><a className={styles.exportLink} href={SENDERS_CSV_URL} download>Export warning list</a></div>
+    <p className={styles.help}>Shown only after {dashboard.sender_threshold ?? 3} or more people report the same sender.</p>
+    {senders.length ? <div className={styles.ledgerWrap}><table className={styles.ledger} aria-label="Reported senders"><thead><tr><th scope="col">Sender</th><th scope="col">Type</th><th scope="col" className={styles.numeric}>Reports</th><th scope="col">Seen</th><th scope="col">Most common</th><th scope="col">Status</th></tr></thead><tbody>{senders.map(s => <tr className={styles.ledgerRow} key={`${s.indicator_type}:${s.indicator}`}>
       <th scope="row">{s.indicator}</th><td>{senderTypeLabels[s.indicator_type] ?? s.indicator_type}</td><td className={styles.numeric}>{s.reports}</td><td>{s.first_week === s.last_week ? s.first_week : `${s.first_week} – ${s.last_week}`}</td><td>{categoryLabels[s.most_common_category] ?? s.most_common_category}</td><td>{s.dispute_status ? <span className={styles.disputed}>Disputed by the company, under review</span> : '—'}</td>
-    </tr>)}</tbody></table></div> : <p className={styles.emptyNote}>No sender has been reported by {dashboard.sender_threshold ?? 3} or more students yet.</p>}
+    </tr>)}</tbody></table></div> : <p className={styles.emptyNote}>No sender has been reported by {dashboard.sender_threshold ?? 3} or more people yet.</p>}
   </section>
 }
 
@@ -222,7 +222,7 @@ function DashboardPage() {
       .catch(err => { if (active) setError(err instanceof Error ? err.message : 'The dashboard could not be loaded.') })
     return () => { active = false }
   }, [])
-  return <section className={styles.dashboardPage}><h1>VIT Pune placement cell</h1><p>Weekly results, scam categories and reported senders for VIT Pune. Counts are not verified unique students.</p>{!dashboard && !error && <p className={styles.help} role="status">Loading…</p>}{error && <p role="alert" className={styles.error}>{error}</p>}{dashboard && <div className={styles.dashboardResults}><SendersTable dashboard={dashboard}/><h2>Results by week</h2><TrendChart dashboard={dashboard}/><CategorySummary dashboard={dashboard}/></div>}</section>
+  return <section className={styles.dashboardPage}><h1>Scam trends</h1><p>Weekly results, scam categories and reported senders from checks on this site. Counts are checks, not verified unique people.</p>{!dashboard && !error && <p className={styles.help} role="status">Loading…</p>}{error && <p role="alert" className={styles.error}>{error}</p>}{dashboard && <div className={styles.dashboardResults}><SendersTable dashboard={dashboard}/><h2>Results by week</h2><TrendChart dashboard={dashboard}/><CategorySummary dashboard={dashboard}/></div>}</section>
 }
 
 function HowPage() {
@@ -231,10 +231,10 @@ function HowPage() {
     <section><h2>Email domain</h2><p>Checks domain availability, age, mailbox type and lookalike signals. A passing result means those domain rules passed; it does not verify company identity. Demo fixture responses are labelled and are not live checks.</p></section>
     <section><h2>Company registration</h2><p>Checks GSTIN structure, and we check the CIN against company registry records. A registry match means the CIN belongs to an active company with the same name; a different company name or an inactive status is flagged. GSTIN and CIN state codes are informational.</p></section>
     <section><h2>Payment request</h2><p>Looks for fee and deposit demands, nearby UPI details, and relevant urgency. A detected phrase does not prove that money changed hands. Salary, stipend and reimbursement context is excluded from standalone payment-demand detection.</p></section>
-    <section><h2>Reports from other students</h2><p>With consent, selected scammer-role indicators and a redacted wording fingerprint can be matched against reports. Evidence is bucketed, correlated evidence is capped, and community evidence alone cannot cause a high-risk verdict. Reports are not independently verified.</p></section>
+    <section><h2>Reports from other job seekers</h2><p>With consent, selected scammer-role indicators and a redacted wording fingerprint can be matched against reports. Evidence is bucketed, correlated evidence is capped, and community evidence alone cannot cause a high-risk verdict. Reports are not independently verified.</p></section>
     <section><h2>How to read the result</h2><p>Likely legitimate requires a passing domain, present non-failing registration and an external verification signal. Otherwise structural checks alone cannot establish legitimacy. A payment demand forces high risk. These are rules, not a trained model.</p></section>
     <section><h2>Planned and unavailable checks</h2><p>No additional future check is claimed in the current capability statements. Company registry records are looked up locally; this service does not query a registry over the network. Sender authentication is available for .eml uploads only. Other input types cannot authenticate the sender.</p></section>
-    <section><h2>Privacy and limits</h2><p>The offer text and file aren’t stored. Analysis results are retained. This is a single-college simulation for VIT Pune: every check adds one anonymous count (week, result and scam category only; no text, contact details, file name or IP address) to the VIT Pune placement cell page, where any count below five is shown as &lt;5. These counts are kept for 24 months. Counts represent checks, not verified unique students; a staff login for that page is future scope.</p><p><a href="https://github.com/sohamsarode2007-lab/offer-internship-verification-shield/blob/main/docs/PRIVACY_DESIGN.md">Read the privacy design</a>. <a href="https://github.com/sohamsarode2007-lab/offer-internship-verification-shield/blob/main/CLAIMS.md">Read current capability claims</a>.</p></section>
+    <section><h2>Privacy and limits</h2><p>The offer text and file aren’t stored. Analysis results are retained. Every check adds one anonymous count (week, result and scam category only; no text, contact details, file name or IP address) to the public Scam trends page, where any count below five is shown as &lt;5. These counts are kept for 24 months. Counts represent checks, not verified unique people.</p><p><a href="https://github.com/sohamsarode2007-lab/offer-internship-verification-shield/blob/main/docs/PRIVACY_DESIGN.md">Read the privacy design</a>. <a href="https://github.com/sohamsarode2007-lab/offer-internship-verification-shield/blob/main/CLAIMS.md">Read current capability claims</a>.</p></section>
   </article>
 }
 

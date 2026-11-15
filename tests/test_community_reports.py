@@ -76,15 +76,15 @@ def test_masked_preview_and_deselected_indicator_is_not_stored(db):
     assert db.query(CommunityIndicator).filter_by(digest=phone["digest"]).count() == 0
 
 
-def test_report_consent_is_required_and_only_version_three_is_valid(db):
+def test_report_consent_is_required_and_only_version_four_is_valid(db):
     token, _ = cr.issue_report_token(db, [], cr.minhash_signature("A template text has sufficient words to compare."))
     with pytest.raises(ValueError, match="consent"):
         cr.accept_report(db, token, [], False, cr.CONSENT_VERSION)
-    for obsolete in (1, 2):
+    for obsolete in (1, 2, 3):  # v3 named a single college; it is no longer accepted
         with pytest.raises(ValueError, match="consent"):
             cr.accept_report(db, token, [], True, obsolete)
-    assert cr.CONSENT_VERSION == 3
-    cr.accept_report(db, token, [], True, 3)
+    assert cr.CONSENT_VERSION == 4
+    cr.accept_report(db, token, [], True, 4)
 
 
 def test_report_token_tamper_reuse_and_expiry_are_rejected(db):

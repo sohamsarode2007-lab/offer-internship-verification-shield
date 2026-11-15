@@ -110,7 +110,7 @@ class CommunityDispute(Base):
 
 
 class Institution(Base):
-    """Single-college simulation: exactly one record, "VIT Pune", created automatically."""
+    """Single aggregate record ("Public"), created automatically; no per-college data."""
     __tablename__ = "institutions"
     id = Column(Integer, primary_key=True)
     name = Column(String(200), nullable=False)

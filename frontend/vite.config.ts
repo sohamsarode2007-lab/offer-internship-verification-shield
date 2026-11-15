@@ -9,7 +9,7 @@ export default defineConfig({
       '/report': 'http://127.0.0.1:8000',
       '/disputes': 'http://127.0.0.1:8000',
       '/indicators': 'http://127.0.0.1:8000',
-      '/placement-cell': 'http://127.0.0.1:8000',
+      '/trends': 'http://127.0.0.1:8000',
       '/health': 'http://127.0.0.1:8000',
       '/docs': 'http://127.0.0.1:8000',
       '/openapi.json': 'http://127.0.0.1:8000',

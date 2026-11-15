@@ -1,4 +1,4 @@
-"""Simulated VIT Pune reports (fixtures/demo/vit_simulated_senders.csv), DEMO_MODE only.
+"""Simulated reports (fixtures/demo/simulated_senders.csv), DEMO_MODE only.
 
 Sample letter scam_shared_upi_corvane.txt, expected band derived by hand before running
 (DEMO_MODE=1, seeded reports, corvanestaffing.example NOT a demo domain -> NXDOMAIN):
@@ -78,7 +78,7 @@ def test_seeding_refuses_outside_demo_mode(api_client, monkeypatch):
 
 
 def test_dashboard_shows_seeded_senders_in_demo_mode(seeded, api_client):
-    body = api_client.get("/placement-cell/dashboard").json()
+    body = api_client.get("/trends/dashboard").json()
     shown = {s["indicator"]: s for s in body["top_senders"]}
     expected = {cr.masked(s["indicator_type"], s["value"]): s for s in demo_seed.load_senders()}
     for masked_value, sender in expected.items():
@@ -103,9 +103,9 @@ def test_dashboard_shows_seeded_senders_in_demo_mode(seeded, api_client):
 
 def test_seeded_data_hidden_outside_demo_mode(seeded, api_client, monkeypatch):
     monkeypatch.delenv("DEMO_MODE", raising=False)
-    body = api_client.get("/placement-cell/dashboard").json()
+    body = api_client.get("/trends/dashboard").json()
     assert "pl•••@gmail.com" not in {s["indicator"] for s in body["top_senders"]}
-    csv_text = api_client.get("/placement-cell/senders.csv").text
+    csv_text = api_client.get("/trends/senders.csv").text
     assert "gmail.com" not in csv_text and "nimbuslearn" not in csv_text
 
 
@@ -116,7 +116,7 @@ def test_corvane_sample_matches_seeded_sender(seeded, api_client):
     assert community["status"] == "fail"
     assert "reported by 3+ students" in community["details"]
     assert (body["overall_risk_score"], body["risk_band"]) == (100.0, "high risk")
-    dashboard = api_client.get("/placement-cell/dashboard").json()
-    # The same sender, in the same masked form, is on the placement-cell page and in the report flow.
+    dashboard = api_client.get("/trends/dashboard").json()
+    # The same sender, in the same masked form, is on the scam-trends page and in the report flow.
     assert "careerd•••@ybl" in {s["indicator"] for s in dashboard["top_senders"]}
     assert any(i["masked"] == "careerd•••@ybl" for i in body["reportable_indicators"])

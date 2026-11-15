@@ -1,4 +1,4 @@
-"""Simulated VIT Pune CHECKS that fill the 12-week chart (DEMO_MODE only).
+"""Simulated CHECKS that fill the 12-week chart (DEMO_MODE only).
 
 The senders table stays based on the 45 simulated reports; the chart and category table
 include these checks plus the reports' observations.
@@ -57,7 +57,7 @@ def test_checks_are_idempotent_and_demo_only(demo_db, monkeypatch):
 
 
 def test_chart_mostly_visible_with_two_deliberate_small_cells(demo_db, api_client):
-    body = api_client.get("/placement-cell/dashboard").json()
+    body = api_client.get("/trends/dashboard").json()
     cells = body["by_week_band"]
     small = [(c["week"], c["band"]) for c in cells if c["count"] == "<5"]
     assert len(cells) == 36
@@ -70,7 +70,7 @@ def test_chart_mostly_visible_with_two_deliberate_small_cells(demo_db, api_clien
 
 
 def test_sections_agree(demo_db, api_client):
-    body = api_client.get("/placement-cell/dashboard").json()
+    body = api_client.get("/trends/dashboard").json()
     high = {c["week"]: c["count"] for c in body["by_week_band"] if c["band"] == "high risk"}
     # Every week in which a listed sender was last reported shows a visible high-risk bar.
     for sender in body["top_senders"]:
@@ -88,7 +88,7 @@ def test_sections_agree(demo_db, api_client):
 
 def test_simulated_checks_hidden_outside_demo_mode(demo_db, api_client, monkeypatch):
     monkeypatch.delenv("DEMO_MODE")
-    body = api_client.get("/placement-cell/dashboard").json()
+    body = api_client.get("/trends/dashboard").json()
     weeks = body["weeks"]
     # An older week: real checks made by other tests only ever land in the current week.
     legit_older = next(c["count"] for c in body["by_week_band"]

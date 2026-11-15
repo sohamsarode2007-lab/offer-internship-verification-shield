@@ -109,9 +109,9 @@ been verified in this workspace.
   and the synthetic demo snapshot.
 - `/analyze` returns `next_steps` and `complaint_summary` based on its rule
   results. These are automated guidance, not an official complaint filing.
-  High-risk results tell students who already paid to call the National Cyber
+  High-risk results tell people who already paid to call the National Cyber
   Crime Helpline 1930 and report at cybercrime.gov.in. `/analyze` also returns
-  `reasons`: the same rules as `risk_factors`, worded for students with each
+  `reasons`: the same rules as `risk_factors`, worded for people with each
   rule's score impact. A report (and its token) is offered only for high risk
   and insufficient evidence, never for a likely-legitimate result.
 - Sender authentication is available only for `.eml` uploads. It reads the
@@ -146,39 +146,37 @@ been verified in this workspace.
 - `RATE_LIMIT` controls requests per IP. The default is `10/minute`; with
   `DEMO_MODE=1` and `RATE_LIMIT` unset, the default is `100/minute`.
 
-## VIT Pune placement cell (single-college simulation)
+## Public scam-trends page
 
-- **This is a single-college simulation for VIT Pune.** One institution record,
-  "VIT Pune", is created automatically; there are no college codes, API keys or
-  `scripts/add_institution.py`. **Multiple colleges and a staff login for the
-  placement-cell page are future scope**; the page is currently open to anyone
-  who can reach the site.
-- **Every check is counted anonymously for VIT Pune.** Each successful
+- **The page is public and aggregate-only.** It is open to anyone who can reach the
+  site; there is no login, no per-college or per-user view, and one internal
+  aggregate record ("Public") is created automatically.
+- **Every check is counted anonymously.** Each successful
   `/analyze` call records exactly one aggregate row: UTC ISO week, risk band and
   rule-based scam category. The row holds no offer text, identifiers, file name,
   company name or IP address and is not linked to the analysis, a report or a
   person, so a report withdrawal does not remove it. Rows are deleted 24 months
-  after their week. Purpose: anonymous trend counts for the placement cell; every
+  after their week. Purpose: anonymous trend counts; every
   count below five is shown as `<5`. A consented report adds no second row.
-  Enrollment is not verified and checks are not deduplicated by student, so counts
-  are checks, not verified unique students. The senders table comes from consented
+  Checks are not deduplicated by person, so counts
+  are checks, not verified unique people. The senders table comes from consented
   community reports.
 - With `DEMO_MODE=1`, `run_demo.bat` seeds 45 simulated reports (senders table)
   and 484 simulated checks (the same three fields) so the 12-week chart and
   category summary are populated; checks made in demo mode are also demo-flagged.
   Demo rows count only in demo mode. Two chart cells are deliberately below five.
-- `GET /placement-cell/dashboard` returns week-by-band and week-by-category
+- `GET /trends/dashboard` returns week-by-band and week-by-category
   counts for 12 ISO weeks and replaces cells below five with `"<5"`, a
   `category_summary` (per category: 12-week total, last 4 weeks, previous 8
   weeks, trend word by a ±25% weekly-rate rule; `<5` applied to each count; no
-  trend word when the total is below five), `GET /placement-cell/weekly.csv`
+  trend word when the total is below five), `GET /trends/weekly.csv`
   with the full weekly data under the same rule, plus
-  `top_senders`: masked indicators reported in 3+ consented (consent v3)
+  `top_senders`: masked indicators reported in 3+ consented (consent v4)
   reports, with type, count, first/last week, most common category and dispute
-  status. `GET /placement-cell/senders.csv` exports that list. Only masked
+  status. `GET /trends/senders.csv` exports that list. Only masked
   display forms are stored for consented reports (never raw emails, phones, UPI
   IDs or account numbers); a non-free-mail sender domain is shown in full.
-  Consent v3 tells students the placement cell sees these masked details. Both
+  Consent v4 tells people the public scam-trends page shows these masked details. Both
   endpoints are limited to 30 requests/minute. Categories derive from payment-demand, domain,
   sender-authentication and scheme-text rules; the README documents their
   priority and mapping.

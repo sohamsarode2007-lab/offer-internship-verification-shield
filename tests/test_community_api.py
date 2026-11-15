@@ -20,7 +20,7 @@ def test_analyze_preview_report_selection_and_withdrawal_flow(api_client, monkey
 
     selected = [x["id"] for x in preview if x["indicator_type"] == "upi"]
     report = api_client.post("/report", json={"report_token": result["report_token"],
-        "consent": True, "consent_version": 3, "selected_indicators": selected})
+        "consent": True, "consent_version": 4, "selected_indicators": selected})
     assert report.status_code == 200, report.text
     withdrawal_code = report.json()["withdrawal_code"]
     stats = api_client.get("/indicators/stats").json()["indicators"]
@@ -37,16 +37,16 @@ def test_api_rejects_missing_consent_and_reused_or_tampered_token(api_client, mo
     result = api_client.post("/analyze", data={"text": OFFER}).json()
     token = result["report_token"]
     denied = api_client.post("/report", json={"report_token": token, "consent": False,
-        "consent_version": 3, "selected_indicators": []})
+        "consent_version": 4, "selected_indicators": []})
     assert denied.status_code == 400
     tampered = token[:-1] + ("0" if token[-1] != "0" else "1")
     assert api_client.post("/report", json={"report_token": tampered, "consent": True,
-        "consent_version": 3, "selected_indicators": []}).status_code == 400
+        "consent_version": 4, "selected_indicators": []}).status_code == 400
     accepted = api_client.post("/report", json={"report_token": token, "consent": True,
-        "consent_version": 3, "selected_indicators": []})
+        "consent_version": 4, "selected_indicators": []})
     assert accepted.status_code == 200
     assert api_client.post("/report", json={"report_token": token, "consent": True,
-        "consent_version": 3, "selected_indicators": []}).status_code == 400
+        "consent_version": 4, "selected_indicators": []}).status_code == 400
 
 
 def test_dispute_paths_require_same_domain_one_time_verification(api_client, monkeypatch):

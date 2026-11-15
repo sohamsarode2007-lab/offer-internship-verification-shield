@@ -200,7 +200,7 @@ def analyze_offer(
                 score=c_schema.score,
                 details=c_schema.details,
             ))
-        # One anonymous VIT Pune trend row per check: ISO week, band, category only
+        # One anonymous public trend row per check: ISO week, band, category only
         # (no text, identifiers, file name, IP or link to this analysis). See PRIVACY_DESIGN.md.
         institution_dashboard.record_check_observation(
             db, risk_band, scam_category, institution_dashboard.current_iso_week(),
@@ -222,7 +222,7 @@ def analyze_offer(
 
     # Reporting is offered only for high risk and insufficient evidence, never for a
     # likely-legitimate result. The token carries only the band and rule-based category,
-    # so a consented report can be counted on the VIT Pune page; nothing is recorded without consent.
+    # so a consented report can be counted on the scam-trends page; nothing is recorded without consent.
     report_token, reportable_indicators = None, []
     if risk_band in REPORTABLE_BANDS:
         report_token, reportable_indicators = community_reports.issue_report_token(

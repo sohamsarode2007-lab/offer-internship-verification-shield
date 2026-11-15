@@ -27,7 +27,7 @@ describe('backend error translation', () => {
   ])('explains what to do for %s errors', async (path, detail, message) => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response(400, detail)))
     const request = path === '/report'
-      ? submitReport({ report_token: 'report-token-that-is-long-enough', consent: true, consent_version: 3, selected_indicators: [] })
+      ? submitReport({ report_token: 'report-token-that-is-long-enough', consent: true, consent_version: 4, selected_indicators: [] })
       : withdrawReport({ code: 'withdrawal-code-that-is-long-enough' })
     await expect(request).rejects.toThrow(message)
   })

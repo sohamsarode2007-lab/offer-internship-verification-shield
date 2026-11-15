@@ -41,10 +41,10 @@ def _test_db():
 
 
 def test_dashboard_needs_no_key_and_is_vit_pune(api_client):
-    response = api_client.get("/placement-cell/dashboard")
+    response = api_client.get("/trends/dashboard")
     assert response.status_code == 200
     body = response.json()
-    assert body["institution"] == "VIT Pune"
+    assert body["institution"] == "Public"
     assert len(body["weeks"]) == 12
     # The old key-protected endpoint is gone (the SPA catch-all may answer, but with no data).
     assert "by_week_band" not in api_client.get("/institutions/me/dashboard").text
@@ -52,11 +52,11 @@ def test_dashboard_needs_no_key_and_is_vit_pune(api_client):
 
 def test_single_institution_is_created_once(api_client):
     from app.models.models import Institution
-    api_client.get("/placement-cell/dashboard")
-    api_client.get("/placement-cell/dashboard")
+    api_client.get("/trends/dashboard")
+    api_client.get("/trends/dashboard")
     gen, db = _test_db()
     try:
-        assert [i.name for i in db.query(Institution).all()] == ["VIT Pune"]
+        assert [i.name for i in db.query(Institution).all()] == ["Public"]
         assert {c.name for c in Institution.__table__.columns} == {"id", "name"}
     finally:
         gen.close()
@@ -75,12 +75,12 @@ def test_dashboard_suppresses_cells_below_five(api_client):
     for _ in range(4 - existing):
         db.add(InstitutionObservation(institution_id=institution.id, iso_week=week, band=band, scam_category=category))
     db.commit()
-    body = api_client.get("/placement-cell/dashboard").json()
+    body = api_client.get("/trends/dashboard").json()
     assert next(c["count"] for c in body["by_week_band"] if c["week"] == week and c["band"] == band) == "<5"
     assert next(c["count"] for c in body["by_week_category"] if c["week"] == week and c["category"] == category) == "<5"
     db.add(InstitutionObservation(institution_id=institution.id, iso_week=week, band=band, scam_category=category))
     db.commit()
-    body = api_client.get("/placement-cell/dashboard").json()
+    body = api_client.get("/trends/dashboard").json()
     assert next(c["count"] for c in body["by_week_band"] if c["week"] == week and c["band"] == band) == 5
     assert next(c["count"] for c in body["by_week_category"] if c["week"] == week and c["category"] == category) == 5
     db.query(InstitutionObservation).filter_by(iso_week=week, band=band, scam_category=category).delete()

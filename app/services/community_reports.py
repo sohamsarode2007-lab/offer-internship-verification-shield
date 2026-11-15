@@ -18,7 +18,7 @@ from app.models.models import (CommunityDispute, CommunityIndicator, CommunityRe
 from app.services import payment_detection
 from app.utils.email_domains import is_free_mailbox, is_upi_handle
 
-CONSENT_VERSION = 3  # v3 adds: the VIT placement cell sees the details in masked form
+CONSENT_VERSION = 4  # v4: details appear in masked form on the public scam-trends page (v3 named one college)
 MINHASH_SIZE = 128
 BAND_SIZE = 8
 PHONE_RE = re.compile(r"(?<!\w)(?:\+?91[\s().-]?)?[6-9]\d{9}(?!\w)")
@@ -76,7 +76,7 @@ def _visible_prefix(local: str, cap: int) -> str:
 
 
 def masked(kind: str, value: str) -> str:
-    """Display form shown in the report flow and on the placement-cell page.
+    """Display form shown in the report flow and on the scam-trends page.
 
     Never the full value, except a sender domain: domain indicators are only
     extracted for non-free-mail domains, and those are shown in full.
@@ -221,7 +221,7 @@ def _decode_token(token: str, pepper: str) -> dict:
 def issue_report_token(db: Session, indicators: list[dict], signature: list[int],
                        band: str | None = None, scam_category: str | None = None):
     """Signed, single-use token. band/scam_category (rule outputs, no text) let a consented
-    report be counted on the VIT Pune dashboard."""
+    report be counted on the scam-trends dashboard."""
     current, _ = _pepper_config()
     if not current or not signature:
         return None, []

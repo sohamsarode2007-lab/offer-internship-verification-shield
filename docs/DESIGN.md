@@ -30,7 +30,7 @@ Steel on obsidian and basalt measures 6.23:1 and 5.76:1 respectively, above WCAG
 Desktop:
 ```text
 ┌──────────────────────────────────────────────────────────────────────────┐
-│ Offer shield                    How it works   VIT Pune placement cell │
+│ Offer shield                    How it works   Scam trends │
 ├──────────────────────────────────────────────────────────────────────────┤
 │                                                                          │
 │ Check an offer before you pay anything.                                  │
@@ -58,7 +58,7 @@ Mobile (360px):
 │ [Choose PDF, image or .eml  ]│
 │ .eml sender-verification tip│
 │ Gmail download instructions │
-│ [College code              ]│
+│ [Unused                    ]│
 │ [Check offer               ]│
 │ Privacy line                 │
 │ Try a sample:                │
@@ -98,13 +98,13 @@ Desktop/mobile share the focused single-column form: heading, one code input, wi
 
 Desktop: restrained form with indicator type, value, contact email, reason, and a conditional same-domain verification note for domain disputes; submit and response below. Mobile: same order, one column. Response copy reflects whether a verification link was actually sent and whether scoring continues.
 
-### Placement-cell dashboard (`/dashboard`)
+### Scam-trends page (`/dashboard`)
 
 Desktop:
 ```text
 ┌──────────────────────────────────────────────────────────────────────────┐
-│ VIT Pune placement cell                                                 │
-│ Loads automatically (single-college simulation; no key)                  │
+│ Scam trends                                                 │
+│ Loads automatically (public; aggregate data only)                  │
 │ Counts aren't deduplicated by student.                                    │
 │ Results by week                                                          │
 │ [Monochrome hand-written SVG chart, 12 weeks, accessible legend]          │
@@ -242,11 +242,11 @@ Mobile:
 └──────────────────────────────┘
 ```
 
-### Placement-cell dashboard (`/dashboard`) mobile wireframe
+### Scam-trends page (`/dashboard`) mobile wireframe
 
 ```text
 ┌──────────────────────────────┐
-│ VIT Pune placement cell      │
+│ Scam trends      │
 │ Loads automatically          │
 │ Counts aren't deduplicated   │
 │ Results by week              │

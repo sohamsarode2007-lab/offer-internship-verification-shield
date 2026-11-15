@@ -152,9 +152,9 @@ describe('interface errors', () => {
   })
 })
 
-describe('VIT Pune placement cell page', () => {
+describe('Scam trends page', () => {
   const dashboardData = {
-    institution: 'VIT Pune', sender_threshold: 3, weeks: ['2026-W46'], by_week_band: [], by_week_category: [],
+    institution: 'Public', sender_threshold: 3, weeks: ['2026-W46'], by_week_band: [], by_week_category: [],
     category_summary: [
       { category: 'registration_fee', total: 61, last_4_weeks: 28, previous_8_weeks: 33, trend: 'Rising' },
       { category: 'sender_spoofing', total: '<5', last_4_weeks: '<5', previous_8_weeks: '<5', trend: null },
@@ -168,17 +168,17 @@ describe('VIT Pune placement cell page', () => {
     vi.mocked(api.loadDashboard).mockResolvedValueOnce(structuredClone(dashboardData) as never)
     window.history.replaceState({}, '', '/dashboard')
     render(<App />)
-    expect(await screen.findByRole('heading', { name: 'VIT Pune placement cell' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Scam trends' })).toBeInTheDocument()
     expect(screen.queryByLabelText(/API key/i)).not.toBeInTheDocument()
-    const senders = await screen.findByRole('heading', { name: 'Senders targeting VIT students' })
+    const senders = await screen.findByRole('heading', { name: 'Reported senders' })
     const chart = screen.getByRole('heading', { name: 'Results by week' })
     expect(senders.compareDocumentPosition(chart) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    expect(screen.getByText('Shown only after 3 or more students report the same sender.')).toBeInTheDocument()
-    const table = screen.getByRole('table', { name: 'Senders targeting VIT students' })
+    expect(screen.getByText('Shown only after 3 or more people report the same sender.')).toBeInTheDocument()
+    const table = screen.getByRole('table', { name: 'Reported senders' })
     expect(within(table).getByText('pl•••@gmail.com')).toBeInTheDocument()
     expect(within(table).getByText('12')).toBeInTheDocument()
     expect(within(table).getByText('Disputed by the company, under review')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Export warning list' })).toHaveAttribute('href', expect.stringContaining('/placement-cell/senders.csv'))
+    expect(screen.getByRole('link', { name: 'Export warning list' })).toHaveAttribute('href', expect.stringContaining('/trends/senders.csv'))
     expect(vi.mocked(api.loadDashboard)).toHaveBeenCalledWith()
   })
   it('shows one row per category with totals and a trend word instead of a week grid', async () => {
@@ -194,25 +194,25 @@ describe('VIT Pune placement cell page', () => {
     expect(within(spoof).getAllByText('<5')).toHaveLength(3)
     expect(within(spoof).getByText('—')).toBeInTheDocument()
     expect(screen.queryByRole('table', { name: 'Scam categories by week' })).not.toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Export weekly data' })).toHaveAttribute('href', expect.stringContaining('/placement-cell/weekly.csv'))
+    expect(screen.getByRole('link', { name: 'Export weekly data' })).toHaveAttribute('href', expect.stringContaining('/trends/weekly.csv'))
   })
   it('names the page in the navigation and has no college-code field', () => {
     render(<App />)
-    expect(screen.getByRole('link', { name: 'VIT Pune placement cell' })).toHaveAttribute('href', '/dashboard')
+    expect(screen.getByRole('link', { name: 'Scam trends' })).toHaveAttribute('href', '/dashboard')
     expect(screen.queryByLabelText(/college/i)).not.toBeInTheDocument()
   })
 })
 
 describe('community report consent', () => {
-  it('matches the version 3 text in the privacy design', () => {
+  it('matches the version 4 text in the privacy design', () => {
     const path = [resolve(process.cwd(), '../docs/PRIVACY_DESIGN.md'), resolve(process.cwd(), 'docs/PRIVACY_DESIGN.md')].find(existsSync)!
     const doc = readFileSync(path, 'utf8')
-    const quote = doc.match(/> Share these details[\s\S]*?so it can warn other students\./)?.[0]
+    const quote = doc.match(/> Share these details[\s\S]*?so it can warn other job seekers\./)?.[0]
     expect(quote).toBeTruthy()
     expect(quote!.split('\n').map(line => line.replace(/^>\s?/, '').trim()).join(' ').replace(/\s+/g, ' ')).toBe(CONSENT_TEXT)
-    expect(CONSENT_VERSION).toBe(3)
-    expect(doc).toContain('version `3`')
-    expect(CONSENT_TEXT.endsWith("VIT's placement cell will see these details in masked form so it can warn other students.")).toBe(true)
+    expect(CONSENT_VERSION).toBe(4)
+    expect(doc).toContain('version `4`')
+    expect(CONSENT_TEXT.endsWith("The public scam-trends page will show these details in masked form so it can warn other job seekers.")).toBe(true)
   })
 
   it('allows deselection, requires consent and does not store the withdrawal code', async () => {
@@ -227,7 +227,7 @@ describe('community report consent', () => {
     expect(screen.getByRole('button', { name: 'Report scam' })).toBeEnabled()
     await user.click(screen.getByRole('button', { name: 'Report scam' }))
     expect(await screen.findByText('once-only-secret-code-123456')).toBeInTheDocument()
-    expect(vi.mocked(api.submitReport)).toHaveBeenCalledWith(expect.objectContaining({ consent: true, consent_version: 3, selected_indicators: ['phone:two'] }))
+    expect(vi.mocked(api.submitReport)).toHaveBeenCalledWith(expect.objectContaining({ consent: true, consent_version: 4, selected_indicators: ['phone:two'] }))
     expect(localStorage.length).toBe(0)
     expect(sessionStorage.length).toBe(0)
   })

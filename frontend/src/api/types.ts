@@ -57,7 +57,7 @@ export interface ReportableIndicator {
 export interface ReportRequest {
   report_token: string
   consent: true
-  consent_version: 3
+  consent_version: 4
   selected_indicators: string[]
 }
 

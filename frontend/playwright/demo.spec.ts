@@ -24,7 +24,7 @@ test('demo analysis, reporting, dashboard, and public screens', async ({ page },
     { button: 'Quillmere internship', key: 'registry_name_match_quillmere.txt', band: 'Likely legitimate', shot: 'sample-quillmere-result' },
     { button: 'Tarnwick internship', key: 'registry_struck_off_tarnwick.txt', band: 'Insufficient evidence', shot: 'sample-tarnwick-result' },
     { button: 'Halvorn internship', key: 'registry_cin_mismatch_halvorn.txt', band: 'Insufficient evidence', shot: 'sample-halvorn-result' },
-    // Shares a simulated VIT sender (careerdesk.fees@ybl); reported below, then seen on the placement-cell page.
+    // Shares a simulated sender (careerdesk.fees@ybl); reported below, then seen on the scam-trends page.
     { button: 'Corvane internship', key: 'scam_shared_upi_corvane.txt', band: 'High risk', shot: 'sample-corvane-result' },
   ]
   for (const [index, sample] of samples.entries()) {
@@ -78,8 +78,8 @@ test('demo analysis, reporting, dashboard, and public screens', async ({ page },
   await capture(page, testInfo, 'dispute-success')
 
   await page.goto('/dashboard')
-  await expect(page.getByRole('heading', { name: 'VIT Pune placement cell' })).toBeVisible()
-  const senders = page.getByRole('table', { name: 'Senders targeting VIT students' })
+  await expect(page.getByRole('heading', { name: 'public scam-trends page' })).toBeVisible()
+  const senders = page.getByRole('table', { name: 'Reported senders' })
   await expect(senders).toBeVisible()
   await expect(page.getByText('Shown only after 3 or more students report the same sender.')).toBeVisible()
   // The sender the student just checked (Corvane letter) is on the warning list, masked.
@@ -93,7 +93,7 @@ test('demo analysis, reporting, dashboard, and public screens', async ({ page },
   const downloadPromise = page.waitForEvent('download')
   await page.getByRole('link', { name: 'Export warning list' }).click()
   const download = await downloadPromise
-  expect(download.suggestedFilename()).toBe('vit-pune-warning-list.csv')
+  expect(download.suggestedFilename()).toBe('scam-warning-list.csv')
 
   await page.goto('/how-it-works')
   await expect(page.getByRole('heading', { name: 'What this checks' })).toBeVisible()

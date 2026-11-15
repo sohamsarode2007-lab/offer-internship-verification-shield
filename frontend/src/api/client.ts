@@ -62,7 +62,7 @@ export function submitDispute(payload: DisputeRequest) {
   return request<DisputeResponse>('/disputes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
 }
 export function loadDashboard() {
-  return request<InstitutionDashboard>('/placement-cell/dashboard')
+  return request<InstitutionDashboard>('/trends/dashboard')
 }
-export const SENDERS_CSV_URL = `${API_BASE}/placement-cell/senders.csv`
-export const WEEKLY_CSV_URL = `${API_BASE}/placement-cell/weekly.csv`
+export const SENDERS_CSV_URL = `${API_BASE}/trends/senders.csv`
+export const WEEKLY_CSV_URL = `${API_BASE}/trends/weekly.csv`

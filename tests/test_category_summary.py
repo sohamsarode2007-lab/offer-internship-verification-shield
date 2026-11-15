@@ -50,13 +50,13 @@ def test_trend_word_rule():
 
 
 def test_dashboard_api_has_summary_and_weekly_csv(api_client):
-    body = api_client.get("/placement-cell/dashboard").json()
+    body = api_client.get("/trends/dashboard").json()
     assert len(body["category_summary"]) == len(dash.CATEGORIES)
     assert len(body["by_week_category"]) == 12 * len(dash.CATEGORIES)      # full weekly data kept in the API
-    response = api_client.get("/placement-cell/weekly.csv")
+    response = api_client.get("/trends/weekly.csv")
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/csv")
-    assert 'filename="vit-pune-weekly-data.csv"' in response.headers["content-disposition"]
+    assert 'filename="scam-weekly-data.csv"' in response.headers["content-disposition"]
     rows = list(csv.reader(io.StringIO(response.text)))
     assert rows[0] == list(dash.WEEKLY_CSV_COLUMNS)
     assert len(rows) - 1 == 12 * (len(dash.BANDS) + len(dash.CATEGORIES))
