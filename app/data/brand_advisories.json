@@ -1,0 +1,14 @@
+{
+  "_comment": "Employer-published recruitment-fraud statements. Add an entry only after opening the employer's own page; keep wording to what the page states. Used by app/services/brand_advisories.py.",
+  "advisories": [
+    {
+      "brand": "TCS",
+      "aliases": ["tcs", "tata consultancy services"],
+      "official_domains": ["tcs.com"],
+      "statement": "recruits only from @tcs.com addresses, never from free email services, and never asks for payment or a security deposit",
+      "source": "TCS recruitment fraud alert",
+      "source_url": "https://www.tcs.com/careers/india/recruitment-fraud-alert",
+      "retrieved": "2026-11-15"
+    }
+  ]
+}

@@ -7,7 +7,7 @@ machine-learning model, no training data and no learned weights.
 Risk points (added):
   +65  Upfront payment demand            (HARD OVERRIDE: final score >= 61 -> high risk)
   +20  Urgency language within 250 chars of the payment demand
-  +30  Contact domain failed (free mailbox, disposable mailbox, no MX/NXDOMAIN, lookalike, < 30 days old)
+  +30  Contact domain failed (free mailbox, disposable mailbox, not the named employer's published recruitment domain, no MX/NXDOMAIN, lookalike, < 30 days old)
   +25  Registration number failed structural checks
   +10  Registration number structurally valid but NOT verified against any registry
   +10  GSTIN PAN name-initial character conflicts with the claimed company name
@@ -99,6 +99,8 @@ def _domain_reason(details: str) -> str:
     d = details.casefold()
     if "free mailbox" in d:
         return "The contact email is a free personal mailbox (like Gmail), not a company address"
+    if "official recruitment domain" in d:
+        return "The sender's email domain is not the one this employer says it recruits from"
     if "disposable" in d:
         return "The contact email comes from a temporary throwaway mailbox service"
     if "lookalike" in d:

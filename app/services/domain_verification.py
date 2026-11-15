@@ -36,6 +36,7 @@ import dns.resolver
 from rapidfuzz.distance import Levenshtein
 
 from app.utils.field_utils import get_field_value
+from app.services import brand_advisories
 from app.utils.email_domains import is_disposable_mailbox, is_free_mailbox
 
 logger = logging.getLogger(__name__)
@@ -272,6 +273,11 @@ def verify_domain(input_data: Union[Dict[str, Any], str, None]) -> Dict[str, Any
                        [{"check_name": "brand_lookalike", "status": "fail", "explanation": lookalike}])
 
     reg_domain, _ = registrable_domain(host)
+    claimed = get_field_value(input_data, "company_name", "company_name_legacy") if isinstance(input_data, dict) else None
+    mismatch = brand_advisories.official_domain_mismatch(claimed, reg_domain)
+    if mismatch:
+        return _result("fail", host, mismatch,
+                       [{"check_name": "employer_official_domain", "status": "fail", "explanation": mismatch}])
     if os.getenv("DEMO_MODE") == "1" and (host in _demo_fixture_domains() or reg_domain in _demo_fixture_domains()):
         logger.warning("[DOMAIN_VERIFY] DEMO_MODE fixture applied; result is not a live DNS lookup.")
         return _result("pass", host,

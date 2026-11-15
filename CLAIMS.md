@@ -80,6 +80,20 @@ been verified in this workspace.
   as Gmail keep their separate, existing finding. The rule is offline and does not
   verify who controls the address.
 
+## Employer-published recruitment domains
+
+- `app/data/brand_advisories.json` records what an employer's own fraud page says about
+  where it recruits from, with the source URL and the date it was read. Currently one
+  entry: TCS (its recruitment fraud alert states recruiting only from `@tcs.com`). When an
+  offer names TCS but the sender's domain is not `tcs.com` or a subdomain, the domain check
+  fails with wording attributed to that page ("Per TCS recruitment fraud alert ... TCS
+  recruits only from ..."). It reuses the existing +30 domain weight; no new weight.
+  The page was read through a summarising fetch tool, so the statement is paraphrased and
+  the entry should be re-read against the page before it is shown in a demo as a quotation.
+  Employers without an entry are not checked, and a staffing firm legitimately recruiting
+  on an employer's behalf from its own domain would also be flagged: the result says the
+  domain is not the employer's published one, not that the sender is a scammer.
+
 ## Payment detection and scoring
 
 - Payment detection uses phrase rules and UPI payment context. A nearby UPI VPA
