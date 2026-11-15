@@ -194,6 +194,28 @@ def _cin_problems(cin: str, company: Optional[str]) -> List[str]:
     return problems
 
 
+_PAN_REGEX = re.compile(r"^[A-Z]{3}[ABCFGHJLPT][A-Z][0-9]{4}[A-Z]$")
+_UDYAM_REGEX = re.compile(r"^UDYAM-[A-Z]{2}-[0-9]{2}-[0-9]{7}$")
+
+
+def _pan_problems(pan: str, company: Optional[str], gstin: Optional[str]) -> List[str]:
+    """PAN format, company holder type ('C'), and agreement with the PAN embedded in a valid GSTIN."""
+    if not _PAN_REGEX.match(pan):
+        return [f"PAN '{pan}' does not match the PAN format"]
+    problems = []
+    if company and _COMPANY_NAME_HINT.search(company) and pan[3] != "C":
+        problems.append(f"Claimed name '{company}' is a company (Pvt/Ltd), but PAN '{pan}' has holder-type '{pan[3]}' instead of 'C'")
+    if gstin and GSTIN_REGEX.match(gstin) and gstin[2:12] != pan:
+        problems.append(f"PAN '{pan}' differs from the PAN inside GSTIN '{gstin}'")
+    return problems
+
+
+def _udyam_problems(udyam: str) -> List[str]:
+    if not _UDYAM_REGEX.match(udyam):
+        return [f"Udyam number '{udyam}' does not match the UDYAM-XX-00-0000000 format"]
+    return []
+
+
 def _llpin_problems(llpin: str) -> List[str]:
     if not LLPIN_REGEX.match(llpin):
         return [f"LLPIN '{llpin}' does not match the AAA-0000 format"]
@@ -365,18 +387,21 @@ def verify_gstin(facts: Dict[str, Any]) -> Dict[str, Any]:
     gstin = get_field_value(facts, "gstin")
     cin = get_field_value(facts, "cin")
     llpin = get_field_value(facts, "llpin")
-    if not (gstin or cin or llpin) and raw_text and isinstance(facts, dict) and not isinstance(facts.get("gstin"), dict):
+    pan = get_field_value(facts, "pan")
+    udyam = get_field_value(facts, "udyam")
+    if not (gstin or cin or llpin or pan or udyam) and raw_text and isinstance(facts, dict) and not isinstance(facts.get("gstin"), dict):
         # Facts did not come from fact_extraction; extract here with the same rules.
         from app.services.fact_extraction import extract_registration_numbers
         regs = extract_registration_numbers(raw_text)
-        gstin, cin, llpin = (regs[k]["value"] for k in ("gstin", "cin", "llpin"))
+        gstin, cin, llpin, pan, udyam = (regs[k]["value"] for k in ("gstin", "cin", "llpin", "pan", "udyam"))
 
-    identifiers = [{"type": t, "value": v} for t, v in (("GSTIN", gstin), ("CIN", cin), ("LLPIN", llpin)) if v]
+    identifiers = [{"type": t, "value": v} for t, v in
+                   (("GSTIN", gstin), ("CIN", cin), ("LLPIN", llpin), ("PAN", pan), ("UDYAM", udyam)) if v]
 
     if not identifiers:
         return _result(
             "insufficient_information", False,
-            "No GSTIN, CIN or labelled LLPIN found in the offer text.",
+            "No GSTIN, CIN, PAN, Udyam number or labelled LLPIN found in the offer text.",
             identifiers, None,
         )
 
@@ -389,6 +414,12 @@ def verify_gstin(facts: Dict[str, Any]) -> Dict[str, Any]:
         problems += _cin_problems(cin, claimed_company)
     if llpin:
         problems += _llpin_problems(llpin)
+    if pan:
+        problems += _pan_problems(pan, claimed_company, gstin)
+    if udyam:
+        problems += _udyam_problems(udyam)
+        if not _udyam_problems(udyam):
+            consistency_notes.append("Udyam number format is valid; Udyam numbers are self-declared and are not verified here")
 
     if gstin and claimed_company and len(gstin) == 15 and gstin_checksum_ok(gstin):
         initial = next((c.upper() for c in claimed_company if c.isalpha()), None)

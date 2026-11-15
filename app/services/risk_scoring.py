@@ -8,7 +8,7 @@ Risk points (added):
   +65  Upfront payment demand            (HARD OVERRIDE: final score >= 61 -> high risk)
   +20  Urgency language within 250 chars of the payment demand
   +30  Contact domain failed (free mailbox, disposable mailbox, not the named employer's published recruitment domain, no MX/NXDOMAIN, lookalike, < 30 days old)
-  +25  Registration number failed structural checks
+  +25  Registration number failed structural checks (GSTIN, CIN, LLPIN, labelled PAN, Udyam format)
   +10  Registration number structurally valid but NOT verified against any registry
   +10  GSTIN PAN name-initial character conflicts with the claimed company name
   +15  MCA incorporation date contradicts a founding-year/age claim by >1 year

@@ -49,6 +49,12 @@ LLPIN_LABELLED_PATTERN = re.compile(
     r"\b(?i:LLPIN)(?:\s*(?i:no\.?|number))?\s*[:#-]?\s*([A-Z]{3}-[0-9]{4})\b"
 )
 
+# PAN and Udyam are accepted only with their label / prefix, and must contain a digit, so that
+# ordinary words after "PAN:" are not read as numbers. Malformed values are captured on purpose
+# so the registration check can report them.
+PAN_LABELLED_PATTERN = re.compile(r"\bPAN(?:\s*(?i:no\.?|number|card))?\s*[:#-]\s*(?=[A-Za-z0-9]*\d)([A-Za-z0-9]{8,12})\b", re.I)
+UDYAM_PATTERN = re.compile(r"\bUDYAM[-\s]?[A-Z]{2}[-\s]?\d{1,2}[-\s]?\d{3,8}\b", re.I)
+
 EMAIL_PATTERN = re.compile(r"\b[A-Za-z0-9._%+-]+@([A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,})\b")
 URL_DOMAIN_PATTERN = re.compile(
     r"(?:https?://|\bwww\.)(?:www\.)?([A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,})",
@@ -134,15 +140,19 @@ def extract_emails_and_domains(text: str) -> Tuple[Dict[str, Any], Dict[str, Any
 
 
 def extract_registration_numbers(text: str) -> Dict[str, Dict[str, Any]]:
-    """Extract GSTIN, CIN and (labelled) LLPIN. Structure only; nothing is verified here."""
+    """Extract GSTIN, CIN, labelled LLPIN and PAN, and Udyam numbers. Structure only; nothing is verified here."""
     gstin = GSTIN_PATTERN.search(text)
     cin = CIN_PATTERN.search(text)
     llpin = LLPIN_LABELLED_PATTERN.search(text)
+    pan = PAN_LABELLED_PATTERN.search(text)
+    udyam = UDYAM_PATTERN.search(text)
 
     return {
         "gstin": create_field_dict(gstin.group(0) if gstin else None, 0.98 if gstin else 0.0),
         "cin": create_field_dict(cin.group(0) if cin else None, 0.98 if cin else 0.0),
-        "llpin": create_field_dict(llpin.group(1) if llpin else None, 0.95 if llpin else 0.0)
+        "llpin": create_field_dict(llpin.group(1) if llpin else None, 0.95 if llpin else 0.0),
+        "pan": create_field_dict(pan.group(1).upper() if pan else None, 0.95 if pan else 0.0),
+        "udyam": create_field_dict(re.sub(r"\s+", "-", udyam.group(0).upper()) if udyam else None, 0.95 if udyam else 0.0),
     }
 
 
@@ -222,6 +232,8 @@ def extract_facts(raw_text: str) -> Dict[str, Any]:
         "gstin": regs["gstin"],
         "cin": regs["cin"],
         "llpin": regs["llpin"],
+        "pan": regs["pan"],
+        "udyam": regs["udyam"],
         "monetary_amounts": monetary,
         "account_numbers": accounts,
         "institutional_affiliations": institutional,

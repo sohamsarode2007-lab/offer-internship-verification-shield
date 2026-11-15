@@ -235,6 +235,21 @@ def _urgency_near(text: str, demands: List[Dict[str, Any]]) -> List[str]:
     return found
 
 
+# RBI bank codes (first four IFSC characters) of payments banks. A payments bank cannot lend and
+# is not where an employer's treasury collects money; the note is informational and adds no points
+# because a payment demand already forces high risk.
+PAYMENTS_BANK_CODES = {"AIRP": "Airtel Payments Bank", "PYTM": "Paytm Payments Bank",
+                       "FINO": "Fino Payments Bank", "IPOS": "India Post Payments Bank"}
+_IFSC_RE = re.compile(r"\b([A-Z]{4})0[A-Z0-9]{6}\b")
+
+
+def _payments_bank_note(text: str) -> str:
+    names = sorted({PAYMENTS_BANK_CODES[m.group(1)] for m in _IFSC_RE.finditer(text.upper())
+                    if m.group(1) in PAYMENTS_BANK_CODES})
+    return (" The bank details given are for a payments-bank account (" + ", ".join(names) + "); "
+            "employers do not normally collect money there.") if names else ""
+
+
 def detect_payment_demand(facts: Dict[str, Any]) -> Dict[str, Any]:
     """Rule-based scan of the offer text for upfront payment demands."""
     raw_text = get_field_value(facts, "raw_text") or ""
@@ -265,6 +280,7 @@ def detect_payment_demand(facts: Dict[str, Any]) -> Dict[str, Any]:
         )
         if urgency:
             details += " Urgency language near the demand: " + ", ".join(f"'{u}'" for u in urgency) + "."
+        details += _payments_bank_note(raw_text)
         details += " Genuine employers do not charge candidates to join."
         return {
             "check_name": "payment_detection",

@@ -94,6 +94,21 @@ been verified in this workspace.
   on an employer's behalf from its own domain would also be flagged: the result says the
   domain is not the employer's published one, not that the sender is a scammer.
 
+## PAN, Udyam and payments-bank structure checks
+
+- A labelled `PAN:` value must match the PAN format, have holder type `C` when the claimed
+  name says Pvt/Ltd, and equal the PAN embedded in a quoted GSTIN. A `UDYAM-XX-00-0000000`
+  number must match that format. Failures reuse the existing +25 "registration number failed
+  structural checks" weight; a structurally valid PAN or Udyam number without a registry record
+  reuses the existing +10 "valid but not verified" weight. No new weights.
+- These are format checks only. A valid PAN or Udyam number is not verified: this project has no
+  PAN or Udyam registry source (the data.gov.in Udyam list has no Udyam-number column and is not
+  used), and Udyam numbers are self-declared. The result says so.
+- If a payment demand's text includes an IFSC whose bank code belongs to a payments bank
+  (Airtel, Paytm, Fino, India Post), the payment details add an informational sentence. It adds
+  no points (a payment demand already forces high risk) and never repeats the IFSC. The code list
+  is short and from general knowledge of RBI bank codes, not an RBI download.
+
 ## Payment detection and scoring
 
 - Payment detection uses phrase rules and UPI payment context. A nearby UPI VPA
