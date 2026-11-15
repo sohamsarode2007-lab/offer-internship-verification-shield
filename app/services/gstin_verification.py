@@ -1,7 +1,11 @@
 """
-GSTIN / CIN / LLPIN Structural Check (offline only)
+GSTIN / CIN / LLPIN Structural Check (offline structure checks; optional CIN registry lookup)
 
-What this module DOES (no network access):
+Network use: only lookup_registry() may call data.gov.in (ogd_registry), and only when
+DATA_GOV_IN_API_KEY is set and DEMO_MODE is off. Everything else here is offline.
+registry_source "ogd" means a data.gov.in company-master snapshot answered.
+
+What this module DOES (offline):
   - GSTIN: format regex + official mod-36 check character; state code must be
     01-38, 97 or 99; if the claimed company name says Pvt/Private/Ltd/Limited the
     6th GSTIN character (4th PAN character, the holder type) must be 'C' (company).
@@ -36,6 +40,7 @@ from datetime import date, datetime
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 
+from app.services import ogd_registry
 from app.utils.field_utils import get_field_value
 from app.utils.email_domains import is_free_mailbox
 
@@ -108,7 +113,28 @@ def _snapshot_source(db) -> str:
 
 def lookup_registry(identifier: str, id_type: str) -> Dict[str, Any]:
     """
-    Look up a CIN in the loaded local company-master SQLite database (never network).
+    Look up a CIN: the local company-master SQLite database first, then (only when
+    DATA_GOV_IN_API_KEY is set and DEMO_MODE is off) one live data.gov.in lookup by CIN.
+
+    If the live lookup is unavailable (timeout, blocked, bad payload) the local result is
+    returned unchanged, so an outage is never reported as "company not found".
+    """
+    local = _lookup_local(identifier, id_type)
+    if (id_type != "CIN" or local["lookup_status"] == "found"
+            or os.getenv("DEMO_MODE") == "1" or not ogd_registry.is_enabled()):
+        return local
+    status, record = ogd_registry.fetch_company_by_cin(identifier)
+    if status == ogd_registry.FOUND and record:
+        return {"lookup_status": "found", "cin": record["cin"], "company_name": record["company_name"],
+                "company_status": record["company_status"],
+                "date_of_registration": record["date_of_registration"], "registry_source": "ogd"}
+    if status == ogd_registry.NOT_FOUND:
+        return {"lookup_status": "not_found", "cin": identifier.upper(), "registry_source": "ogd"}
+    return local
+
+
+def _lookup_local(identifier: str, id_type: str) -> Dict[str, Any]:
+    """Look up a CIN in the loaded local company-master SQLite database (never network).
 
     A SYNTHETIC snapshot is used only when DEMO_MODE=1; otherwise the lookup
     behaves exactly as if no registry database were loaded.
@@ -195,6 +221,20 @@ def _normalized_company_name(value: Optional[str]) -> str:
     return re.sub(r"[^a-z0-9]", "", (value or "").lower())
 
 
+_LEGAL_SUFFIXES = {"pvt": "private", "ltd": "limited", "lmtd": "limited"}
+
+
+def _registry_name_key(value: Optional[str]) -> str:
+    """Name key for comparing a letter's company name with a registry name.
+
+    Registry names spell out legal suffixes ("PRIVATE LIMITED") while letters abbreviate
+    them ("Pvt. Ltd."); expanding them first stops a genuine match scoring as a different
+    company. Only the legal-form words are expanded, so different names still differ.
+    """
+    words = re.sub(r"[^a-z0-9& ]", " ", (value or "").lower().replace("&", " and ")).split()
+    return "".join(_LEGAL_SUFFIXES.get(w, w) for w in words)
+
+
 def _parse_registry_date(raw_date: Optional[str]) -> Optional[date]:
     for fmt in ("%d/%m/%Y", "%Y-%m-%d", "%d-%m-%Y", "%d-%b-%Y"):
         try:
@@ -246,7 +286,15 @@ def _gstin_cin_state_note(gstin: Optional[str], cin: Optional[str]) -> Optional[
             f"({cin[6:8]}): these locations {relation}; informational only, not a verification failure.")
 
 
-INACTIVE_STATUSES = {"struck off", "dissolved", "under liquidation"}
+INACTIVE_STATUSES = {"struck off", "dissolved", "under liquidation"}  # exact values; see _is_inactive_status
+# Registry status wording varies ("Strike Off", "Under Process of Striking Off", "Liquidated",
+# "Amalgamated"), so match word stems. "Dormant" is deliberately not inactive.
+_INACTIVE_STEMS = ("strik", "struck", "dissol", "liquidat", "amalgamat")
+
+
+def _is_inactive_status(status: str) -> bool:
+    lowered = (status or "").strip().lower()
+    return lowered in INACTIVE_STATUSES or any(stem in lowered for stem in _INACTIVE_STEMS)
 
 
 def _registry_result(record: Dict[str, Any], claimed_company: Optional[str], raw_text: str,
@@ -272,9 +320,10 @@ def _registry_result(record: Dict[str, Any], claimed_company: Optional[str], raw
     parsed = _parse_registry_date(record.get("date_of_registration"))
     incorporated = parsed.isoformat() if parsed else (record.get("date_of_registration") or "unknown")
     synthetic = record.get("registry_source") == "synthetic"
+    source_key = "synthetic" if synthetic else ("ogd" if record.get("registry_source") == "ogd" else "mca_csv")
     metadata = dict(registry_checked=True,
                     verification_source="company_registry" if synthetic else "mca_registry",
-                    registry_source="synthetic" if synthetic else "mca_csv",
+                    registry_source=source_key,
                     verified_identifier_type="CIN", registry_company_name=registered,
                     incorporation_date=record.get("date_of_registration"))
     point_notes = [n for n in prior_notes if "+10" in n]
@@ -284,15 +333,15 @@ def _registry_result(record: Dict[str, Any], claimed_company: Optional[str], raw
         return " ".join([lead] + [n.rstrip(".") + "." for n in extra if n])
 
     name_matches = True
-    if claimed_company and _normalized_company_name(registered) != _normalized_company_name(claimed_company):
+    if claimed_company and _registry_name_key(registered) != _registry_name_key(claimed_company):
         from rapidfuzz.fuzz import ratio
-        name_matches = ratio(_normalized_company_name(registered), _normalized_company_name(claimed_company)) >= 90
+        name_matches = ratio(_registry_name_key(registered), _registry_name_key(claimed_company)) >= 90
     if not name_matches:
         lead = (f"CIN belongs to a different company in company registry records: "
                 f"{registered}; status {status}; incorporated {incorporated}.")
         return _result("fail", True, details(lead, info_notes), identifiers, 0.0,
                        consistency_risk_points=consistency_points, consistency_notes=point_notes, **metadata)
-    if status.lower() in INACTIVE_STATUSES:
+    if _is_inactive_status(status):
         lead = f"Company is {status} in company registry records: {registered}; incorporated {incorporated}."
         return _result("fail", True, details(lead, info_notes), identifiers, 0.0,
                        consistency_risk_points=consistency_points, consistency_notes=point_notes, **metadata)
@@ -370,7 +419,7 @@ def verify_gstin(facts: Dict[str, Any]) -> Dict[str, Any]:
                                     consistency_points, consistency_notes)
         if record["lookup_status"] == "db_missing":
             registry_note = "MCA master database is missing; registry was not checked"
-        elif record.get("registry_source") == "synthetic":
+        elif record.get("registry_source") in ("synthetic", "ogd"):
             registry_note = f"CIN '{cin}' was not found in the company registry records"
         else:
             registry_note = f"CIN '{cin}' was not found in the loaded MCA master data"

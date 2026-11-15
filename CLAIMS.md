@@ -50,9 +50,24 @@ been verified in this workspace.
   data.gov.in. Every such response carries the non-displayed API field
   `registry_source: "synthetic"`, so a result can always be traced to the synthetic
   snapshot. Presenters should state in the demo that the companies are fictional.
-- The official MCA company-master snapshot is **future scope**: its bulk download
-  requires eKYC, which this project has not completed. No official MCA data is
-  included in this repository or used by any deployment described here.
+- No company-master data is included in this repository. Two optional sources can
+  answer a CIN lookup, and each response carries the non-displayed field
+  `registry_source`: `mca_csv` (a CSV the operator loaded locally with
+  `scripts/load_mca_master.py`) or `ogd` (one lookup by CIN against the
+  data.gov.in "RoC-wise Company Master Data" resource, made only when the operator
+  sets `DATA_GOV_IN_API_KEY` and DEMO_MODE is off). That resource is a periodically
+  refreshed snapshot published under the Government Open Data License - India
+  (attribution: Ministry of Corporate Affairs, data.gov.in), not a live registry;
+  a company may have changed status since. If the API times out, is blocked or
+  returns an unexpected payload the lookup reports "registry not checked", never
+  "not found". A CIN absent from the snapshot is `insufficient_information`, not
+  evidence against the company. Only CIN, name, status and registration date are
+  read; addresses, capital and industry fields are discarded. The registry
+  industry-classification column is not used because a sample row for a large
+  IT-services company carried an unrelated manufacturing classification.
+- Company-name comparison expands legal suffixes (`Pvt.`/`Ltd.` to `Private`/
+  `Limited`) before matching, and registry statuses meaning not operating
+  (strike off, dissolved, liquidation, amalgamated) fail the check; `Dormant` does not.
 
 ## Payment detection and scoring
 
