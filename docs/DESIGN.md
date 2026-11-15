@@ -269,7 +269,7 @@ Desktop:
 │ Email domain                              │
 │ Company registration                      │
 │ Payment request                           │
-│ Reports from other students               │
+│ Reports from other job seekers               │
 │ Verified signals / unavailable checks     │
 │ Privacy and limits → privacy design       │
 └───────────────────────────────────────────┘
@@ -284,7 +284,7 @@ Mobile:
 │ Email domain                 │
 │ Company registration         │
 │ Payment request              │
-│ Reports from other students  │
+│ Reports from other job seekers  │
 │ Verified and unavailable     │
 │ Privacy and limits           │
 │ Read privacy design          │

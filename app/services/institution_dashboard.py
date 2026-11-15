@@ -87,7 +87,7 @@ def classify_scam(checks: list[dict], text: str) -> str:
             return "fake_government_scheme"
 
     domain_details = (domain.get("details") or "").casefold()
-    if domain.get("status") == "fail" and "free mailbox" in domain_details:
+    if domain.get("status") == "fail" and ("free mailbox" in domain_details or "disposable" in domain_details):
         return "free_mailbox_impersonation"
     if domain.get("status") == "fail" and any(word in domain_details for word in ("lookalike", "look-alike", "imitates", "brand")):
         return "lookalike_domain"

@@ -114,7 +114,7 @@ def test_corvane_sample_matches_seeded_sender(seeded, api_client):
     body = api_client.post("/analyze", data={"text": text}).json()
     community = next(c for c in body["checks"] if c["check_name"] == "community_reports")
     assert community["status"] == "fail"
-    assert "reported by 3+ students" in community["details"]
+    assert "reported by 3+ people" in community["details"]
     assert (body["overall_risk_score"], body["risk_band"]) == (100.0, "high risk")
     dashboard = api_client.get("/trends/dashboard").json()
     # The same sender, in the same masked form, is on the scam-trends page and in the report flow.

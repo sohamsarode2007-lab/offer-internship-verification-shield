@@ -21,7 +21,7 @@ import logging
 from typing import Dict, Any, List, Optional, Tuple
 from rapidfuzz import fuzz
 
-from app.utils.email_domains import is_free_mailbox, is_upi_handle
+from app.utils.email_domains import is_disposable_mailbox, is_free_mailbox, is_upi_handle
 
 logger = logging.getLogger(__name__)
 
@@ -98,7 +98,7 @@ def select_sender_email(text: str) -> Tuple[Optional[str], Optional[str]]:
     Rules:
       1. Ignore addresses on lines starting with To:/Cc:/Bcc:/Dear (the candidate).
       2. Ignore UPI handles (name@ybl, name@paytm, ...).
-      3. If any remaining address is a free mailbox, choose it (that is the risk signal);
+      3. If any remaining address is a free or disposable mailbox, choose it (that is the risk signal);
          otherwise choose the first remaining address.
       4. If there is none, fall back to the first www./https:// domain (no email).
     Returns (email, domain).
@@ -115,7 +115,7 @@ def select_sender_email(text: str) -> Tuple[Optional[str], Optional[str]]:
 
     if candidates:
         for email, domain in candidates:
-            if is_free_mailbox(domain):
+            if is_free_mailbox(domain) or is_disposable_mailbox(domain):
                 return email, domain
         return candidates[0]
 

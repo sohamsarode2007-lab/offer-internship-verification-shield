@@ -7,7 +7,7 @@ machine-learning model, no training data and no learned weights.
 Risk points (added):
   +65  Upfront payment demand            (HARD OVERRIDE: final score >= 61 -> high risk)
   +20  Urgency language within 250 chars of the payment demand
-  +30  Contact domain failed (free mailbox, no MX/NXDOMAIN, lookalike, < 30 days old)
+  +30  Contact domain failed (free mailbox, disposable mailbox, no MX/NXDOMAIN, lookalike, < 30 days old)
   +25  Registration number failed structural checks
   +10  Registration number structurally valid but NOT verified against any registry
   +10  GSTIN PAN name-initial character conflicts with the claimed company name
@@ -32,7 +32,7 @@ Community indicators are risk evidence only; they never satisfy the external
 verification guard. Details use threshold buckets and never expose exact counts.
 Community evidence alone cannot produce a high-risk result: if it is the only
 factor pushing a score above 60 (no payment demand or failed domain, registration,
-or sender check), cap at 60 and add: "Reported by other students; not enough
+or sender check), cap at 60 and add: "Reported by other job seekers; not enough
 independent evidence to call this high risk."
 
 Low-risk guard: "likely legitimate" requires ALL of:
@@ -99,6 +99,8 @@ def _domain_reason(details: str) -> str:
     d = details.casefold()
     if "free mailbox" in d:
         return "The contact email is a free personal mailbox (like Gmail), not a company address"
+    if "disposable" in d:
+        return "The contact email comes from a temporary throwaway mailbox service"
     if "lookalike" in d:
         return "The email domain imitates another company's name"
     if "registered only" in d or "newly registered" in d:
@@ -120,14 +122,14 @@ def _registration_fail_reason(details: str) -> str:
 
 def _community_reason(details: str) -> str:
     parts = []
-    if "10+ students" in details:
-        parts.append("Reported by 10+ students")
-    elif "3+ students" in details:
-        parts.append("Reported by 3+ students")
+    if "10+ people" in details:
+        parts.append("Reported by 10+ people")
+    elif "3+ people" in details:
+        parts.append("Reported by 3+ people")
     if "similar to a reported scam template" in details:
-        parts.append("the wording matches a scam letter other students reported" if parts
-                     else "The wording matches a scam letter other students reported")
-    return "; ".join(parts) or "Other students reported details from this letter"
+        parts.append("the wording matches a scam letter other job seekers reported" if parts
+                     else "The wording matches a scam letter other job seekers reported")
+    return "; ".join(parts) or "Other job seekers reported details from this letter"
 
 
 def calculate_risk_score(
@@ -168,7 +170,7 @@ def calculate_risk_score(
     has_external_signal = registry_verified or sender_authenticated or synthetic_registry
 
     factors: List[str] = []
-    # Plain-language 'Why' rows for students: (text, score impact). No engine wording.
+    # Plain-language Why rows for people: (text, score impact). No engine wording.
     reasons: List[Dict[str, Optional[str]]] = []
 
     def reason(text: str, points: float = 0.0):
@@ -290,9 +292,9 @@ def calculate_risk_score(
         and auth.get("status") != "fail"
     )
     if community_alone_crossed_high:
-        reason("Reports from other students alone aren't enough to call this high risk", min(score, 60.0) - score)
+        reason("Reports from other job seekers alone aren't enough to call this high risk", min(score, 60.0) - score)
         score = min(score, 60.0)
-        factors.append("Reported by other students; not enough independent evidence to call this high risk.")
+        factors.append("Reported by other job seekers; not enough independent evidence to call this high risk.")
 
     # Guard: no structural-only or demo-less checks can establish legitimacy.
     if score <= 30:

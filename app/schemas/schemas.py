@@ -38,7 +38,7 @@ class OfferSchema(BaseModel):
     created_at: Optional[datetime.datetime] = None
 
 class Reason(BaseModel):
-    """One plain-language 'Why' row: text for students and its score impact ('+65', '−10' or None)."""
+    """One plain-language 'Why' row: text for people and its score impact ('+65', '−10' or None)."""
     text: str
     impact: Optional[str] = None
 

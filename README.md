@@ -143,7 +143,7 @@ Category rules use the existing check results and follow this priority:
 - `registration_fee`: a registration, application, processing, joining, or
   verification fee demand not classified above.
 - `free_mailbox_impersonation`: a failed domain check says the address uses a
-  free mailbox.
+  free mailbox or a disposable (temporary) mailbox service.
 - `lookalike_domain`: a failed domain check identifies a lookalike or brand.
 - `sender_spoofing`: sender authentication fails or adds risk points.
 - `no_red_flags`: no check failed and no check added positive risk points.

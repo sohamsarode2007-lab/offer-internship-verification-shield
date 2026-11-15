@@ -117,12 +117,12 @@ def test_indicator_thresholds_are_three_then_ten_reports(db):
     store_report(db, item)
     match = cr.lookup_community(db, [item], cr.minhash_signature("An incoming letter that does not resemble template."))
     assert match["risk_points"] == 25
-    assert "reported by 3+ students" in match["details"] and "3 reports" not in match["details"]
+    assert "reported by 3+ people" in match["details"] and "3 reports" not in match["details"]
     for _ in range(7):
         store_report(db, item)
     match = cr.lookup_community(db, [item], cr.minhash_signature("An incoming letter that does not resemble template."))
     assert match["risk_points"] == 40
-    assert "reported by 10+ students" in match["details"] and "10 reports" not in match["details"]
+    assert "reported by 10+ people" in match["details"] and "10 reports" not in match["details"]
 
 
 def test_correlated_indicator_and_template_evidence_caps_at_forty(db):
@@ -149,7 +149,7 @@ def test_community_only_high_score_is_capped_to_manual_review():
     ])
     assert result["overall_risk_score"] == 60
     assert result["risk_band"] == "insufficient evidence, verify manually"
-    assert "Reported by other students; not enough independent evidence to call this high risk." in result["risk_factors"]
+    assert "Reported by other job seekers; not enough independent evidence to call this high risk." in result["risk_factors"]
 
 
 def test_payment_demand_still_allows_high_risk_with_community_evidence():
@@ -171,7 +171,7 @@ def test_community_match_does_not_satisfy_external_verification_guard():
         {"check_name": "gstin_verification", "status": "pass", "identifier_present": True},
         {"check_name": "payment_detection", "status": "pass"},
         {"check_name": "community_reports", "status": "fail", "risk_points": 25,
-         "details": "This upi appears in reports from 3+ students."},
+         "details": "This upi appears in reports from 3+ people."},
     ])
     assert result["risk_band"] == "insufficient evidence, verify manually"
     assert any("no externally verified registry match or authenticated sender" in x

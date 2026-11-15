@@ -69,6 +69,17 @@ been verified in this workspace.
   `Limited`) before matching, and registry statuses meaning not operating
   (strike off, dissolved, liquidation, amalgamated) fail the check; `Dormant` does not.
 
+## Disposable mailbox detection
+
+- A contact or sender address on a known throwaway-mail service (for example
+  mailinator.com or yopmail.com, or a subdomain of one) fails the domain check
+  before any DNS lookup. It reuses the existing +30 "contact domain failed" weight;
+  no new weight is added. The list in `app/utils/email_domains.py` is short and
+  curated, not exhaustive: a throwaway service missing from it is not detected, and
+  absence from the list says nothing about a domain. Free personal mailboxes such
+  as Gmail keep their separate, existing finding. The rule is offline and does not
+  verify who controls the address.
+
 ## Payment detection and scoring
 
 - Payment detection uses phrase rules and UPI payment context. A nearby UPI VPA

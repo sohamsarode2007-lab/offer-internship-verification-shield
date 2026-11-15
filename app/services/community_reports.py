@@ -324,10 +324,10 @@ def lookup_community(db: Session, indicators: list[dict], signature: list[int]):
         count = len(reports)
         if count >= 10:
             indicator_bucket_points = max(indicator_bucket_points, 40)
-            notes.append(f"This {item['indicator_type']} was reported by 10+ students.")
+            notes.append(f"This {item['indicator_type']} was reported by 10+ people.")
         elif count >= 3:
             indicator_bucket_points = max(indicator_bucket_points, 25)
-            notes.append(f"This {item['indicator_type']} was reported by 3+ students.")
+            notes.append(f"This {item['indicator_type']} was reported by 3+ people.")
         for report_id in reports:
             db.query(CommunityReport).filter_by(id=report_id).update({"last_seen_at": now})
             db.query(CommunityIndicator).filter_by(report_id=report_id, digest=item["digest"]).update({"last_seen_at": now})

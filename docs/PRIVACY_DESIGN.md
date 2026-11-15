@@ -135,7 +135,7 @@ store only a verifier, not the plaintext code.
   bucket plus any template match, capped at +40 total; matching more identifiers
   never stacks. Community evidence alone cannot produce high risk: if community
   evidence alone crosses 60, cap the result at manual review with the factor
-  “Reported by other students; not enough independent evidence to call this high
+  “Reported by other job seekers; not enough independent evidence to call this high
   risk.” Neither community signal satisfies the external-verification low-risk
   guard. These limits address the [poisoning threat](#poisoning-a-legitimate-companys-identifiers).
 - Details use buckets only: “reported by 3+ people” or “reported by 10+

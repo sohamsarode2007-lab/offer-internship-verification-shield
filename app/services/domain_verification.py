@@ -36,7 +36,7 @@ import dns.resolver
 from rapidfuzz.distance import Levenshtein
 
 from app.utils.field_utils import get_field_value
-from app.utils.email_domains import is_free_mailbox
+from app.utils.email_domains import is_disposable_mailbox, is_free_mailbox
 
 logger = logging.getLogger(__name__)
 
@@ -258,6 +258,13 @@ def verify_domain(input_data: Union[Dict[str, Any], str, None]) -> Dict[str, Any
                        f"Contact address uses the free mailbox provider '{host}', not a company domain.",
                        [{"check_name": "free_mailbox", "status": "fail",
                          "explanation": f"'{host}' is a free/public mailbox provider."}])
+
+    if is_disposable_mailbox(host):
+        return _result("fail", host,
+                       f"Contact address uses the disposable (temporary) mailbox service '{host}'; "
+                       "companies do not send offers from these.",
+                       [{"check_name": "disposable_mailbox", "status": "fail",
+                         "explanation": f"'{host}' is a throwaway mailbox service."}])
 
     lookalike = find_lookalike(host)
     if lookalike:

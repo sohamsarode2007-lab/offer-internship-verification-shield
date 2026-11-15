@@ -29,8 +29,8 @@ Suggested walkthrough (use the "Try a sample" buttons, or upload the matching PD
    Then click **Report this scam** to show the consented report flow (consent version 3 tells
    the student that the public scam-trends page shows the details in masked form).
 5. **Check → scam-trends page**: click **Corvane internship**. It asks for a security
-   deposit via UPI to `careerdesk.fees@ybl`, a sender other students already reported: 100,
-   High risk, and "Why" shows **Reported by 3+ students**.
+   deposit via UPI to `careerdesk.fees@ybl`, a sender other job seekers already reported: 100,
+   High risk, and "Why" shows **Reported by 3+ people**.
 6. Open **Scam trends**. The same sender, `careerd•••@ybl`, is in **Reported
    senders** (6 reports; 7 if you reported it in step 5). The table lists only senders with
    3 or more reports; the simulated sender with 2 reports is not shown, and one sender is marked
@@ -55,7 +55,7 @@ registration number, phone number, account number and domain in them is fictiona
 | `registry_name_match_quillmere.txt` / `.pdf` | CIN matches an active company with the same name in the synthetic registry |
 | `registry_struck_off_tarnwick.txt` / `.pdf` | CIN belongs to a company whose registry status is Struck Off |
 | `registry_cin_mismatch_halvorn.txt` / `.pdf` | Offer claims one company but quotes the CIN of a different company |
-| `scam_shared_upi_corvane.txt` / `.pdf` | Deposit demand to a UPI ID other (simulated) students already reported |
+| `scam_shared_upi_corvane.txt` / `.pdf` | Deposit demand to a UPI ID other (simulated) job seekers already reported |
 | `simulated_senders.csv` | Simulated reports for the scam-trends page |
 | `synthetic_mca_master.csv` | Synthetic company master: 13 fictional companies for the registry demo |
 
@@ -127,7 +127,7 @@ Notes:
   a visible high-risk bar.
 - `scam_shared_upi_corvane.txt` / `.pdf` shares the seeded UPI sender. Hand-derived band:
   payment +65, contact domain NXDOMAIN +30, no registration number +20, UPI reported by 3–9
-  students +25 = 140, capped at 100: High risk.
+  job seekers +25 = 140, capped at 100: High risk.
 - The six PDFs are generated from the `.txt` files by `scripts/make_demo_pdfs.py` (reportlab, A4)
   as offer-letter layouts (company header, identifiers, date, subject, body, signature block) with
   a real text layer, so the demo exercises the PDF upload path without OCR. Tests check each PDF

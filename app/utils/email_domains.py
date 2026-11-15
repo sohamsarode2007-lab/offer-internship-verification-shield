@@ -16,6 +16,17 @@ FREE_EMAIL_DOMAINS = frozenset({
     "zohomail.com", "zohomail.in", "tutanota.com", "tuta.io",
 })
 
+# Throwaway/temporary mailbox services (public service names; a curated list, not exhaustive).
+# Companies do not send offers from these.
+DISPOSABLE_EMAIL_DOMAINS = frozenset({
+    "mailinator.com", "guerrillamail.com", "guerrillamail.net", "guerrillamail.org", "sharklasers.com",
+    "10minutemail.com", "10minutemail.net", "temp-mail.org", "temp-mail.io", "tempmail.com",
+    "tempmail.net", "tempail.com", "tempr.email", "throwawaymail.com", "yopmail.com", "yopmail.net",
+    "getnada.com", "maildrop.cc", "trashmail.com", "dispostable.com", "fakeinbox.com", "mohmal.com",
+    "emailondeck.com", "mailnesia.com", "mytemp.email", "burnermail.io", "moakt.com", "mintemail.com",
+    "discard.email", "email-fake.com", "inboxkitten.com", "anonbox.net", "spamgourmet.com",
+})
+
 # UPI virtual payment address (VPA) handles: the part after '@' in "name@ybl".
 UPI_HANDLES = frozenset({
     "ybl", "ibl", "axl", "apl", "yapl", "rapl", "abfspay",
@@ -31,6 +42,12 @@ UPI_HANDLES = frozenset({
 
 def is_free_mailbox(domain: str) -> bool:
     return bool(domain) and domain.strip().lower() in FREE_EMAIL_DOMAINS
+
+
+def is_disposable_mailbox(domain: str) -> bool:
+    """True for a listed throwaway-mail domain or any subdomain of one (not look-alike suffixes)."""
+    host = (domain or "").strip().lower().rstrip(".")
+    return bool(host) and any(host == d or host.endswith("." + d) for d in DISPOSABLE_EMAIL_DOMAINS)
 
 
 def is_upi_handle(domain_part: str) -> bool:
