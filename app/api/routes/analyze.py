@@ -16,6 +16,7 @@ from app.services import (
     domain_verification,
     gstin_verification,
     payment_detection,
+    scam_text,
     email_auth,
     risk_scoring,
     community_reports,
@@ -154,10 +155,11 @@ def analyze_offer(
         auth_check = email_auth.not_applicable()
     gstin_check = gstin_verification.verify_gstin(facts)
     payment_check = payment_detection.detect_payment_demand(facts)
+    scam_text_check = scam_text.detect_scam_text(facts)
     report_indicators = community_reports.extract_indicators(raw_text, email_result, payment_check)
     signature = community_reports.minhash_signature(raw_text) if os.getenv("INDICATOR_PEPPER") else []
     community_check = community_reports.lookup_community(db, report_indicators, signature)
-    check_dicts = [domain_check, gstin_check, payment_check, auth_check, community_check]
+    check_dicts = [domain_check, gstin_check, payment_check, auth_check, scam_text_check, community_check]
 
     # Step 6: scoring
     scoring_res = risk_scoring.calculate_risk_score(check_dicts, facts=facts)

@@ -236,3 +236,16 @@ been verified in this workspace.
 ## Database and CI
 
 - **Postgres was verified in CI** by successful run `43403402979` on 2026-11-13 UTC (commit `51c6c2357ddf93566249e2287913d36a9b674263`). The job initialized a `postgres:15` service; Alembic logged `PostgresqlImpl`, applied revisions 001 through 004, and `alembic check` reported `No new upgrade operations detected.` The test step used the configured PostgreSQL `DATABASE_URL` and completed with `143 passed` and no pytest warnings.
+
+## Scam-chat wording
+
+- `app/services/scam_text.py` matches fixed phrase patterns typical of WhatsApp/Telegram job scams
+  (paid tasks for liking or rating, pay-to-withdraw, recruiter reachable only by chat, no-interview
+  and easy-money claims). It is wording only: it does not know whether a person or group is a scammer.
+- Weights: strong tier +30 and it blocks "likely legitimate"; moderate tier +15; both tiers +40 in total.
+  A negation earlier in the sentence ("we never ask you to join Telegram") cancels a match.
+- No match is reported as "not applicable", never as a pass: absence of these phrases does not show
+  an offer is genuine. The result names the rule families and never repeats the offer text.
+- Patterns were written from publicly described scam wording, not trained on data, and will miss
+  paraphrases and other languages. Genuine recruiters occasionally use WhatsApp, which is why that
+  rule is the moderate tier.

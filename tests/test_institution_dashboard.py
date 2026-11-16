@@ -27,7 +27,8 @@ def test_scam_categories_follow_rule_priority():
     assert classify() == "no_red_flags"
     assert classify(domain={"status": "fail", "details": "No MX records found."}) == "other"
     assert set(("registration_fee", "security_deposit", "training_or_kit_fee", "fake_government_scheme",
-                "free_mailbox_impersonation", "lookalike_domain", "sender_spoofing", "no_red_flags", "other")) == set(CATEGORIES)
+                "task_or_chat_scam", "free_mailbox_impersonation", "lookalike_domain", "sender_spoofing", "no_red_flags",
+                "other")) == set(CATEGORIES)
 
 
 def _test_db():

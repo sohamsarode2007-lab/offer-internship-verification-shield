@@ -18,7 +18,7 @@ INSTITUTION_NAME = "Public"
 BANDS = ("likely legitimate", "insufficient evidence, verify manually", "high risk")
 CATEGORIES = (
     "registration_fee", "security_deposit", "training_or_kit_fee", "fake_government_scheme",
-    "free_mailbox_impersonation", "lookalike_domain", "sender_spoofing", "no_red_flags", "other",
+    "task_or_chat_scam", "free_mailbox_impersonation", "lookalike_domain", "sender_spoofing", "no_red_flags", "other",
 )
 
 
@@ -85,6 +85,9 @@ def classify_scam(checks: list[dict], text: str) -> str:
             return "registration_fee"
         if re.search(r"\b(?:government|govt|ministry|department)\b.{0,50}\bscheme\b|\bscheme\b.{0,50}\b(?:government|govt|ministry)\b", content):
             return "fake_government_scheme"
+
+    if _check(checks, "scam_text_patterns").get("status") == "fail":
+        return "task_or_chat_scam"
 
     domain_details = (domain.get("details") or "").casefold()
     if domain.get("status") == "fail" and ("free mailbox" in domain_details or "disposable" in domain_details):

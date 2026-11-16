@@ -16,6 +16,11 @@ Risk points (added):
   +25  Corporate From with free-mailbox or unrelated Reply-To
   +25  Protected-brand display name from a non-official domain
   +15  Body-claimed domain differs from the .eml From domain
+  +30  Scam-chat wording, strong tier (paid tasks for likes/reviews, pay-to-withdraw); also
+       blocks 'likely legitimate' (raised to 31)
+  +15  Scam-chat wording, moderate tier only (recruiter reachable only via WhatsApp/Telegram,
+       no-interview or easy-money claims)
+  +10  extra when both tiers match (strong + moderate = +40 in total)
   +25  Community indicator reported by 3-9 reports; +40 at 10+ reports
   +25  Community template MinHash similarity >= 0.8
   Community evidence is correlated: highest indicator bucket + template points,
@@ -64,6 +69,9 @@ W_URGENCY = 20.0
 W_DOMAIN_FAIL = 30.0
 W_REG_FAIL = 25.0
 W_REG_UNVERIFIED = 10.0
+W_SCAM_STRONG = 30.0
+W_SCAM_MODERATE = 15.0
+W_SCAM_BOTH_EXTRA = 10.0
 W_REG_MISSING = 20.0
 W_NO_IDENTIFIERS = 20.0
 G_DOMAIN_PASS = 10.0
@@ -237,6 +245,17 @@ def calculate_risk_score(
         other_points += auth_points
         factors.append(f"Sender authentication risk (+{auth_points:g}): {auth.get('details', '')}")
         reason("The email's sender checks failed or point to a different sender", auth_points)
+    scam_text = by_name.get("scam_text_patterns", {})
+    scam_strong = scam_text.get("status") == "fail" and scam_text.get("tier") == "strong"
+    if scam_text.get("status") == "fail":
+        families = scam_text.get("families") or []
+        has_moderate = any(f in ("chat_only", "easy_money") for f in families)
+        scam_points = W_SCAM_STRONG if scam_strong else W_SCAM_MODERATE
+        if scam_strong and has_moderate:
+            scam_points += W_SCAM_BOTH_EXTRA
+        other_points += scam_points
+        factors.append(f"Scam-chat wording found (+{scam_points:g}): {scam_text.get('details', '')}")
+        reason("The wording matches common WhatsApp/Telegram job-scam patterns", scam_points)
     community = by_name.get("community_reports", {})
     community_points = min(40.0, max(0.0, float(community.get("risk_points", community.get("score", 0)) or 0)))
     if community_points:
@@ -307,12 +326,17 @@ def calculate_risk_score(
             missing.append("no registration number was given")
         elif reg_status == "fail":
             missing.append("the registration number failed checks")
+        if scam_strong:
+            missing.append("the text matches a known task-scam pattern")
         if not has_external_signal:
             missing.append("no externally verified registry match or authenticated sender was found")
         if missing:
             registration_gap = (not reg_present or reg_status == "fail" or not has_external_signal)
+            scam_gap = scam_strong and not registration_gap
             reason("We couldn't verify this company's registration, so we can't call it legitimate yet."
                    if registration_gap else
+                   "The wording matches a known task-scam pattern, so we can't call it legitimate."
+                   if scam_gap else
                    "We couldn't verify the company's email domain, so we can't call it legitimate yet.",
                    GUARD_SCORE - score)
             score = GUARD_SCORE

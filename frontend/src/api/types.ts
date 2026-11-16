@@ -75,7 +75,7 @@ export interface DisputeResponse { status: 'under_review'; message: string }
 
 export type RiskBand = 'likely legitimate' | 'insufficient evidence, verify manually' | 'high risk'
 export type ScamCategory = 'registration_fee' | 'security_deposit' | 'training_or_kit_fee' |
-  'fake_government_scheme' | 'free_mailbox_impersonation' | 'lookalike_domain' |
+  'fake_government_scheme' | 'task_or_chat_scam' | 'free_mailbox_impersonation' | 'lookalike_domain' |
   'sender_spoofing' | 'no_red_flags' | 'other'
 export type DashboardCount = number | '<5'
 export interface WeekBandCount { week: string; band: RiskBand; count: DashboardCount }

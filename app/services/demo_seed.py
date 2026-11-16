@@ -134,12 +134,13 @@ DELIBERATE_SMALL = {(0, BAND_LEGIT): 3, (1, BAND_HIGH): 4}
 def _weekly_check_plan(week_index: int) -> dict[str, dict[str, int]]:
     """Checks for one week (0 = oldest of 12) as {band: {category: count}}."""
     wobble = (0, 2, -1, 1, 3, -2, 0, 2, 1, -1, 2, 0)[week_index]
-    legit = DELIBERATE_SMALL.get((week_index, BAND_LEGIT), 12 + wobble)
-    manual = 18 + (wobble // 2)
+    legit = DELIBERATE_SMALL.get((week_index, BAND_LEGIT), 8 + wobble)
+    manual = 23 + (wobble // 2)
     high = DELIBERATE_SMALL.get((week_index, BAND_HIGH), round(6 + week_index * 0.85))   # rises 6 -> 15
     plan = {BAND_LEGIT: {"no_red_flags": legit}}
     spoof = week_index % 3 == 0 and 2 or 1
-    plan[BAND_MANUAL] = {"sender_spoofing": spoof, "lookalike_domain": 5, "free_mailbox_impersonation": 5}
+    plan[BAND_MANUAL] = {"sender_spoofing": spoof, "lookalike_domain": 5, "free_mailbox_impersonation": 5,
+                       "task_or_chat_scam": 5}
     plan[BAND_MANUAL]["other"] = manual - sum(plan[BAND_MANUAL].values())
     reg = max(1, round(high * 0.40))
     dep = max(1, round(high * 0.35))

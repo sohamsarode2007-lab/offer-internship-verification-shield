@@ -25,6 +25,7 @@ Status: **open** = not reviewed yet.
 | 15 | CI lint gate is pyflakes-only; audit covers `requirements.txt` only | open |
 | 16 | Deployment (Render/Vercel) work deliberately left alone | open |
 | 17 | Advisory scraper is semi-automated: a person approves every entry | open |
+| 18 | Scam-chat wording rules: weights, tiers and the new trend category | open |
 
 ## 1. Udyam registry dataset skipped
 - **Decided:** do not use the data.gov.in "List of MSME Registered Units under UDYAM" dataset.
@@ -137,3 +138,17 @@ Status: **open** = not reviewed yet.
   environment** (network blocked), so it is tested only with mocked pages.
 - **Not built (on purpose):** crawling news sites or government portals, and any unattended scheduled run that
   would publish entries without review. Say if you want a scheduled "re-check and report changes" job instead.
+
+## 18. Scam-chat wording rules
+- **Decided:** new check `scam_text_patterns`. Strong tier (paid tasks, pay-to-withdraw) +30 and blocks the
+  "likely legitimate" band; moderate tier (WhatsApp/Telegram-only recruiter, no-interview or easy-money wording)
+  +15; both +40. It never forces "high risk" by itself; a letter with no identifiers and strong wording reaches
+  70 through the existing "no registration number / no domain" points.
+- **Why these weights:** the strong patterns describe the scam arrangement itself, while the moderate ones also
+  appear in some genuine recruiter messages, so they are weaker.
+- **Changed on purpose:** new trend category `task_or_chat_scam` (so the pinned category-set test changed), and the
+  demo seed's synthetic weekly counts were rebalanced so the demo chart still shows most category cells.
+  Real data is unaffected.
+- **Risks:** English-only; phrase lists come from public descriptions of these scams, not from a dataset, so they
+  will miss paraphrases; a genuine employer that recruits only over WhatsApp would get +15.
+- **Reverse:** change `W_SCAM_*` in `risk_scoring.py`, or move a family between tiers in `scam_text.py`.

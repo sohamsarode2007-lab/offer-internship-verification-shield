@@ -146,6 +146,8 @@ Category rules use the existing check results and follow this priority:
   ministry, or department scheme wording.
 - `registration_fee`: a registration, application, processing, joining, or
   verification fee demand not classified above.
+- `task_or_chat_scam`: scam-chat wording (paid tasks, pay-to-withdraw, WhatsApp/Telegram-only
+  recruiter, no-interview claims) was found and no payment-demand rule above applied.
 - `free_mailbox_impersonation`: a failed domain check says the address uses a
   free mailbox or a disposable (temporary) mailbox service.
 - `lookalike_domain`: a failed domain check identifies a lookalike or brand.

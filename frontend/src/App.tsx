@@ -7,7 +7,7 @@ import styles from './App.module.css'
 const labelByCheck: Record<string, string> = {
   sender_authentication: 'Who sent it', domain_verification: 'Email domain',
   gstin_verification: 'Company registration', payment_detection: 'Payment request',
-  community_reports: 'Reports from other job seekers',
+  scam_text_patterns: 'Scam-chat wording', community_reports: 'Reports from other job seekers',
 }
 const statusText: Record<CheckResult['status'], string> = {
   pass: 'Passed', fail: 'Failed', insufficient_information: 'Not enough information', not_applicable: 'Not applicable',
@@ -15,7 +15,7 @@ const statusText: Record<CheckResult['status'], string> = {
 const statusGlyph: Record<CheckResult['status'], string> = { pass: '✓', fail: '✕', insufficient_information: '○', not_applicable: '—' }
 const categoryLabels: Record<ScamCategory, string> = {
   registration_fee: 'Registration fee', security_deposit: 'Security deposit', training_or_kit_fee: 'Training or kit fee',
-  fake_government_scheme: 'Fake government scheme', free_mailbox_impersonation: 'Free mailbox impersonation',
+  fake_government_scheme: 'Fake government scheme', task_or_chat_scam: 'Task or chat scam', free_mailbox_impersonation: 'Free mailbox impersonation',
   lookalike_domain: 'Lookalike domain', sender_spoofing: 'Sender spoofing', no_red_flags: 'No red flags', other: 'Other',
 }
 const bandClass = (band?: string | null) => band === 'high risk' ? styles.highRisk : band === 'likely legitimate' ? styles.likely : styles.manual
