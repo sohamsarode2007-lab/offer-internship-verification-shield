@@ -109,6 +109,15 @@ been verified in this workspace.
   no points (a payment demand already forces high risk) and never repeats the IFSC. The code list
   is short and from general knowledge of RBI bank codes, not an RBI download.
 
+## Internet Archive first-seen note
+
+- With `INFRA_AGE_LOOKUPS=1` (off by default) and only when WHOIS gave no usable domain age, the
+  domain check adds one informational sentence with the month of the earliest successful capture in
+  the Internet Archive's public CDX index. It never changes the status or the score: an archived copy
+  does not show who sent an offer, and a missing copy proves nothing. Lookup failures add nothing.
+  The endpoint was written from its public documentation and has not been exercised against the live
+  service from the build environment (network access was blocked); tests use a mocked response.
+
 ## Payment detection and scoring
 
 - Payment detection uses phrase rules and UPI payment context. A nearby UPI VPA

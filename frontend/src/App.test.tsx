@@ -122,6 +122,18 @@ describe('analysis result', () => {
     expect(screen.queryByText(/^Checked:/)).not.toBeInTheDocument()
   })
 
+  it.each(['high risk', 'insufficient evidence, verify manually'])('links to the national cyber crime portal for %s', async band => {
+    await showResult(payload({ risk_band: band, next_steps: ['Do not pay.'] }))
+    const link = screen.getByRole('link', { name: 'National Cyber Crime Reporting Portal' })
+    expect(link).toHaveAttribute('href', 'https://cybercrime.gov.in/')
+    expect(link).toHaveAttribute('rel', 'noopener noreferrer')
+  })
+
+  it('does not show the portal link for a likely legitimate result', async () => {
+    await showResult(payload({ risk_band: 'likely legitimate', next_steps: ['Confirm the sender independently.'] }))
+    expect(screen.queryByRole('link', { name: 'National Cyber Crime Reporting Portal' })).not.toBeInTheDocument()
+  })
+
   it('labels demo fixture evidence', async () => {
     await showResult(payload({ checks: [{ check_name: 'domain_verification', status: 'pass', details: '[DEMO FIXTURE — not a live DNS result] emberlakeanalytics.example.' }] }))
     expect(screen.getByText('Demo fixture, not a live check')).toBeInTheDocument()

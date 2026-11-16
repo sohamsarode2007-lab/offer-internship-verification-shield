@@ -36,7 +36,7 @@ import dns.resolver
 from rapidfuzz.distance import Levenshtein
 
 from app.utils.field_utils import get_field_value
-from app.services import brand_advisories
+from app.services import brand_advisories, web_archive
 from app.utils.email_domains import is_disposable_mailbox, is_free_mailbox
 
 logger = logging.getLogger(__name__)
@@ -303,5 +303,10 @@ def verify_domain(input_data: Union[Dict[str, Any], str, None]) -> Dict[str, Any
     details = f"Claimed contact domain '{host}' exists and accepts email (MX present)."
     if warnings:
         details += " Warnings: " + " ".join(warnings)
+    if age["status"] in ("warning", "unknown"):
+        first_seen = web_archive.first_capture_month(reg_domain)
+        if first_seen:
+            details += (f" The Internet Archive's earliest saved copy of '{reg_domain}' is from {first_seen} "
+                        "(informational only; it does not show who sent this offer).")
     details += " Note: this checks the domain written in the text, not the actual sender."
     return _result("pass", host, details, sub_checks, warnings)
