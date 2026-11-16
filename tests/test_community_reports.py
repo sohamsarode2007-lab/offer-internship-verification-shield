@@ -101,7 +101,7 @@ def test_report_token_tamper_reuse_and_expiry_are_rejected(db):
     payload["exp"] = int((cr._utcnow() - timedelta(hours=1)).timestamp())
     state = db.get(CommunityToken, payload["jti"])
     state.expires_at = cr._utcnow() - timedelta(hours=1)
-    import base64, json, hmac, hashlib
+    import base64, hmac, hashlib
     body = base64.urlsafe_b64encode(json.dumps(payload, separators=(",", ":"), sort_keys=True).encode()).decode().rstrip("=")
     sig = hmac.new(b"test-secret-pepper", ("report-token:" + body).encode(), hashlib.sha256).hexdigest()
     with pytest.raises(ValueError, match="expired"):

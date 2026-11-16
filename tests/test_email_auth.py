@@ -1,6 +1,5 @@
 from pathlib import Path
 
-import pytest
 
 from app.services import email_auth
 from app.services.fact_extraction import extract_facts

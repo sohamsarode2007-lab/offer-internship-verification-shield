@@ -8,7 +8,6 @@ import re
 import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Any
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -256,7 +255,6 @@ def accept_report(db: Session, token: str, selected: list[str], consent: bool, c
     by_id = {x["indicator_type"] + ":" + x["digest"]: x for x in payload["indicators"]}
     if not set(selected).issubset(by_id):
         raise ValueError("selected indicators were not offered by this analysis")
-    jti = payload["jti"]
     code = secrets.token_urlsafe(24)
     report_id = str(uuid.uuid4())
     signature = payload["signature"]

@@ -1,6 +1,3 @@
-import os
-import re
-import uuid
 from pathlib import Path
 
 from app.services.institution_dashboard import CATEGORIES, classify_scam
