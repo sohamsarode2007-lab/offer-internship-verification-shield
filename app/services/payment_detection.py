@@ -33,6 +33,7 @@ surrounding offer text is not echoed back.
 import re
 from typing import Dict, Any, List, Tuple
 
+from app.services import upi_payment
 from app.utils.field_utils import get_field_value
 from app.utils.email_domains import UPI_HANDLES
 
@@ -267,6 +268,10 @@ def detect_payment_demand(facts: Dict[str, Any]) -> Dict[str, Any]:
     phrase_demands = _find_phrase_demands(raw_text, spans)
     demands = phrase_demands + _attach_upi_to_phrase_demands(raw_text, phrase_demands)
     demands += _find_upi_demands(raw_text, spans)
+    upi_requests = upi_payment.find_upi_requests(raw_text)
+    for request in upi_requests:
+        demands.append({"kind": "upi_request", "match": "a UPI payment request link or QR code",
+                        "start": request["start"], "end": request["end"]})
     urgency = _urgency_near(raw_text, demands)
 
     if demands:
@@ -280,6 +285,9 @@ def detect_payment_demand(facts: Dict[str, Any]) -> Dict[str, Any]:
         )
         if urgency:
             details += " Urgency language near the demand: " + ", ".join(f"'{u}'" for u in urgency) + "."
+        amounts = [r["amount"] for r in upi_requests if r["amount"]]
+        if amounts:
+            details += f" The UPI request asks for Rs {amounts[0]}."
         details += _payments_bank_note(raw_text)
         details += " Genuine employers do not charge candidates to join."
         return {

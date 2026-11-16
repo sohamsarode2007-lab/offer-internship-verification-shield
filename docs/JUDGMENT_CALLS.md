@@ -26,6 +26,7 @@ Status: **open** = not reviewed yet.
 | 16 | Deployment (Render/Vercel) work deliberately left alone | open |
 | 17 | Advisory scraper is semi-automated: a person approves every entry | open |
 | 18 | Scam-chat wording rules: weights, tiers and the new trend category | open |
+| 19 | A UPI link/QR in an offer always counts as a payment demand | open |
 
 ## 1. Udyam registry dataset skipped
 - **Decided:** do not use the data.gov.in "List of MSME Registered Units under UDYAM" dataset.
@@ -152,3 +153,13 @@ Status: **open** = not reviewed yet.
 - **Risks:** English-only; phrase lists come from public descriptions of these scams, not from a dataset, so they
   will miss paraphrases; a genuine employer that recruits only over WhatsApp would get +15.
 - **Reverse:** change `W_SCAM_*` in `risk_scoring.py`, or move a family between tiers in `scam_text.py`.
+
+## 19. UPI link / QR code = payment demand
+- **Decided:** any `upi://pay` or `upi://mandate` payload (typed, pasted, or decoded from a QR in an uploaded
+  image) is a payment demand, so the result is "high risk". The payee address becomes a community indicator even
+  when its handle is not on our known-handle list, because a upi:// payload is a payment destination by definition.
+- **Why:** a genuine employer's offer has no reason to carry a payment QR for the candidate to pay.
+- **Risk:** a genuine letter that includes a payment QR (for example an event fee a real college asks for)
+  would be flagged high risk. That matches the project rule that a payment demand is never offset.
+- **Not done:** QR inside PDFs, QR containing web links, and scanned phone photos at an angle; OpenCV's detector
+  is decent, not perfect. No new dependency: OpenCV was already required.

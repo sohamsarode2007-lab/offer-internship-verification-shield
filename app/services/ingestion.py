@@ -12,6 +12,8 @@ import os
 import shutil
 import numpy as np
 import cv2
+
+from app.services import upi_payment
 from typing import Optional, Tuple
 
 logger = logging.getLogger(__name__)
@@ -336,6 +338,9 @@ def ingest_offer(
             except Exception as img_err:
                 logger.error("[INGESTION] %s: image OCR error (%s).", doc, type(img_err).__name__)
                 raise ValueError(f"Could not extract text from the image: {type(img_err).__name__}") from img_err
+            qr_lines = upi_payment.upi_lines_from_image(img)
+            if qr_lines:
+                extracted_str = f"{extracted_str}\n{qr_lines}"
             raw_text = f"{raw_text}\n{extracted_str}" if raw_text else extracted_str
 
         elif ext == 'pdf':

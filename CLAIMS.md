@@ -249,3 +249,12 @@ been verified in this workspace.
 - Patterns were written from publicly described scam wording, not trained on data, and will miss
   paraphrases and other languages. Genuine recruiters occasionally use WhatsApp, which is why that
   rule is the moderate tier.
+
+## UPI payment links and QR codes
+
+- A `upi://pay` or `upi://mandate` link in the text, or in a QR code inside an uploaded image (decoded
+  offline with OpenCV), counts as a payment demand and so forces "high risk" like any other payment demand.
+- Only the payee address and amount are read. The payee name and note are ignored and not shown or stored;
+  the redaction step removes the whole link before any text is used for similarity matching.
+- Limits: QR codes are read only from image uploads (not from images embedded in PDFs), only when OpenCV can
+  detect them (small, blurred or angled codes may be missed), and QR codes holding web addresses are ignored.

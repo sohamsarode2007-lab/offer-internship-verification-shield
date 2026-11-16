@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 from app.models.models import (CommunityDispute, CommunityIndicator, CommunityReport,
     CommunityTemplateBand, CommunityToken)
 from app.services import payment_detection
+from app.services import upi_payment
 from app.utils.email_domains import is_free_mailbox, is_upi_handle
 
 CONSENT_VERSION = 4  # v4: details appear in masked form on the public scam-trends page (v3 named one college)
@@ -138,6 +139,9 @@ def extract_indicators(text: str, parsed_email: dict | None, payment_check: dict
                 continue
             if any(max(d["start"] - match.end(), match.start() - d["end"], 0) <= 200 for d in demand_spans):
                 add("upi", match.group(0))
+        for request in upi_payment.find_upi_requests(text):
+            if request["vpa"]:  # a upi:// payload is a payment destination whatever the handle
+                found[("upi", normalize("upi", request["vpa"]))] = request["vpa"]
         for line in text.splitlines():
             if not PAYMENT_CONTEXT_RE.search(line):
                 continue
@@ -166,6 +170,7 @@ def extract_indicators(text: str, parsed_email: dict | None, payment_check: dict
 def redact_text(text: str) -> str:
     text = re.sub(r"(?im)(\b(?:candidate|applicant|student)?\s*name\s*[:=-]\s*)[^\n,;]+", r"\1<NAME>", text)
     text = re.sub(r"(?im)^\s*dear\s+[^,\n]+", "Dear <NAME>", text)
+    text = upi_payment.UPI_URI_RE.sub("<UPI_LINK>", text)
     text = EMAIL_RE.sub("<EMAIL>", text)
     text = VPA_RE.sub("<UPI>", text)
     text = IFSC_RE.sub("<IFSC>", text)
