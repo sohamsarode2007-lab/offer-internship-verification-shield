@@ -1,0 +1,11 @@
+{
+  "_comment": "Pages the advisory scraper may read. Add a source only after opening the page yourself and checking its terms. 'aliases' (how a letter names the employer) are chosen by a human; the scraper never guesses them.",
+  "sources": [
+    {
+      "brand": "TCS",
+      "aliases": ["tcs", "tata consultancy services"],
+      "source": "TCS recruitment fraud alert",
+      "url": "https://www.tcs.com/careers/india/recruitment-fraud-alert"
+    }
+  ]
+}

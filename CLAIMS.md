@@ -93,6 +93,9 @@ been verified in this workspace.
   Employers without an entry are not checked, and a staffing firm legitimately recruiting
   on an employer's behalf from its own domain would also be flagged: the result says the
   domain is not the employer's published one, not that the sender is a scammer.
+- `scripts/advisory_scraper.py` can re-read allowlisted employer pages and propose entries, but it only
+  writes candidates for a person to review; nothing it reads changes a result until a person approves
+  and promotes the entry. It obeys robots.txt and has only been tested against mocked pages.
 
 ## PAN, Udyam and payments-bank structure checks
 

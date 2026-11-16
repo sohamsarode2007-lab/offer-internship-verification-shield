@@ -35,6 +35,10 @@ The service can look up CINs in a local SQLite copy of the official MCA company
 master data; it does not contact a remote registry. Obtain the source data from
 an official MCA/data.gov.in release, then load it with
 `python scripts/load_mca_master.py <source.csv> --db data/mca_master.sqlite3`.
+
+Employer advisories: `ADVISORY_BOT_CONTACT=you@example.org python scripts/advisory_scraper.py fetch`
+writes candidates to `advisory_candidates.json` (git-ignored); review, set `statement` and `approved`, then run
+`python scripts/advisory_scraper.py promote advisory_candidates.json`. See docs/JUDGMENT_CALLS.md #17.
 Set `MCA_DB_PATH` if the database is stored elsewhere. The matcher checks the
 registered name and active status. GSTIN/PAN consistency and a conflict between
 an offer's founding-year/age claim and MCA incorporation date can add risk points;

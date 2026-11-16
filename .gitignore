@@ -26,3 +26,6 @@ frontend/tsconfig.tsbuildinfo
 
 # run_demo.bat state (demo DB, synthetic registry, demo pepper)
 data/demo/
+
+# Scraper output awaiting human review
+advisory_candidates.json
