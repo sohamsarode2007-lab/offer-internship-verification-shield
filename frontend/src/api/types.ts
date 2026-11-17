@@ -46,6 +46,8 @@ export interface AnalyzeResponse {
   registry_source?: string | null
   /** Company name extracted from the offer text, if any (not stored server-side). */
   company_name?: string | null
+  /** What the person could add to strengthen the check. */
+  evidence_hints?: { id: string; title: string; why: string; how: string }[]
 }
 
 export interface ReportableIndicator {

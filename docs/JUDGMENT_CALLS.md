@@ -27,6 +27,7 @@ Status: **open** = not reviewed yet.
 | 17 | Advisory scraper is semi-automated: a person approves every entry | open |
 | 18 | Scam-chat wording rules: weights, tiers and the new trend category | open |
 | 19 | A UPI link/QR in an offer always counts as a payment demand | open |
+| 20 | Re-check is stateless (browser re-sends text); hint cards, ledger left as a table | open |
 
 ## 1. Udyam registry dataset skipped
 - **Decided:** do not use the data.gov.in "List of MSME Registered Units under UDYAM" dataset.
@@ -163,3 +164,11 @@ Status: **open** = not reviewed yet.
   would be flagged high risk. That matches the project rule that a payment demand is never offset.
 - **Not done:** QR inside PDFs, QR containing web links, and scanned phone photos at an angle; OpenCV's detector
   is decent, not perfect. No new dependency: OpenCV was already required.
+
+## 20. Add-evidence re-check, stateless
+- **Decided:** the browser keeps the first submission in memory and re-sends it with the extra text/file, so the
+  server still stores nothing and no "session" exists. Hints come from which checks could not run, not from text.
+- **Why:** a server-side draft of the offer would break the "we never store your offer" promise.
+- **Trade-offs:** closing the tab loses the draft; one file per check (a new file replaces the old one); the
+  evidence table was not turned into cards, only the hint cards are new.
+- **Reverse / extend:** accepting several files means changing `/analyze` to take a list of files.

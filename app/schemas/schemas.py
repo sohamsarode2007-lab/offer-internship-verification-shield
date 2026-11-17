@@ -66,3 +66,5 @@ class AnalyzeResponse(BaseModel):
     # Company name extracted from the offer text, shown under the verdict. Returned in
     # the response only; it is never stored.
     company_name: Optional[str] = None
+    # What the person could add to strengthen the check: [{id, title, why, how}].
+    evidence_hints: List[dict] = Field(default_factory=list)

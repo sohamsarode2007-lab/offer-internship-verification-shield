@@ -28,7 +28,9 @@ function Footer() {
 }
 function Shell({ children }: { children: React.ReactNode }) { return <><Header/><main className={styles.main}>{children}</main><Footer/></> }
 
-function Home({ onResult }: { onResult: (result: AnalyzeResponse) => void }) {
+type Submitted = { text: string; file: File | null }
+
+function Home({ onResult }: { onResult: (result: AnalyzeResponse, input: Submitted) => void }) {
   const [text, setText] = useState('')
   const [file, setFile] = useState<File | null>(null)
   const [busy, setBusy] = useState(false)
@@ -40,7 +42,7 @@ function Home({ onResult }: { onResult: (result: AnalyzeResponse) => void }) {
     event.preventDefault(); setError('')
     if (!text.trim() && !file) { setError('Paste offer text or choose a file to check.'); return }
     setBusy(true)
-    try { onResult(await analyze(text, file)); window.scrollTo({ top: 0, behavior: 'instant' }) }
+    try { onResult(await analyze(text, file), { text, file }); window.scrollTo({ top: 0, behavior: 'instant' }) }
     catch (err) { setError(err instanceof Error ? err.message : 'The request failed. Try again.') }
     finally { setBusy(false) }
   }
@@ -150,7 +152,36 @@ function WhyList({ result }: { result: AnalyzeResponse }) {
   return result.risk_factors?.length > 0 ? <section className={styles.why}><h2>Why</h2><ul>{result.risk_factors.map((factor, i) => <li key={i}>{factor}</li>)}</ul></section> : null
 }
 
-function Result({ result, onClear }: { result: AnalyzeResponse; onClear: () => void }) {
+function AddEvidence({ result, input, onResult }: { result: AnalyzeResponse; input: Submitted; onResult: (result: AnalyzeResponse, input: Submitted) => void }) {
+  const hints = result.evidence_hints ?? []
+  const [extra, setExtra] = useState('')
+  const [file, setFile] = useState<File | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const fileId = useId()
+  if (!hints.length) return null
+  async function recheck(event: FormEvent) {
+    event.preventDefault(); setError('')
+    if (!extra.trim() && !file) { setError('Add some text or choose a file first.'); return }
+    const next = { text: [input.text, extra.trim()].filter(Boolean).join('\n\n'), file: file ?? input.file }
+    setBusy(true)
+    try { onResult(await analyze(next.text, next.file), next); window.scrollTo({ top: 0, behavior: 'instant' }) }
+    catch (err) { setError(err instanceof Error ? err.message : 'The request failed. Try again.') }
+    finally { setBusy(false) }
+  }
+  return <section className={styles.addEvidence}><h2>Make this check stronger</h2>
+    <ul className={styles.hintCards}>{hints.map(h => <li key={h.id}><strong>{h.title}</strong><span>{h.why}</span><em>{h.how}</em></li>)}</ul>
+    <form onSubmit={recheck}>
+      <label className={styles.textWell}><span>More details to add</span><textarea value={extra} onChange={e => setExtra(e.target.value)} disabled={busy} rows={4} placeholder="Paste the sender's address, CIN or GSTIN, or anything else from the offer"/></label>
+      <label htmlFor={fileId} className={styles.uploadLabel}>Add a file (original email, screenshot or QR code)</label>
+      <input id={fileId} type="file" accept=".pdf,.png,.jpg,.jpeg,.bmp,.tiff,.eml" disabled={busy} onChange={e => setFile(e.target.files?.[0] ?? null)}/>
+      <p className={styles.help}>Only one file is checked at a time; a new file replaces the earlier one. Nothing you add is stored.</p>
+      <button type="submit" disabled={busy}>{busy ? 'Checking…' : 'Check again with this'}</button>
+      {error && <p className={styles.error} role="alert">{error}</p>}
+    </form></section>
+}
+
+function Result({ result, input, onResult, onClear }: { result: AnalyzeResponse; input: Submitted; onResult: (result: AnalyzeResponse, input: Submitted) => void; onClear: () => void }) {
   const [reportOpen, setReportOpen] = useState(false)
   const band = result.risk_band
   const verdict = band ? verdictText[band] ?? { title: band.charAt(0).toUpperCase() + band.slice(1) } : null
@@ -162,7 +193,7 @@ function Result({ result, onClear }: { result: AnalyzeResponse; onClear: () => v
       <div className={styles.actions}>{canReport && <button onClick={() => setReportOpen(true)}>Report this scam</button>}<button className={styles.secondaryButton} onClick={onClear}>Check another offer</button></div>
       {result.complaint_summary?.trim() && <Complaint summary={result.complaint_summary}/>}
     </div>
-    <div className={styles.evidenceSide}><WhyList result={result}/><EvidenceLedger checks={result.checks ?? []}/></div>
+    <div className={styles.evidenceSide}><WhyList result={result}/><EvidenceLedger checks={result.checks ?? []}/><AddEvidence result={result} input={input} onResult={onResult}/></div>
     {reportOpen && canReport && result.report_token && <ReportDialog token={result.report_token} indicators={result.reportable_indicators ?? []} onClose={() => setReportOpen(false)}/>}
   </section>
 }
@@ -240,13 +271,15 @@ function HowPage() {
 
 export default function App() {
   const [result, setResult] = useState<AnalyzeResponse | null>(null)
+  const [input, setInput] = useState<Submitted>({ text: '', file: null })
+  const show = (r: AnalyzeResponse, i: Submitted) => { setResult(r); setInput(i) }
   const path = window.location.pathname.replace(/\/$/, '') || '/'
   let page: React.ReactNode
   if (path === '/withdraw') page = <WithdrawPage/>
   else if (path === '/dispute') page = <DisputePage/>
   else if (path === '/dashboard') page = <DashboardPage/>
   else if (path === '/how-it-works') page = <HowPage/>
-  else if (result && path === '/') page = <Result result={result} onClear={() => { setResult(null); window.location.reload() }}/>
-  else page = <Home onResult={setResult}/>
+  else if (result && path === '/') page = <Result result={result} input={input} onResult={show} onClear={() => { setResult(null); window.location.reload() }}/>
+  else page = <Home onResult={show}/>
   return <Shell>{page}</Shell>
 }

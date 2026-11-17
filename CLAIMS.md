@@ -258,3 +258,11 @@ been verified in this workspace.
   the redaction step removes the whole link before any text is used for similarity matching.
 - Limits: QR codes are read only from image uploads (not from images embedded in PDFs), only when OpenCV can
   detect them (small, blurred or angled codes may be missed), and QR codes holding web addresses are ignored.
+
+## Add evidence and check again
+
+- The result page lists what could make the check stronger (original email, sender address, company
+  registration details, payment screenshot), chosen only from which checks could not run. No hint is shown
+  when a payment demand was found, because nothing can change that verdict.
+- "Check again" re-sends the earlier text plus the new text from the browser's memory. The server keeps
+  nothing between the two checks, so the offer text is still never stored. Only one file is checked at a time.

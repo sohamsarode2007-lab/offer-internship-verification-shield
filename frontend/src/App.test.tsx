@@ -244,3 +244,34 @@ describe('community report consent', () => {
     expect(sessionStorage.length).toBe(0)
   })
 })
+
+describe('add evidence and check again', () => {
+  const hints = [{ id: 'company_identifiers', title: 'Add the company\'s registration details', why: 'A CIN can be compared.', how: 'Look in the footer.' }]
+
+  it('shows hint cards only when the server returned hints', async () => {
+    await showResult(payload({ evidence_hints: [] }))
+    expect(screen.queryByText('Make this check stronger')).toBeNull()
+    cleanup()
+    await showResult(payload({ evidence_hints: hints }))
+    expect(await screen.findByText('Make this check stronger')).toBeTruthy()
+    expect(screen.getByText(/registration details/)).toBeTruthy()
+  })
+
+  it('sends the earlier text together with the new text, then shows the new result', async () => {
+    const user = await showResult(payload({ evidence_hints: hints, overall_risk_score: 40 }))
+    vi.mocked(api.analyze).mockResolvedValueOnce(payload({ evidence_hints: [], overall_risk_score: 5, risk_band: 'likely legitimate' }))
+    await user.type(await screen.findByLabelText('More details to add'), 'CIN: U74999DL2016PTC298345')
+    await user.click(screen.getByRole('button', { name: 'Check again with this' }))
+    const [text, file] = vi.mocked(api.analyze).mock.calls[1]
+    expect(text).toBe('Test offer text\n\nCIN: U74999DL2016PTC298345')
+    expect(file).toBeNull()
+    expect(await screen.findByText('Likely legitimate')).toBeTruthy()
+  })
+
+  it('asks for something to add instead of sending an empty re-check', async () => {
+    const user = await showResult(payload({ evidence_hints: hints }))
+    await user.click(await screen.findByRole('button', { name: 'Check again with this' }))
+    expect((await screen.findByRole('alert')).textContent).toMatch(/Add some text or choose a file/)
+    expect(vi.mocked(api.analyze)).toHaveBeenCalledTimes(1)
+  })
+})

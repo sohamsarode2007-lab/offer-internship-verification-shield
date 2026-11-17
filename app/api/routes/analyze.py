@@ -18,6 +18,7 @@ from app.services import (
     payment_detection,
     scam_text,
     email_auth,
+    evidence_hints,
     risk_scoring,
     community_reports,
     institution_dashboard,
@@ -255,4 +256,7 @@ def analyze_offer(
         registry_source=gstin_check.get("registry_source"),
         # Returned for display only; never persisted (Offer.company_name stays NULL).
         company_name=get_field_value(facts, "company_name", "company_name_legacy"),
+        evidence_hints=evidence_hints.build_evidence_hints(
+            check_dicts, had_file=bool(email_result),
+            had_image=bool(filename and filename.lower().rsplit(".", 1)[-1] in {"png", "jpg", "jpeg", "bmp", "tiff"})),
     )
