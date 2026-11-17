@@ -15,6 +15,9 @@ __pycache__/
 
 # Quarantined scraped datasets can contain personal information.
 data/quarantine/*.csv
+# Human-reviewed external evaluation records and their redacted text stay local.
+eval/external/cases.csv
+eval/external/cases/
 # Generated frontend artifacts.
 node_modules
 frontend/node_modules
