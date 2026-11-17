@@ -19,6 +19,7 @@ from app.services import (
     scam_text,
     email_auth,
     evidence_hints,
+    plausibility,
     risk_scoring,
     community_reports,
     institution_dashboard,
@@ -167,6 +168,10 @@ def analyze_offer(
     overall_risk_score = scoring_res["overall_risk_score"]
     completeness_percentage = scoring_res["completeness_percentage"]
     risk_band = scoring_res["risk_band"]
+    # Informational notes (no score impact); never include submitted values.
+    pdf_bytes = file_bytes if filename and filename.lower().endswith(".pdf") else None
+    scoring_res["reasons"] = list(scoring_res["reasons"]) + [
+        {"text": note, "impact": None} for note in plausibility.collect_notes(raw_text, pdf_bytes)]
 
     check_schemas = [
         CheckResultSchema(

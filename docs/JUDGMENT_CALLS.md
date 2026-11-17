@@ -29,6 +29,7 @@ Status: **open** = not reviewed yet.
 | 19 | A UPI link/QR in an offer always counts as a payment demand | open |
 | 20 | Re-check is stateless (browser re-sends text); hint cards, ledger left as a table | open |
 | 21 | Bulk data.gov.in sync; Infosys and HCLTech advisories added, Wipro and Cognizant not | open |
+| 22 | Pay/phone/PDF-metadata notes are informational only; careers-page check not built | open |
 
 ## 1. Udyam registry dataset skipped
 - **Decided:** do not use the data.gov.in "List of MSME Registered Units under UDYAM" dataset.
@@ -189,3 +190,13 @@ Status: **open** = not reviewed yet.
   its email addresses, so no domain is stated). Adding either from memory would break the no-invention rule.
 - **Scraper allowlist unchanged:** I have not checked these sites' terms for automated reading, so they are not
   on `advisory_sources.json`. Entries were added by hand from the pages I read.
+
+## 22. Plausibility notes (informational) and what was left out
+- **Decided:** unusual pay, odd phone numbers and PDFs saved by online editors appear as notes with no score impact,
+  and so have no weight in the scoring docstring.
+- **Why:** each has many innocent causes (well-paid graduate schemes, numbers typed wrongly, people exporting from
+  Canva), so counting them would flag genuine offers. If you want them to score, say which and by how much.
+- **Thresholds are my guesses:** Rs 1,00,000 a month and 30 LPA for fresher/intern wording; the editor list
+  (Canva, iLovePDF, Smallpdf, Sejda, PDFescape, PDF24, Photoshop, PDFfiller) is short and from general knowledge.
+- **Not built:** (a) careers-page consistency (needs live web access and per-site parsing); (b) phone-number
+  reputation lookups (no free reliable source); (c) logo and signature image checks (no dependable offline method).

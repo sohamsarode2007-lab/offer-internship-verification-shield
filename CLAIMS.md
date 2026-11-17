@@ -273,3 +273,13 @@ been verified in this workspace.
 - `scripts/sync_ogd_master.py` copies the public "RoC-wise Company Master Data" snapshot into a local database
   using your own API key. It keeps four fields only. The data is a periodic snapshot, not a live registry, and a
   company can change status after it was published.
+
+## Plausibility notes (no score impact)
+
+- `app/services/plausibility.py` adds notes to the "Why" list, with no score change, for: a stated pay far above
+  normal for an internship or fresher role (Rs 1,00,000 a month or 30 LPA and above), a +91 number that cannot
+  be an Indian mobile or a non-Indian country code, and a PDF last saved by a known online design or editing tool.
+- Each has common innocent explanations, which is why none of them affects the result. A note never repeats the
+  amount, number or any PDF metadata. The PDF check reads only the producer and creator fields against a fixed list.
+- A check that the employer's careers page lists the role is not built: it needs live web access and is easy to
+  get wrong.
