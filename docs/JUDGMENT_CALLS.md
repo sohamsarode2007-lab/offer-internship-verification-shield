@@ -17,7 +17,7 @@ Status: **open** = not reviewed yet.
 | 7 | Public trends page: one aggregate record, counts are checks | open |
 | 8 | "students" replaced with "people" / "job seekers" in code, tests and docs | open |
 | 9 | Disposable-mailbox list is short and curated | open |
-| 10 | Employer advisories: TCS only; staffing-firm false positive accepted | open |
+| 10 | Employer advisories: TCS, Infosys, HCLTech; staffing-firm false positive accepted | open |
 | 11 | PAN and Udyam are format checks only; existing weights reused | open |
 | 12 | Payments-bank IFSC codes come from general knowledge, add no points | open |
 | 13 | Internet Archive first-seen note is opt-in and untested against the live service | open |
@@ -28,6 +28,7 @@ Status: **open** = not reviewed yet.
 | 18 | Scam-chat wording rules: weights, tiers and the new trend category | open |
 | 19 | A UPI link/QR in an offer always counts as a payment demand | open |
 | 20 | Re-check is stateless (browser re-sends text); hint cards, ledger left as a table | open |
+| 21 | Bulk data.gov.in sync; Infosys and HCLTech advisories added, Wipro and Cognizant not | open |
 
 ## 1. Udyam registry dataset skipped
 - **Decided:** do not use the data.gov.in "List of MSME Registered Units under UDYAM" dataset.
@@ -172,3 +173,19 @@ Status: **open** = not reviewed yet.
 - **Trade-offs:** closing the tab loses the draft; one file per check (a new file replaces the old one); the
   evidence table was not turned into cards, only the hint cards are new.
 - **Reverse / extend:** accepting several files means changing `/analyze` to take a list of files.
+
+## 21. Bulk sync script and more employer advisories
+- **Sync:** `scripts/sync_ogd_master.py` pages through the data.gov.in company master (0.5 s minimum between
+  requests, page size capped at 1000, 3 tries per page, resumable with `--start-offset`) and keeps only CIN, name,
+  status and registration date. Run it with `--max-pages 5` first. **Not run against the real API from here**
+  (network blocked), and I have not confirmed the API's real maximum page size or whether it caps offsets, so the
+  1000 cap is my assumption. I did not add the extra environment variables from your pasted list yet.
+- **Advisories added (pages opened and read on 2026-11-17):** Infosys and HCLTech. Aliases are deliberately narrow
+  ("Infosys Limited", not "Infosys", because Infosys BPM uses a different domain; "HCL Technologies", not "HCL",
+  because HCL Infosystems and HCL Healthcare are different companies). HCLTech's page says offers may also come from
+  its preferred recruitment partners, so the stored statement says so and a partner's domain would still be flagged
+  as "not HCLTech's own", which is the same staffing-firm false positive as TCS.
+- **Not added:** Wipro (its page refuses automated reading, so I could not read it) and Cognizant (the page hides
+  its email addresses, so no domain is stated). Adding either from memory would break the no-invention rule.
+- **Scraper allowlist unchanged:** I have not checked these sites' terms for automated reading, so they are not
+  on `advisory_sources.json`. Entries were added by hand from the pages I read.

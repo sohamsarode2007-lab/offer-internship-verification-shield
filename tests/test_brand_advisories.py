@@ -1,4 +1,4 @@
-"""Employer-published recruitment-domain advisories (TCS only). Offline; DNS is stubbed."""
+"""Employer-published recruitment-domain advisories (TCS, Infosys, HCLTech). Offline; DNS is stubbed."""
 import pytest
 
 from app.services import brand_advisories, domain_verification, risk_scoring
@@ -57,3 +57,31 @@ def test_scoring_uses_existing_domain_weight_and_plain_reason():
     scored = risk_scoring.calculate_risk_score([result])
     reason = next(r for r in scored["reasons"] if "recruits from" in r["text"])
     assert reason["impact"] == "+30"
+
+
+@pytest.mark.parametrize("company, source_url", [
+    ("Infosys Limited", "https://www.infosys.com/careers/apply/recruitment-fraud-alert.html"),
+    ("HCL Technologies Ltd", "https://www.hcltech.com/careers/genuine-job-offers"),
+])
+def test_other_employers_with_unrelated_domain_fail_with_their_source(company, source_url):
+    result = domain_verification.verify_domain(facts(company, "hr-desk.example"))
+    assert result["status"] == "fail" and source_url in result["details"] and "read 2026-11-17" in result["details"]
+
+
+@pytest.mark.parametrize("company, domain", [
+    ("Infosys Limited", "infosys.com"), ("HCL Technologies Ltd", "hcl.com"),
+    ("HCL Technologies Ltd", "hcltech.com"), ("HCLTech", "careers.hcltech.com"),
+])
+def test_other_employers_official_domains_pass_the_advisory_check(company, domain):
+    assert "official recruitment domain" not in domain_verification.verify_domain(facts(company, domain))["details"]
+
+
+@pytest.mark.parametrize("company", ["Infosys BPM Limited", "Infosys", "HCL Infosystems Ltd", "HCL Healthcare"])
+def test_similar_but_different_companies_are_not_checked(company):
+    result = domain_verification.verify_domain(facts(company, "hr-desk.example"))
+    assert "official recruitment domain" not in result["details"]
+
+
+def test_hcltech_statement_keeps_the_partner_exception_the_page_states():
+    advisory = brand_advisories.find_advisory("HCL Technologies Limited")
+    assert "preferred recruitment partners" in advisory["statement"]

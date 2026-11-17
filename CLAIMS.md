@@ -83,9 +83,10 @@ been verified in this workspace.
 ## Employer-published recruitment domains
 
 - `app/data/brand_advisories.json` records what an employer's own fraud page says about
-  where it recruits from, with the source URL and the date it was read. Currently one
-  entry: TCS (its recruitment fraud alert states recruiting only from `@tcs.com`). When an
-  offer names TCS but the sender's domain is not `tcs.com` or a subdomain, the domain check
+  where it recruits from, with the source URL and the date it was read. Currently three
+  entries: TCS (`@tcs.com`), Infosys (`@infosys.com`) and HCLTech (`@hcl.com` or `@hcltech.com`, plus
+  preferred recruitment partners, which its page also states). When an
+  offer names one of them but the sender's domain is not that employer's listed domain or a subdomain, the domain check
   fails with wording attributed to that page ("Per TCS recruitment fraud alert ... TCS
   recruits only from ..."). It reuses the existing +30 domain weight; no new weight.
   The page was read through a summarising fetch tool, so the statement is paraphrased and
@@ -266,3 +267,9 @@ been verified in this workspace.
   when a payment demand was found, because nothing can change that verdict.
 - "Check again" re-sends the earlier text plus the new text from the browser's memory. The server keeps
   nothing between the two checks, so the offer text is still never stored. Only one file is checked at a time.
+
+## data.gov.in bulk sync
+
+- `scripts/sync_ogd_master.py` copies the public "RoC-wise Company Master Data" snapshot into a local database
+  using your own API key. It keeps four fields only. The data is a periodic snapshot, not a live registry, and a
+  company can change status after it was published.
