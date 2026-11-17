@@ -30,6 +30,7 @@ Status: **open** = not reviewed yet.
 | 20 | Re-check is stateless (browser re-sends text); hint cards, ledger left as a table | open |
 | 21 | Bulk data.gov.in sync; Infosys and HCLTech advisories added, Wipro and Cognizant not | open |
 | 22 | Pay/phone/PDF-metadata notes are informational only; careers-page check not built | open |
+| 23 | Eval set grown to 41; EC41 is a deliberate dangerous miss | open |
 
 ## 1. Udyam registry dataset skipped
 - **Decided:** do not use the data.gov.in "List of MSME Registered Units under UDYAM" dataset.
@@ -200,3 +201,13 @@ Status: **open** = not reviewed yet.
   (Canva, iLovePDF, Smallpdf, Sejda, PDFescape, PDF24, Photoshop, PDFfiller) is short and from general knowledge.
 - **Not built:** (a) careers-page consistency (needs live web access and per-site parsing); (b) phone-number
   reputation lookups (no free reliable source); (c) logo and signature image checks (no dependable offline method).
+
+## 23. Eval set grown from 22 to 41 cases
+- **Decided:** 19 new hand-derived cases (EC23-EC41): six realistic genuine offers that must stay legitimate, the new
+  rules firing, and two known-gap cases. All matched my hand calculation on the first run.
+- **EC41 is a deliberate "dangerous miss":** a scam copying a real company's CIN with a passing domain looks genuine.
+  The eval now reports "1 dangerous miss(es)" instead of 0. I kept it because hiding the limit would be dishonest;
+  say if you would rather keep it out of the CSV and list it only in the README.
+- **Limits:** the cases are still written by the same person (me) who wrote the rules, so they test that the rules
+  do what I intended, not that they match real-world offers. A real evaluation needs offers collected independently
+  and frozen before tuning (see the held-out rule in `eval/README.md`).
