@@ -242,3 +242,11 @@ Status: **open** = not reviewed yet.
   rewritten to assert the opposite (instruction named, handle absent). The scoring result is unchanged.
 - **Added:** tests/test_no_raw_upi_persisted.py checks the response and every analysis table for the handle.
 
+
+28. **Migrations 005 and 007 made non-destructive (open, audit findings A3).**
+- **005:** old observations are copied to `institution_observations_legacy` before the live table is emptied (they do not
+  fit the consented-report model, so they stay out of the dashboard). `alembic check` ignores `*_legacy` archive tables.
+- **007:** rows are marked simulated only when linked to a report carrying the demo seeder's marker, not because
+  `is_demo` is true. Older unlinked demo rows are ambiguous and stay unmarked (they still count only in DEMO_MODE).
+- **Limit:** databases that already ran 005/007 are unchanged; this protects fresh and older databases. Editing an
+  applied migration is normally avoided, and is justified here only because the old behaviour destroyed or mislabelled data.

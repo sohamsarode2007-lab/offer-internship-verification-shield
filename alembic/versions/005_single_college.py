@@ -19,7 +19,9 @@ def upgrade():
         batch.drop_column("code")
         batch.drop_column("api_key_hash")
     # Earlier observations came from optional college codes on /analyze, not from
-    # consented reports; they do not fit the new model and are removed.
+    # consented reports; they do not fit the new model, so they leave the live table. They are
+    # copied to institution_observations_legacy first so a normal upgrade never destroys history.
+    op.execute("CREATE TABLE institution_observations_legacy AS SELECT * FROM institution_observations")
     op.execute("DELETE FROM institution_observations")
     with op.batch_alter_table("institution_observations") as batch:
         batch.add_column(sa.Column("report_id", sa.String(36), nullable=True))
