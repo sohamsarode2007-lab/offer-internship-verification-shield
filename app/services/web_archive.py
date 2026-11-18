@@ -16,6 +16,8 @@ import urllib.parse
 import urllib.request
 from typing import Optional
 
+from app.services.env_config import float_env
+
 logger = logging.getLogger(__name__)
 
 CDX_URL = "https://web.archive.org/cdx/search/cdx"
@@ -30,7 +32,7 @@ def is_enabled() -> bool:
 
 def _open(url: str) -> bytes:
     """Fetch the URL body (size-capped). Separate function so tests can replace it."""
-    with urllib.request.urlopen(url, timeout=TIMEOUT_SECONDS) as response:  # noqa: S310 (fixed https host)
+    with urllib.request.urlopen(url, timeout=float_env("INFRA_AGE_TIMEOUT", TIMEOUT_SECONDS, 0.5, 10.0)) as response:  # noqa: S310 (fixed https host)
         return response.read(MAX_RESPONSE_BYTES)
 
 

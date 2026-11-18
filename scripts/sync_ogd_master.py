@@ -23,7 +23,7 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-from app.services.ogd_registry import CIN_RE, OGD_RESOURCE_URL
+from app.services.ogd_registry import CIN_RE, resource_url
 from scripts.load_mca_master import load_csv
 
 FIELDS = ["CIN", "CompanyName", "CompanyStatus", "CompanyRegistrationdate_date"]
@@ -45,7 +45,7 @@ def _fetch_page(key: str, offset: int, limit: int, timeout: float, sleep=time.sl
     last = "unknown"
     for attempt in range(RETRIES):
         try:
-            payload = json.loads(_open(f"{OGD_RESOURCE_URL}?{query}", timeout))
+            payload = json.loads(_open(f"{resource_url()}?{query}", timeout))
             records = payload["records"]
             if isinstance(records, list):
                 return records, payload.get("total")

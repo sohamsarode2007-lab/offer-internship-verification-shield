@@ -211,3 +211,13 @@ Status: **open** = not reviewed yet.
 - **Limits:** the cases are still written by the same person (me) who wrote the rules, so they test that the rules
   do what I intended, not that they match real-world offers. A real evaluation needs offers collected independently
   and frozen before tuning (see the held-out rule in `eval/README.md`).
+
+24. **Env-variable review note, verified against the code (open).**
+- **Confirmed and done:** `GSTIN_REGISTRY_API_KEY` and `WHOIS_API_KEY` were read by no code, so they were removed
+  from `.env.example`. Added optional `DATA_GOV_IN_BASE_URL` (https only), `MCA_LIVE_LOOKUP_TIMEOUT` and
+  `INFRA_AGE_TIMEOUT` (both clamped to 0.5-10 s), a 0.5 s outbound throttle on live lookups, and an absolute
+  `MCA_DB_PATH` plus a read-only `./data` mount in docker-compose.
+- **Not accepted:** the claim that api.data.gov.in "died in Sep 2026". A web search found nothing supporting it and a
+  live call worked in November. The host is now overridable, so a real move costs one env change.
+- **Not added:** `MCA_STATE_CODES`. No evidence the API supports state filters on this resource, so it would be a guess.
+

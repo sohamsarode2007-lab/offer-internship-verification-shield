@@ -18,14 +18,23 @@ import json
 import logging
 import os
 import re
+import threading
+import time
 import urllib.parse
 import urllib.request
 from typing import Optional, TypedDict
 
+from app.services.env_config import float_env, https_url_env
+
 logger = logging.getLogger(__name__)
 
-OGD_RESOURCE_URL = "https://api.data.gov.in/resource/4dbe5667-7b6b-41d7-82af-211562424d9a"
+OGD_BASE_URL = "https://api.data.gov.in"
+RESOURCE_ID = "4dbe5667-7b6b-41d7-82af-211562424d9a"
+OGD_RESOURCE_URL = f"{OGD_BASE_URL}/resource/{RESOURCE_ID}"
 TIMEOUT_SECONDS = 2.5
+MIN_CALL_INTERVAL = 0.5  # polite outbound throttle: at most ~2 live lookups per second per process
+_throttle_lock = threading.Lock()
+_last_call = 0.0
 MAX_RESPONSE_BYTES = 256 * 1024
 CIN_RE = re.compile(r"^[LU]\d{5}[A-Z]{2}\d{4}[A-Z]{3}\d{6}$")
 
@@ -45,10 +54,26 @@ def is_enabled() -> bool:
     return bool(os.getenv("DATA_GOV_IN_API_KEY", "").strip())
 
 
+def resource_url() -> str:
+    """Resource URL; DATA_GOV_IN_BASE_URL (https only) overrides the host if the API ever moves."""
+    return f"{https_url_env('DATA_GOV_IN_BASE_URL', OGD_BASE_URL)}/resource/{RESOURCE_ID}"
+
+
+def _throttle() -> None:
+    global _last_call
+    with _throttle_lock:
+        wait = _last_call + MIN_CALL_INTERVAL - time.monotonic()
+        if wait > 0:
+            time.sleep(wait)
+        _last_call = time.monotonic()
+
+
 def _open(url: str) -> bytes:
-    """Fetch the URL body (size-capped). Separate function so tests can replace it."""
+    """Fetch the URL body (size-capped, throttled). Separate function so tests can replace it."""
+    _throttle()
     request = urllib.request.Request(url, headers={"Accept": "application/json"})
-    with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as response:  # noqa: S310 (fixed https host)
+    timeout = float_env("MCA_LIVE_LOOKUP_TIMEOUT", TIMEOUT_SECONDS, 0.5, 10.0)
+    with urllib.request.urlopen(request, timeout=timeout) as response:  # noqa: S310 (fixed https host)
         return response.read(MAX_RESPONSE_BYTES)
 
 
@@ -67,7 +92,7 @@ def fetch_company_by_cin(cin: str) -> tuple[str, Optional[OgdCompany]]:
         "filters[CIN]": cin,
     })
     try:
-        payload = json.loads(_open(f"{OGD_RESOURCE_URL}?{query}"))
+        payload = json.loads(_open(f"{resource_url()}?{query}"))
         records = payload["records"]
         if not isinstance(records, list):
             return UNAVAILABLE, None

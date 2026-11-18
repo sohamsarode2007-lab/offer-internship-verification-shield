@@ -11,6 +11,11 @@ services:
     environment:
       # Overrides the localhost URL in .env with the compose service name.
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      # Absolute path inside the container; the snapshot built by scripts/load_mca_master.py
+      # (or sync_ogd_master.py) lives in ./data on the host and is mounted read-only.
+      MCA_DB_PATH: /app/data/mca_master.sqlite3
+    volumes:
+      - ./data:/app/data:ro
     depends_on:
       db:
         condition: service_healthy

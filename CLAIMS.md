@@ -283,3 +283,7 @@ been verified in this workspace.
   amount, number or any PDF metadata. The PDF check reads only the producer and creator fields against a fixed list.
 - A check that the employer's careers page lists the role is not built: it needs live web access and is easy to
   get wrong.
+
+- Live lookup tuning (`DATA_GOV_IN_BASE_URL`, `MCA_LIVE_LOOKUP_TIMEOUT`, `INFRA_AGE_TIMEOUT`) only changes where and how long
+  the app waits; it never changes a score. Live lookups are throttled to about two per second per process.
+
