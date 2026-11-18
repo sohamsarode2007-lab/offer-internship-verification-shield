@@ -140,6 +140,10 @@ def analyze_offer(
     if not raw_text or not raw_text.strip():
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT,
                             "No text could be extracted from the submission.")
+    # One limit for every path: pasted text, extracted PDF/image/.txt text, and all parts combined.
+    if len(raw_text) > MAX_TEXT_CHARS:
+        raise HTTPException(status.HTTP_413_CONTENT_TOO_LARGE,
+                            f"The text in your submission is longer than {MAX_TEXT_CHARS:,} characters.")
 
     # Steps 2-5: extraction and checks
     facts = fact_extraction.extract_facts(raw_text)
