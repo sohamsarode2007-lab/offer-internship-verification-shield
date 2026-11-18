@@ -285,7 +285,7 @@ describe('add evidence and check again', () => {
     it('shows the number, the steps and a safe link to the official page', async () => {
       await showResult(payload({ self_checks: [check] }))
       expect(screen.getByText('UDYAM-MH-12-1234567')).toBeTruthy()
-      const link = screen.getByRole('link', { name: 'Open the official page' })
+      const link = screen.getByRole('link', { name: 'Open the Udyam verification page' })
       expect(link.getAttribute('href')).toBe(check.url)
       expect(link.getAttribute('rel')).toContain('noopener')
       expect(screen.getByText('Type the captcha.')).toBeTruthy()

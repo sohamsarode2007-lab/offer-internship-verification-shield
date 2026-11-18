@@ -194,7 +194,7 @@ function SelfChecks({ checks }: { checks: NonNullable<AnalyzeResponse['self_chec
       <ol>{c.steps.map((step, i) => <li key={i}>{step}</li>)}</ol>
       <em>{c.caution}</em>
       <span className={styles.actions}>
-        <a href={c.url} target="_blank" rel="noopener noreferrer">Open the official page</a>
+        <a href={c.url} target="_blank" rel="noopener noreferrer">Open the Udyam verification page</a>
         <button type="button" className={styles.secondaryButton} onClick={() => copy(c.id, c.number)}>{copied === c.id ? 'Copied' : 'Copy the number'}</button>
       </span>
     </li>)}</ul></section>

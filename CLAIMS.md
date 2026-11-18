@@ -290,7 +290,7 @@ been verified in this workspace.
 - The scam-wording rules include a small set of Hinglish and Devanagari Hindi phrasings. They are narrow, have not been
   reviewed by a native speaker, and most Hindi/Hinglish scam wording will not match.
 
-- **Udyam self-check.** When the offer quotes a well-formed Udyam number, the result shows it with a link to the official
+- **Udyam self-check.** When the offer quotes a well-formed Udyam number, the result shows it with a link to the government
   Udyam verification page so the person can check it themselves. The tool does not query that page (it needs a captcha),
   does not verify the number, adds no score, and never stores the number.
 

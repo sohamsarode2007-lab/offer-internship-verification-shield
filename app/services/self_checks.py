@@ -35,7 +35,7 @@ def build_self_checks(facts: Dict[str, Any], checks: List[dict]) -> List[Dict[st
         "why": "The offer quotes a Udyam registration number. We have not verified it: the government's look-up page "
                "asks for a captcha, so only you can run it.",
         "steps": [
-            "Open the official page and enter the number exactly as shown.",
+            "Open the Ministry of MSME Udyam verification page and enter the number exactly as shown.",
             "Type the captcha code and press Verify.",
             "Compare the business name and state with the company in the offer.",
             "If the name or state differs, or nothing is found, treat the offer as suspicious.",
