@@ -10,6 +10,7 @@ import re
 from datetime import date, datetime, timedelta, timezone
 
 from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models.models import Institution, InstitutionObservation
@@ -26,9 +27,14 @@ def get_institution(db: Session) -> Institution:
     """Return the single public record, creating it on first use."""
     institution = db.query(Institution).order_by(Institution.id).first()
     if institution is None:
-        institution = Institution(name=INSTITUTION_NAME)
-        db.add(institution)
-        db.flush()
+        # Two first requests can both see "none". The unique name makes the loser fail; it re-reads the winner's row.
+        try:
+            with db.begin_nested():
+                institution = Institution(name=INSTITUTION_NAME)
+                db.add(institution)
+                db.flush()
+        except IntegrityError:
+            institution = db.query(Institution).order_by(Institution.id).first()
     return institution
 
 

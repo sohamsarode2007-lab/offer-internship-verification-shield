@@ -51,3 +51,21 @@ def test_007_marks_only_seeder_rows_as_simulated(tmp_path, monkeypatch):
     db = sqlite3.connect(tmp_path / "m.sqlite3")
     rows = dict(db.execute("SELECT coalesce(report_id, 'unlinked'), is_simulated FROM institution_observations").fetchall())
     assert rows == {"seeded-1": 1, "real-demo-1": 0, "unlinked": 0}
+
+
+def test_009_merges_duplicate_institutions_and_keeps_observations(tmp_path, monkeypatch):
+    db = _upgrade(tmp_path, monkeypatch, "008_dispute_reason_codes")
+    db.execute("INSERT INTO institutions (id, name) VALUES (1, 'Public'), (2, 'Public')")
+    for inst in (1, 2, 2):
+        db.execute("INSERT INTO institution_observations (institution_id, iso_week, band, scam_category, is_demo, is_simulated)"
+                   " VALUES (?, '2026-W01', 'high risk', 'other', 0, 0)", (inst,))
+    db.commit(); db.close()
+    command.upgrade(Config("alembic.ini"), "009_unique_public_institution")
+    db = sqlite3.connect(tmp_path / "m.sqlite3")
+    assert db.execute("SELECT id FROM institutions").fetchall() == [(1,)]
+    assert db.execute("SELECT institution_id, count(*) FROM institution_observations GROUP BY 1").fetchall() == [(1, 3)]
+    try:
+        db.execute("INSERT INTO institutions (name) VALUES ('Public')")
+        raise AssertionError("duplicate name was accepted")
+    except sqlite3.IntegrityError:
+        pass

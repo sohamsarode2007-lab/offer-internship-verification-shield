@@ -96,7 +96,10 @@ def dispute(request: Request, payload: DisputeRequest, db: Session = Depends(get
     if not current:
         raise HTTPException(503, "dispute intake is temporarily unavailable")
     version, pepper = current
-    normalized = cr.normalize(kind, payload.value)
+    try:
+        normalized = cr.normalize(kind, payload.value)
+    except ValueError:
+        raise HTTPException(400, "value does not match the indicator type (a bank value looks like account|IFSC)")
     digest = cr._digest(kind, normalized, pepper)
     same_domain = (kind == "domain" and
                    payload.contact_email.rsplit("@", 1)[1].casefold().rstrip(".") == normalized)

@@ -113,7 +113,7 @@ class Institution(Base):
     """Single aggregate record ("Public"), created automatically; no per-college data."""
     __tablename__ = "institutions"
     id = Column(Integer, primary_key=True)
-    name = Column(String(200), nullable=False)
+    name = Column(String(200), nullable=False, unique=True)
     observations = relationship("InstitutionObservation", back_populates="institution", cascade="all, delete-orphan")
 
 

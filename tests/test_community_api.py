@@ -83,3 +83,10 @@ def test_dispute_reason_must_be_a_code_not_free_text(api_client, monkeypatch):
     assert old_field.status_code == 422
     ok = api_client.post("/disputes", json={**body, "reason_code": "reported_in_error"})
     assert ok.status_code == 200
+
+
+def test_malformed_bank_dispute_is_a_400_not_a_500(api_client, monkeypatch):
+    monkeypatch.setattr(community_reports, "_pepper_config", lambda: ((7, "test-api-secret"), {}))
+    r = api_client.post("/disputes", json={"indicator_type": "bank", "value": "123",
+                                           "contact_email": "legal@acme.example", "reason_code": "other"})
+    assert r.status_code == 400
