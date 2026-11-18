@@ -27,7 +27,7 @@ Rules:
 Returns status 'fail' (demand found), 'pass' (none found) or 'not_applicable'
 (no text), plus 'urgency': [matched urgency terms near a demand].
 
-Privacy: details name the matched rule phrases and UPI payment instructions; other
+Privacy: details name the matched rule phrases; a UPI handle is never echoed (it is "a UPI payment instruction (handle not shown)"); other
 surrounding offer text is not echoed back.
 """
 import re
@@ -216,7 +216,7 @@ def _attach_upi_to_phrase_demands(text: str, phrase_demands: List[Dict[str, Any]
                 continue
             attached.append({
                 "kind": "upi_instruction",
-                "match": f"UPI payment instruction: {handle.group(0)}",
+                "match": "a UPI payment instruction (handle not shown)",
                 "start": handle.start(),
                 "end": handle.end(),
             })

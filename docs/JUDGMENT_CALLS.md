@@ -236,3 +236,9 @@ Status: **open** = not reviewed yet.
   number returned in the response only (not stored or logged).
 - **Revisit:** a paid verification API (Surepass, Attestr, Zoop) if the team accepts sending each number to a third party.
 
+27. **UPI handle no longer appears in check text (open, audit finding A1).**
+- **Why a test changed:** `test_govt_scheme_payment_details_include_upi` asserted the raw handle was in the stored
+  check details. That contradicts docs/PRIVACY_DESIGN.md ("raw ... UPI IDs ... are never stored"), so the test was
+  rewritten to assert the opposite (instruction named, handle absent). The scoring result is unchanged.
+- **Added:** tests/test_no_raw_upi_persisted.py checks the response and every analysis table for the handle.
+
