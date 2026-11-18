@@ -59,16 +59,27 @@ def test_dispute_paths_require_same_domain_one_time_verification(api_client, mon
     monkeypatch.setattr("app.api.routes.community._send_verification", capture)
 
     pending = api_client.post("/disputes", json={"indicator_type": "domain", "value": "acme.example",
-        "contact_email": "legal@attacker.example", "reason": "We dispute this domain."})
+        "contact_email": "legal@attacker.example", "reason_code": "our_business_detail"})
     assert pending.status_code == 200
     assert "scoring continues" in pending.json()["message"]
     assert not captured
 
     verified_request = api_client.post("/disputes", json={"indicator_type": "domain", "value": "acme.example",
-        "contact_email": "legal@acme.example", "reason": "We dispute this domain."})
+        "contact_email": "legal@acme.example", "reason_code": "our_business_detail"})
     assert verified_request.status_code == 200
     assert captured["domain"] == "acme.example"
     verify = api_client.get("/disputes/verify", params={"token": captured["token"]})
     assert verify.status_code == 200
     assert verify.json()["status"] == "domain_verified"
     assert api_client.get("/disputes/verify", params={"token": captured["token"]}).status_code == 400
+
+
+def test_dispute_reason_must_be_a_code_not_free_text(api_client, monkeypatch):
+    monkeypatch.setattr(community_reports, "_pepper_config", lambda: ((7, "test-api-secret"), {}))
+    body = {"indicator_type": "domain", "value": "acme.example", "contact_email": "legal@attacker.example"}
+    free_text = api_client.post("/disputes", json={**body, "reason_code": "Dear Priya Sharma, account 123456789012 IFSC HDFC0001234"})
+    assert free_text.status_code == 422
+    old_field = api_client.post("/disputes", json={**body, "reason": "Our whole offer letter text"})
+    assert old_field.status_code == 422
+    ok = api_client.post("/disputes", json={**body, "reason_code": "reported_in_error"})
+    assert ok.status_code == 200

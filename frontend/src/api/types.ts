@@ -73,7 +73,7 @@ export interface DisputeRequest {
   indicator_type: DisputeIndicatorType
   value: string
   contact_email: string
-  reason: string
+  reason_code: "our_business_detail" | "reported_in_error" | "someone_else_misused_it" | "other"
 }
 export interface DisputeResponse { status: 'under_review'; message: string }
 

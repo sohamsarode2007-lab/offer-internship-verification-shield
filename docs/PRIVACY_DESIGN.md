@@ -152,7 +152,9 @@ company, under review”. The exception is a domain dispute verified by a
 one-time link sent to an address at that same domain; that domain may be
 suppressed while pending manual review. Store the dispute contact email only
 for follow-up, and delete it 12 months after resolution. The dispute reason
-must not be used to submit offer text or unrelated personal information.
+is a fixed code (our_business_detail, reported_in_error, someone_else_misused_it, other), never free
+text, so offer text and unrelated personal information cannot be submitted. Migration 008 overwrote
+free-text reasons stored earlier.
 
 Anonymous trend rows (ISO week, band, category) are deleted 24 months after
 their ISO week. Indicators and their report contributions not seen for 24 months are deleted
