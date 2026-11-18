@@ -48,6 +48,8 @@ export interface AnalyzeResponse {
   company_name?: string | null
   /** What the person could add to strengthen the check. */
   evidence_hints?: { id: string; title: string; why: string; how: string }[]
+  /** Official look-ups the person can run themselves (e.g. the Udyam number page). */
+  self_checks?: { id: string; title: string; number: string; url: string; why: string; steps: string[]; caution: string }[]
 }
 
 export interface ReportableIndicator {

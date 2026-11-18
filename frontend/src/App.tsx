@@ -181,6 +181,25 @@ function AddEvidence({ result, input, onResult }: { result: AnalyzeResponse; inp
     </form></section>
 }
 
+function SelfChecks({ checks }: { checks: NonNullable<AnalyzeResponse['self_checks']> }) {
+  const [copied, setCopied] = useState('')
+  if (!checks.length) return null
+  async function copy(id: string, value: string) {
+    try { await navigator.clipboard.writeText(value); setCopied(id) } catch { setCopied('') }
+  }
+  return <section className={styles.addEvidence}><h2>Check it yourself</h2>
+    <ul className={styles.hintCards}>{checks.map(c => <li key={c.id}>
+      <strong>{c.title}</strong><span>{c.why}</span>
+      <code>{c.number}</code>
+      <ol>{c.steps.map((step, i) => <li key={i}>{step}</li>)}</ol>
+      <em>{c.caution}</em>
+      <span className={styles.actions}>
+        <a href={c.url} target="_blank" rel="noopener noreferrer">Open the official page</a>
+        <button type="button" className={styles.secondaryButton} onClick={() => copy(c.id, c.number)}>{copied === c.id ? 'Copied' : 'Copy the number'}</button>
+      </span>
+    </li>)}</ul></section>
+}
+
 function Result({ result, input, onResult, onClear }: { result: AnalyzeResponse; input: Submitted; onResult: (result: AnalyzeResponse, input: Submitted) => void; onClear: () => void }) {
   const [reportOpen, setReportOpen] = useState(false)
   const band = result.risk_band
@@ -193,7 +212,7 @@ function Result({ result, input, onResult, onClear }: { result: AnalyzeResponse;
       <div className={styles.actions}>{canReport && <button onClick={() => setReportOpen(true)}>Report this scam</button>}<button className={styles.secondaryButton} onClick={onClear}>Check another offer</button></div>
       {result.complaint_summary?.trim() && <Complaint summary={result.complaint_summary}/>}
     </div>
-    <div className={styles.evidenceSide}><WhyList result={result}/><EvidenceLedger checks={result.checks ?? []}/><AddEvidence result={result} input={input} onResult={onResult}/></div>
+    <div className={styles.evidenceSide}><WhyList result={result}/><EvidenceLedger checks={result.checks ?? []}/><SelfChecks checks={result.self_checks ?? []}/><AddEvidence result={result} input={input} onResult={onResult}/></div>
     {reportOpen && canReport && result.report_token && <ReportDialog token={result.report_token} indicators={result.reportable_indicators ?? []} onClose={() => setReportOpen(false)}/>}
   </section>
 }

@@ -68,3 +68,5 @@ class AnalyzeResponse(BaseModel):
     company_name: Optional[str] = None
     # What the person could add to strengthen the check: [{id, title, why, how}].
     evidence_hints: List[dict] = Field(default_factory=list)
+    # Official look-ups the person can run themselves: [{id, title, number, url, why, steps, caution}].
+    self_checks: List[dict] = Field(default_factory=list)

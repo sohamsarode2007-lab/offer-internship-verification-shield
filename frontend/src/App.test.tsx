@@ -274,4 +274,21 @@ describe('add evidence and check again', () => {
     expect((await screen.findByRole('alert')).textContent).toMatch(/Add some text or choose a file/)
     expect(vi.mocked(api.analyze)).toHaveBeenCalledTimes(1)
   })
+
+  describe('self checks', () => {
+    const check = { id: 'udyam', title: 'Check this Udyam number yourself', number: 'UDYAM-MH-12-1234567',
+      url: 'https://udyamregistration.gov.in/Udyam_Verify.aspx', why: 'We have not verified it.', steps: ['Open the page.', 'Type the captcha.'], caution: 'A match shows the number exists.' }
+    it('shows nothing when there are no self checks', async () => {
+      await showResult(payload({ self_checks: [] }))
+      expect(screen.queryByRole('heading', { name: 'Check it yourself' })).toBeNull()
+    })
+    it('shows the number, the steps and a safe link to the official page', async () => {
+      await showResult(payload({ self_checks: [check] }))
+      expect(screen.getByText('UDYAM-MH-12-1234567')).toBeTruthy()
+      const link = screen.getByRole('link', { name: 'Open the official page' })
+      expect(link.getAttribute('href')).toBe(check.url)
+      expect(link.getAttribute('rel')).toContain('noopener')
+      expect(screen.getByText('Type the captcha.')).toBeTruthy()
+    })
+  })
 })

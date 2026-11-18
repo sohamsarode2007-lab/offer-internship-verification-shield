@@ -229,3 +229,10 @@ Status: **open** = not reviewed yet.
 - **Known limit:** coverage is narrow. Everything not in the tests still abstains. EC40 moved from known gap to
   "high risk"; EC42-EC45 added (two guard against false alarms).
 
+26. **Udyam "check it yourself" instead of automated verification (open).**
+- **Decided:** no captcha solving and no agent or crawler on udyamregistration.gov.in. The captcha exists to stop
+  automated look-ups, so we hand the person the number and the official link (a fixed constant) with honest wording.
+- **Also decided:** zero score effect, hidden when a payment demand was found, shown only for a strictly valid format,
+  number returned in the response only (not stored or logged).
+- **Revisit:** a paid verification API (Surepass, Attestr, Zoop) if the team accepts sending each number to a third party.
+
