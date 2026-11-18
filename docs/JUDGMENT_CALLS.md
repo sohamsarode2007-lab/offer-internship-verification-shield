@@ -221,3 +221,11 @@ Status: **open** = not reviewed yet.
   live call worked in November. The host is now overridable, so a real move costs one env change.
 - **Not added:** `MCA_STATE_CODES`. No evidence the API supports state filters on this resource, so it would be a guess.
 
+25. **Hinglish/Hindi wording rules (open, needs a native-speaker review).**
+- **Source:** Codex's unpushed draft, tightened. Its "deposit ... withdraw/unlock" rule flagged ordinary bank-intern and
+  onboarding sentences as the strong tier, and Hindi negation after the phrase ("select nahi karte") was ignored.
+- **Decided:** "deposit"/"unlock" dropped from the Hindi rules (recharge/top-up/"paise jama" only); a Hindi negation word
+  shortly after a match in the same sentence cancels it; the danda (।) ends a sentence; a few Devanagari patterns added.
+- **Known limit:** coverage is narrow. Everything not in the tests still abstains. EC40 moved from known gap to
+  "high risk"; EC42-EC45 added (two guard against false alarms).
+

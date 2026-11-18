@@ -77,7 +77,11 @@ or updates expected bands from predictions.
 | EC37 | Disposable mailbox +30; unverified GSTIN +10; no offset: 40 | insufficient evidence, verify manually |
 | EC38 | Labelled PAN fails format +25; domain pass -10: 15; registration failed, so the guard raises it to 31 | insufficient evidence, verify manually |
 | EC39 | Strong tier +30; domain -10; registry -10: 10; strong task-scam wording blocks the legitimate band, raising it to 31 | insufficient evidence, verify manually |
-| EC40 | No rule matches Hinglish wording: +20; +20: 40 | insufficient evidence, verify manually |
+| EC40 | Hinglish paid_tasks strong +30 and chat_only extra +10 (+40); missing registration +20; no usable domain and no registration +20: 80 | high risk |
+| EC42 | Hindi negation after the phrase cancels it: 0; registry match meets the guard | likely legitimate |
+| EC43 | "deposit and withdraw cash" is not a pay-to-withdraw pattern: 0; registry match meets the guard | likely legitimate |
+| EC44 | Devanagari paid_tasks +30 and chat extra +10; +20; +20: 80 | high risk |
+| EC45 | pay_to_withdraw strong +30; +20; +20: 70 | high risk |
 | EC41 | Copied real CIN and a passing domain: 0; registry match meets the guard | likely legitimate |
 
 EC20–EC22 (`registry_fixture=true`, `input_type=text_file`) read the demo offers in
@@ -162,6 +166,6 @@ cases (`synthetic=true`), not a held-out accuracy set.
 - **EC41 is a dangerous miss and is expected to be.** A scam that copies a real registered company's
   CIN and uses a domain that passes every check looks identical to a genuine offer to everything this tool
   can see. The summary line "1 dangerous miss(es)" is that case; do not "fix" it by loosening the guard.
-- **EC40:** the wording rules are English only, so a Hinglish task scam gets no rule points and abstains.
+- **Hinglish/Hindi coverage is narrow.** Only the phrasings in EC40-EC45 and tests/test_scam_text.py are covered; other spellings, slang and Hindi in other scripts or word orders still abstain. A native speaker has not reviewed the rules.
 - **EC33, EC34 (and EC21, EC22 earlier):** scams with only moderate evidence land in manual review rather
   than "high risk"; that is the intended behaviour, not a miss.

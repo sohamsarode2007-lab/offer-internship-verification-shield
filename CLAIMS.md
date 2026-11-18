@@ -287,3 +287,6 @@ been verified in this workspace.
 - Live lookup tuning (`DATA_GOV_IN_BASE_URL`, `MCA_LIVE_LOOKUP_TIMEOUT`, `INFRA_AGE_TIMEOUT`) only changes where and how long
   the app waits; it never changes a score. Live lookups are throttled to about two per second per process.
 
+- The scam-wording rules include a small set of Hinglish and Devanagari Hindi phrasings. They are narrow, have not been
+  reviewed by a native speaker, and most Hindi/Hinglish scam wording will not match.
+

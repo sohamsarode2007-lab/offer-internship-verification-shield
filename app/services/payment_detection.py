@@ -115,7 +115,7 @@ _URGENCY_RE = re.compile("|".join(f"(?:{p})" for p in URGENCY_PATTERNS), re.IGNO
 
 # Abbreviations whose trailing '.' must not end a sentence ("Rs. 5,000", "Pvt. Ltd.").
 _ABBREVIATIONS = {"rs", "no", "pvt", "ltd", "mr", "mrs", "ms", "dr", "inc", "co", "st", "vs", "etc", "e.g", "i.e"}
-_BOUNDARY_RE = re.compile(r"[.!?]+\s+|\n[ \t]*\n\s*")
+_BOUNDARY_RE = re.compile(r"[.!?।॥]+\s+|\n[ \t]*\n\s*")
 
 UPI_BEFORE_WINDOW = 120
 UPI_AFTER_WINDOW = 60

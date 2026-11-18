@@ -6,9 +6,9 @@ through a formal offer letter. Two tiers, each a fixed list of patterns:
 
   STRONG (the arrangement itself is the scam pattern)
     paid_tasks        "like/rate/review videos or products and earn", "Rs 500 per task",
-                      "prepaid/combination/merchant tasks"
+                      "prepaid/combination/merchant tasks", limited Hinglish/Hindi equivalents
     pay_to_withdraw   "recharge/deposit/pay ... to withdraw/unlock your earnings",
-                      "withdrawal fee/tax", "tax or release charges before salary"
+                      "withdrawal fee/tax", "tax or release charges before salary", limited Hinglish/Hindi equivalents
   MODERATE (common in scams, but occasionally used by genuine recruiters)
     chat_only         recruiter or "HR" reached only through WhatsApp/Telegram, t.me, wa.me
     easy_money        "selected without interview", "no interview required",
@@ -16,7 +16,10 @@ through a formal offer letter. Two tiers, each a fixed list of patterns:
 
 A pattern is ignored when a negation ("never", "not", "do not", ...) precedes it in the same
 sentence, using the same negation rules as payment_detection ("We never ask you to join a
-Telegram group" is not a hit).
+Telegram group" is not a hit). Hindi/Hinglish negation usually FOLLOWS the phrase ("... select nahi
+karte"), so a Hindi negation word (nahi, nahin, nhi, mat, नहीं, मत) shortly after the match in the same
+sentence also cancels it. Hindi rules are deliberately narrow (money/withdraw context required) and still
+await review by a native speaker; see docs/JUDGMENT_CALLS.md.
 
 Result: status 'fail' when any pattern matches, otherwise 'not_applicable' (absence of
 these phrases says nothing about whether an offer is genuine). 'tier' is 'strong' when a
@@ -40,23 +43,35 @@ _FAMILIES = {
         r"\b(?:earn|get\s+paid|receive)\b.{0,30}" + _AMOUNT + r".{0,25}\b(?:per|for\s+each|every)\s+(?:task|video|like|review|order|click|rating|app)\b",
         r"\b(?:prepaid|combination|merchant|premium)\s+tasks?\b",
         r"\bcomplete\s+(?:\d+\s+)?(?:simple|easy|online)\s+tasks?\b.{0,30}\b(?:daily|per\s+day|and\s+earn)\b",
+        r"\b(?:videos?|reels?|posts?|products?|hotels?|apps?)\b.{0,40}\b(?:like|rate|review)\s+kar\w*.{0,80}\b(?:earn|income|commission|paid|kamai|kama\w*)\b",
+        r"(?:वीडियो|रील|प्रोडक्ट|होटल|ऐप).{0,40}(?:लाइक|रेटिंग|रिव्यू).{0,80}(?:कमा|कमाई|कमीशन)",
     ]),
     "pay_to_withdraw": (True, [
         r"\b(?:recharge|top[-\s]?up|deposit|pay)\b.{0,60}\b(?:to|before)\s+(?:withdraw|unlock|release|activate|receive)\b.{0,30}\b(?:earnings?|salary|commission|balance|account|income|amount|payment)\b",
         r"\bwithdraw(?:al)?\b.{0,60}\b(?:fee|tax|charges?|recharge|deposit)\b",
         r"\b(?:tax|gst|clearance|release)\s+(?:fee|charges?)\b.{0,60}\b(?:salary|earnings|withdraw)",
+        r"\b(?:recharge|top[-\s]?up|paise?\s+(?:jama|bharo))\b.{0,60}\b(?:withdraw|nikal\w*)\b",
+        r"\b(?:withdraw|nikal\w*)\b.{0,60}\b(?:recharge|top[-\s]?up|paise?\s+(?:jama|bharo))\b",
     ]),
     "chat_only": (False, [
         r"\b(?:whats\s*app|telegram)\b.{0,60}\b(?:hr|recruiter|manager|team|group|channel|number|chat|join)\b",
         r"\b(?:contact|message|text|chat|msg|join|ping)\b.{0,40}\b(?:whats\s*app|telegram)\b",
         r"\b(?:t\.me|wa\.me)/|chat\.whatsapp\.com",
+        r"\b(?:whats\s*app|telegram)\b.{0,60}\b(?:sampark|baat|sandesh)\b",
+        r"(?:टेलीग्राम|टेलीग्रैम|व्हाट्सएप|व्हाट्सऐप|वॉट्सऐप|वॉट्सएप).{0,60}(?:संपर्क|सम्पर्क|बात|मैसेज)",
     ]),
     "easy_money": (False, [
         r"\b(?:selected|shortlisted|hired|approved)\b.{0,30}\bwithout\s+(?:any\s+)?(?:an?\s+)?interview\b",
         r"\bno\s+interview\s+(?:required|needed|necessary|process)\b",
         r"\bearn\b.{0,20}" + _AMOUNT + r".{0,20}\b(?:daily|per\s+day|a\s+day|per\s+week|weekly)\b",
+        r"\bbina\s+(?:kisi\s+)?interview\b",
+        r"बिना\s+(?:किसी\s+)?इंटरव्यू",
+        r"\binterview\b.{0,25}\b(?:zarurat|need)\s+(?:nahi|nahin|nhi)\b",
     ]),
 }
+# Hindi/Hinglish negation follows the phrase: "... select nahi karte". Only the rest of the sentence is checked.
+_POST_NEGATION_RE = re.compile(r"\b(?:nahi|nahin|nhi|mat)\b|नहीं|मत", re.IGNORECASE)
+_POST_NEGATION_WINDOW = 40
 _COMPILED = {name: (strong, [re.compile(p, re.IGNORECASE | re.DOTALL) for p in patterns])
              for name, (strong, patterns) in _FAMILIES.items()}
 
@@ -79,7 +94,9 @@ def detect_scam_text(facts: Dict[str, Any]) -> Dict[str, Any]:
         for pattern in patterns:
             for m in pattern.finditer(raw_text):
                 start, _ = _sentence_of(spans, m.start())
-                if not _is_negated(raw_text, start, m.start()):
+                _, end = _sentence_of(spans, m.start())
+                tail = raw_text[m.end():min(end, m.end() + _POST_NEGATION_WINDOW)]
+                if not _is_negated(raw_text, start, m.start()) and not _POST_NEGATION_RE.search(tail):
                     families.append(name)
                     break
             if name in families:

@@ -120,3 +120,37 @@ def test_analyze_flags_task_scam_text(api_client):
     assert check["status"] == "fail"
     assert body["risk_band"] == "high risk"
     assert text not in str(body)
+
+
+# ---- Hinglish / Hindi wording (narrow rules; await native-speaker review) ----
+@pytest.mark.parametrize("text, family", [
+    ("Ghar baithe videos like karke roz 500 rupaye kamaye.", "paid_tasks"),
+    ("घर बैठे वीडियो लाइक करके रोज़ 500 रुपये कमाएं।", "paid_tasks"),
+    ("Paise jama karo aur withdraw karo apna commission.", "pay_to_withdraw"),
+    ("Pehle recharge karo tabhi paisa nikal paoge.", "pay_to_withdraw"),
+    ("Telegram par sampark karein.", "chat_only"),
+    ("टेलीग्राम पर संपर्क करें।", "chat_only"),
+    ("Bina interview ke job milegi.", "easy_money"),
+    ("बिना इंटरव्यू नौकरी पाएं।", "easy_money"),
+    ("Interview ki zarurat nahi hai.", "easy_money"),
+])
+def test_hinglish_rules_trigger(text, family):
+    result = scan(text)
+    assert result["status"] == "fail" and family in result["families"]
+
+
+@pytest.mark.parametrize("text", [
+    "Hum bina interview ke kisi ko select nahi karte.",
+    "हम बिना इंटरव्यू किसी का चयन नहीं करते।",
+    "You will learn how customers deposit and withdraw cash at the branch counter.",
+    "Complete onboarding to unlock your laptop and deposit your documents with HR.",
+    "Aap apna ID card HR se nikal sakte hain; documents deposit karne ke baad unlock hoga.",
+    "Is job ke liye koi fee nahi lagti. Interview ke baad offer milega.",
+])
+def test_hinglish_rules_do_not_trigger_on_ordinary_or_negated_wording(text):
+    assert scan(text)["status"] == "not_applicable"
+
+
+def test_danda_ends_a_sentence_so_a_later_negation_does_not_leak_back():
+    text = "बिना इंटरव्यू नौकरी पाएं। हम कभी पैसे नहीं मांगते।"
+    assert "easy_money" in scan(text)["families"]
