@@ -301,3 +301,8 @@ been verified in this workspace.
   snapshot, community reports or demo fixture), whether it affects the score, forces high risk or has no effect, and a
   confidence. A check that could not tell (unknown or not applicable) shows "not enough to tell", never a pass. The
   record holds no offer text or identifiers.
+
+- **Link patterns.** The "Why" list notes when a link in the offer uses a known URL shortener, an `xn--` (punycode)
+  domain, a domain mixing look-alike alphabets, a raw IP address or an `@` trick. These are structural checks of the
+  text only: no link is opened, no redirect is followed and no reputation service is asked. They add no score and never
+  repeat the link.

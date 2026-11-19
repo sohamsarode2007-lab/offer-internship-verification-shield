@@ -1,7 +1,7 @@
 """
 Plausibility notes (informational only: never change the score)
 
-Three weak signals that are shown in the 'Why' list with no score impact, because each has
+Weak signals (the link-pattern notes are in url_evidence.py) that are shown in the 'Why' list with no score impact, because each has
 common innocent explanations and none is strong enough to count as evidence on its own:
 
   salary  A stated pay far above normal for an internship/fresher role
@@ -78,5 +78,6 @@ def pdf_metadata_note(file_bytes: Optional[bytes]) -> Optional[str]:
 
 
 def collect_notes(text: str, pdf_bytes: Optional[bytes] = None) -> List[str]:
-    notes = [salary_note(text or ""), phone_note(text or ""), pdf_metadata_note(pdf_bytes)]
+    from app.services.url_evidence import url_notes  # link-pattern notes are informational too
+    notes = [salary_note(text or ""), phone_note(text or ""), pdf_metadata_note(pdf_bytes)] + url_notes(text or "")
     return [n for n in notes if n]

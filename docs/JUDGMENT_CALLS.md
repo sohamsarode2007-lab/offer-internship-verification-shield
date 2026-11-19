@@ -255,3 +255,11 @@ Status: **open** = not reviewed yet.
 - The Playwright test expected "Reported by 3+ students"; the product text became "Reported by 3+ people" in an earlier
   commit (dbe57b2) and the suite was not in CI, so nobody noticed. The test now matches the deliberate wording.
 - Running it locally in the cloud sandbox is not possible (no matching browser build), so CI is the check for it.
+
+30. **Rules B2 and B3 (open).**
+- **Advance-fee wording (B2)** uses the existing strong tier (+30, blocks "likely legitimate"); no new weight. Patterns are
+  directional on purpose ("we will send you a gift card" and "you will receive an OTP" do not match) and a negation cancels
+  a match. Hand-derived eval cases EC46-EC50 include two false-alarm guards.
+- **Link patterns (B3)** are informational (no score). A shortener or `@` in a link has many innocent uses, and a score
+  would punish genuine recruiters. Redirect-following and TLS checks need network calls, so they sit with the optional,
+  consented lookups (group C), not here.
