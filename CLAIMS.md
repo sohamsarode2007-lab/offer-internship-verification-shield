@@ -294,3 +294,8 @@ been verified in this workspace.
   Udyam verification page so the person can check it themselves. The tool does not query that page (it needs a captcha),
   does not verify the number, adds no score, and never stores the number.
 
+
+- **Evidence source line.** Each check in the result shows its source (offer text, email headers, DNS lookup, local company
+  snapshot, community reports or demo fixture), whether it affects the score, forces high risk or has no effect, and a
+  confidence. A check that could not tell (unknown or not applicable) shows "not enough to tell", never a pass. The
+  record holds no offer text or identifiers.

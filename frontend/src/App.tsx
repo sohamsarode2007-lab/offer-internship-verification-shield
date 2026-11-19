@@ -71,13 +71,20 @@ function Home({ onResult }: { onResult: (result: AnalyzeResponse, input: Submitt
   </section>
 }
 
-function EvidenceLedger({ checks }: { checks: CheckResult[] }) {
+const sourceText: Record<string, string> = {
+  dns_lookup: 'DNS lookup', offer_text: 'offer text', email_headers: 'email headers', community_reports: 'community reports',
+  offer_text_and_local_registry_snapshot: 'offer text and local company snapshot', demo_fixture: 'demo fixture', derived_check: 'derived check',
+}
+const affectsText: Record<string, string> = { score: 'affects the score', safety_floor: 'forces high risk', context: 'no score effect' }
+
+function EvidenceLedger({ checks, meta = [] }: { checks: CheckResult[]; meta?: NonNullable<AnalyzeResponse['evidence_meta']> }) {
   return <section className={styles.ledgerSection}><h2>Evidence</h2><div className={styles.ledgerWrap}><table className={styles.ledger} aria-label="Evidence"><thead><tr><th scope="col">Check</th><th scope="col">Result</th></tr></thead><tbody>{checks.map((check, index) => {
     const details = check.details ?? ''
     const demoMarker = details.includes('[DEMO FIXTURE')
+    const m = meta.find(item => item.check_name === check.check_name)
     return <tr className={styles.ledgerRow} key={`${check.check_name}-${index}`} style={{ '--row-index': index } as React.CSSProperties}>
       <th scope="row">{labelByCheck[check.check_name] ?? check.check_name.replaceAll('_', ' ')}</th>
-      <td><span className={styles.status}><span aria-hidden="true">{statusGlyph[check.status]}</span> {statusText[check.status]}</span>{demoMarker && <span className={styles.demoNote}>Demo fixture, not a live check</span>}{details && <details className={styles.details}><summary>Details</summary><p>{details}</p></details>}</td>
+      <td><span className={styles.status}><span aria-hidden="true">{statusGlyph[check.status]}</span> {statusText[check.status]}</span>{demoMarker && <span className={styles.demoNote}>Demo fixture, not a live check</span>}{m && <span className={styles.sourceNote}>Source: {sourceText[m.source] ?? m.source} · {affectsText[m.affects] ?? m.affects} · confidence: {m.confidence === 'none' ? 'not enough to tell' : m.confidence}</span>}{details && <details className={styles.details}><summary>Details</summary><p>{details}</p></details>}</td>
     </tr>
   })}</tbody></table></div></section>
 }
@@ -212,7 +219,7 @@ function Result({ result, input, onResult, onClear }: { result: AnalyzeResponse;
       <div className={styles.actions}>{canReport && <button onClick={() => setReportOpen(true)}>Report this scam</button>}<button className={styles.secondaryButton} onClick={onClear}>Check another offer</button></div>
       {result.complaint_summary?.trim() && <Complaint summary={result.complaint_summary}/>}
     </div>
-    <div className={styles.evidenceSide}><WhyList result={result}/><EvidenceLedger checks={result.checks ?? []}/><SelfChecks checks={result.self_checks ?? []}/><AddEvidence result={result} input={input} onResult={onResult}/></div>
+    <div className={styles.evidenceSide}><WhyList result={result}/><EvidenceLedger checks={result.checks ?? []} meta={result.evidence_meta ?? []}/><SelfChecks checks={result.self_checks ?? []}/><AddEvidence result={result} input={input} onResult={onResult}/></div>
     {reportOpen && canReport && result.report_token && <ReportDialog token={result.report_token} indicators={result.reportable_indicators ?? []} onClose={() => setReportOpen(false)}/>}
   </section>
 }

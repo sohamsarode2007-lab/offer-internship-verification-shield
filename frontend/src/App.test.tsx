@@ -304,4 +304,22 @@ describe('add evidence and check again', () => {
       expect(screen.getByText('Type the captcha.')).toBeTruthy()
     })
   })
+
+  describe('evidence source line', () => {
+    it('shows source, score effect and confidence for a check', async () => {
+      await showResult(payload({
+        checks: [{ check_name: 'domain_verification', status: 'fail', score: 100, details: 'bad' }],
+        evidence_meta: [{ check_name: 'domain_verification', source: 'dns_lookup', affects: 'score', confidence: 'medium', freshness: 'live at check time', rule_version: 'rule_based_v2', checked_at: '2026-11-19T09:00:00Z' }],
+      }))
+      expect(screen.getByText(/Source: DNS lookup · affects the score · confidence: medium/)).toBeInTheDocument()
+    })
+    it('says "not enough to tell" for an unknown check', async () => {
+      await showResult(payload({
+        checks: [{ check_name: 'gstin_verification', status: 'insufficient_information', score: null, details: 'none' }],
+        evidence_meta: [{ check_name: 'gstin_verification', source: 'offer_text_and_local_registry_snapshot', affects: 'context', confidence: 'none', freshness: 'x', rule_version: 'rule_based_v2', checked_at: 'x' }],
+      }))
+      expect(screen.getByText(/no score effect · confidence: not enough to tell/)).toBeInTheDocument()
+    })
+  })
 })
+

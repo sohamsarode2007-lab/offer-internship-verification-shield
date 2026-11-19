@@ -20,6 +20,7 @@ from app.services import (
     email_auth,
     evidence_hints,
     self_checks,
+    evidence_meta,
     plausibility,
     risk_scoring,
     community_reports,
@@ -267,6 +268,7 @@ def analyze_offer(
         # Returned for display only; never persisted (Offer.company_name stays NULL).
         company_name=get_field_value(facts, "company_name", "company_name_legacy"),
         self_checks=self_checks.build_self_checks(facts, check_dicts),
+        evidence_meta=evidence_meta.build_evidence_meta(check_dicts),
         evidence_hints=evidence_hints.build_evidence_hints(
             check_dicts, had_file=bool(email_result),
             had_image=bool(filename and filename.lower().rsplit(".", 1)[-1] in {"png", "jpg", "jpeg", "bmp", "tiff"})),
