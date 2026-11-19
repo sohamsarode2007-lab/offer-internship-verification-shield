@@ -242,7 +242,9 @@ been verified in this workspace.
 
 - `app/services/scam_text.py` matches fixed phrase patterns typical of WhatsApp/Telegram job scams
   (paid tasks for liking or rating, pay-to-withdraw, recruiter reachable only by chat, no-interview
-  and easy-money claims). It is wording only: it does not know whether a person or group is a scammer.
+  and easy-money claims) and advance-fee wording (fake cheque with a balance to send back, package
+  re-shipping, buying gift cards or sharing their codes, sending crypto to a wallet, sharing an OTP,
+  CVV or PIN, sending an "overpayment" back). The advance-fee families are the strong tier. It is wording only: it does not know whether a person or group is a scammer.
 - Weights: strong tier +30 and it blocks "likely legitimate"; moderate tier +15; both tiers +40 in total.
   A negation earlier in the sentence ("we never ask you to join Telegram") cancels a match.
 - No match is reported as "not applicable", never as a pass: absence of these phrases does not show

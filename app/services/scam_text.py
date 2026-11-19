@@ -9,6 +9,12 @@ through a formal offer letter. Two tiers, each a fixed list of patterns:
                       "prepaid/combination/merchant tasks", limited Hinglish/Hindi equivalents
     pay_to_withdraw   "recharge/deposit/pay ... to withdraw/unlock your earnings",
                       "withdrawal fee/tax", "tax or release charges before salary", limited Hinglish/Hindi equivalents
+    fake_cheque       a cheque/draft to deposit, then send back the "balance/excess"
+    reshipping        receive packages at home and re-ship/forward them
+    gift_card         buy gift cards, or send gift-card codes/PINs
+    crypto            buy/send crypto to a wallet address as part of the "job"
+    otp_sharing       share/tell/give an OTP, CVV or UPI/ATM PIN
+    refund_request    "we paid you too much, send the extra back"
   MODERATE (common in scams, but occasionally used by genuine recruiters)
     chat_only         recruiter or "HR" reached only through WhatsApp/Telegram, t.me, wa.me
     easy_money        "selected without interview", "no interview required",
@@ -53,6 +59,28 @@ _FAMILIES = {
         r"\b(?:recharge|top[-\s]?up|paise?\s+(?:jama|bharo))\b.{0,60}\b(?:withdraw|nikal\w*)\b",
         r"\b(?:withdraw|nikal\w*)\b.{0,60}\b(?:recharge|top[-\s]?up|paise?\s+(?:jama|bharo))\b",
     ]),
+    "fake_cheque": (True, [
+        r"\b(?:cheque|check|cashier'?s\s+check|demand\s+draft|money\s+order)\b.{0,80}\b(?:deposit|cash)\b.{0,100}\b(?:send|transfer|wire|return|forward)\b.{0,60}\b(?:balance|remaining|rest|excess|difference|extra)\b",
+    ]),
+    "reshipping": (True, [
+        r"\b(?:receive|accept)\b.{0,40}\b(?:packages?|parcels?|shipments?)\b.{0,60}\b(?:re-?ship|forward|repack|send\s+(?:them|it)\s+on)\w*",
+        r"\b(?:re-?shipping|package\s+forwarding|parcel\s+forwarding)\s+(?:job|agent|work|position|role)\b",
+    ]),
+    "gift_card": (True, [
+        r"\b(?:buy|purchase)\b.{0,40}\b(?:gift\s*cards?|google\s*play\s*cards?|itunes\s*cards?|steam\s*cards?|amazon\s*(?:pay\s*)?cards?)\b",
+        r"\b(?:send|share|read\s+out|scratch)\b.{0,30}\bgift\s*cards?\b.{0,30}\b(?:codes?|pins?|numbers?|photos?)\b",
+    ]),
+    "crypto": (True, [
+        r"\b(?:buy|purchase|send|transfer|deposit)\b.{0,60}\b(?:bitcoin|btc|usdt|ethereum|crypto(?:currency)?)\b.{0,60}\b(?:wallet|address)\b",
+    ]),
+    "otp_sharing": (True, [
+        r"\b(?:share|tell|give|forward|read\s+out)\b.{0,30}\b(?:otp|one[-\s]?time\s+(?:password|pin|code)|cvv|upi\s+pin|atm\s+pin)\b",
+        r"\bsend\s+(?:us|me)\b.{0,25}\b(?:otp|one[-\s]?time\s+(?:password|pin|code)|cvv)\b",
+    ]),
+    "refund_request": (True, [
+        r"\b(?:accidentally|mistakenly|by\s+mistake)\b.{0,40}\b(?:sent|paid|transferred|credited)\b.{0,40}\b(?:more|excess|extra)\b.{0,100}\b(?:return|refund|send\s+back|transfer\s+back)\b",
+        r"\b(?:return|send\s+back|transfer\s+back|refund)\b.{0,30}\b(?:the\s+)?(?:excess|extra|overpaid|overpayment)\b",
+    ]),
     "chat_only": (False, [
         r"\b(?:whats\s*app|telegram)\b.{0,60}\b(?:hr|recruiter|manager|team|group|channel|number|chat|join)\b",
         r"\b(?:contact|message|text|chat|msg|join|ping)\b.{0,40}\b(?:whats\s*app|telegram)\b",
@@ -76,6 +104,12 @@ _COMPILED = {name: (strong, [re.compile(p, re.IGNORECASE | re.DOTALL) for p in p
              for name, (strong, patterns) in _FAMILIES.items()}
 
 LABELS = {
+    "fake_cheque": "fake-cheque wording (deposit a cheque, send back the balance)",
+    "reshipping": "package re-shipping wording",
+    "gift_card": "gift-card wording (buy cards or send codes)",
+    "crypto": "wording about buying or sending crypto to a wallet",
+    "otp_sharing": "wording asking you to share an OTP, CVV or PIN",
+    "refund_request": "wording asking you to send an overpayment back",
     "paid_tasks": "paid-task wording (earning for liking, rating or reviewing)",
     "pay_to_withdraw": "pay-to-withdraw wording",
     "chat_only": "recruiter reached only through WhatsApp or Telegram",

@@ -16,7 +16,8 @@ Risk points (added):
   +25  Corporate From with free-mailbox or unrelated Reply-To
   +25  Protected-brand display name from a non-official domain
   +15  Body-claimed domain differs from the .eml From domain
-  +30  Scam-chat wording, strong tier (paid tasks for likes/reviews, pay-to-withdraw); also
+  +30  Scam-chat wording, strong tier (paid tasks for likes/reviews, pay-to-withdraw, fake cheque, re-shipping,
+          gift-card purchase or codes, crypto to a wallet, sharing an OTP/CVV/PIN, sending an overpayment back); also
        blocks 'likely legitimate' (raised to 31)
   +15  Scam-chat wording, moderate tier only (recruiter reachable only via WhatsApp/Telegram,
        no-interview or easy-money claims)

@@ -81,6 +81,11 @@ or updates expected bands from predictions.
 | EC42 | Hindi negation after the phrase cancels it: 0; registry match meets the guard | likely legitimate |
 | EC43 | "deposit and withdraw cash" is not a pay-to-withdraw pattern: 0; registry match meets the guard | likely legitimate |
 | EC44 | Devanagari paid_tasks +30 and chat extra +10; +20; +20: 80 | high risk |
+| EC46 | fake_cheque strong +30; missing registration +20; no usable domain and no registration +20: 70 | high risk |
+| EC47 | otp_sharing strong +30; +20; +20: 70 | high risk |
+| EC48 | reshipping strong +30; +20; +20: 70 | high risk |
+| EC49 | Negated OTP wording adds 0; registry match meets the guard: 0 | likely legitimate |
+| EC50 | Receiving a gift card is not a scam pattern: 0; registry match meets the guard | likely legitimate |
 | EC45 | pay_to_withdraw strong +30; +20; +20: 70 | high risk |
 | EC41 | Copied real CIN and a passing domain: 0; registry match meets the guard | likely legitimate |
 

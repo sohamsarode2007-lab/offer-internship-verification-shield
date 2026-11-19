@@ -154,3 +154,36 @@ def test_hinglish_rules_do_not_trigger_on_ordinary_or_negated_wording(text):
 def test_danda_ends_a_sentence_so_a_later_negation_does_not_leak_back():
     text = "बिना इंटरव्यू नौकरी पाएं। हम कभी पैसे नहीं मांगते।"
     assert "easy_money" in scan(text)["families"]
+
+
+# ---- fake cheque, re-shipping, gift card, crypto, OTP and refund-request wording ----
+@pytest.mark.parametrize("text, family", [
+    ("We will mail you a cheque. Deposit the cheque and then transfer the remaining balance to our vendor.", "fake_cheque"),
+    ("You will receive packages at your home and reship them to our clients.", "reshipping"),
+    ("This is a parcel forwarding job from home.", "reshipping"),
+    ("Buy Google Play cards worth Rs 5000 and share the pin.", "gift_card"),
+    ("Scratch the card and send the gift card code on Telegram.", "gift_card"),
+    ("Buy USDT and send it to the wallet address we give you.", "crypto"),
+    ("To activate your account please share the OTP you receive.", "otp_sharing"),
+    ("Please send us the CVV to confirm.", "otp_sharing"),
+    ("We accidentally paid you more than the stipend; please send back the excess.", "refund_request"),
+    ("Please return the overpayment by UPI.", "refund_request"),
+])
+def test_advance_fee_style_wording_triggers_strong(text, family):
+    result = scan(text)
+    assert result["status"] == "fail" and family in result["families"] and result["tier"] == "strong"
+
+
+@pytest.mark.parametrize("text", [
+    "We will send you an Amazon gift card as a joining bonus.",
+    "Never share your OTP with anyone, including us.",
+    "Please do not share your OTP or CVV with anyone.",
+    "You will receive an OTP to verify your email.",
+    "We do not accept cheques.",
+    "We will never ask you to buy gift cards.",
+    "The role involves building a crypto wallet app; deposit your documents with HR.",
+    "Your laptop will be shipped to your home; return it when the internship ends.",
+    "Return the signed offer letter by Friday.",
+])
+def test_ordinary_and_negated_wording_does_not_trigger(text):
+    assert scan(text)["status"] == "not_applicable"
