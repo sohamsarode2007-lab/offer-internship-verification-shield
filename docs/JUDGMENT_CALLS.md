@@ -250,3 +250,8 @@ Status: **open** = not reviewed yet.
   `is_demo` is true. Older unlinked demo rows are ambiguous and stay unmarked (they still count only in DEMO_MODE).
 - **Limit:** databases that already ran 005/007 are unchanged; this protects fresh and older databases. Editing an
   applied migration is normally avoided, and is justified here only because the old behaviour destroyed or mislabelled data.
+
+29. **End-to-end test wording updated after CI began running it (open, audit finding A7).**
+- The Playwright test expected "Reported by 3+ students"; the product text became "Reported by 3+ people" in an earlier
+  commit (dbe57b2) and the suite was not in CI, so nobody noticed. The test now matches the deliberate wording.
+- Running it locally in the cloud sandbox is not possible (no matching browser build), so CI is the check for it.

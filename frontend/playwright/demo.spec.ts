@@ -35,7 +35,7 @@ test('demo analysis, reporting, dashboard, and public screens', async ({ page },
     await page.getByRole('button', { name: 'Check offer' }).click()
     await expect(page.getByRole('heading', { name: sample.band, exact: true })).toBeVisible()
     if (sample.band === 'Likely legitimate') await expect(page.getByRole('button', { name: 'Report this scam' })).toHaveCount(0)
-    if (sample.button === 'Corvane internship') await expect(page.getByRole('table', { name: 'Why' }).getByText('Reported by 3+ students')).toBeVisible()
+    if (sample.button === 'Corvane internship') await expect(page.getByRole('table', { name: 'Why' }).getByText('Reported by 3+ people')).toBeVisible()
     await capture(page, testInfo, sample.shot)
   }
 
