@@ -59,7 +59,7 @@ function Home({ onResult }: { onResult: (result: AnalyzeResponse, input: Submitt
     <form onSubmit={run} className={styles.intake}>
       <div className={styles.intakeGrid}>
         <label className={styles.textWell}><span>Paste offer text</span><textarea value={text} onChange={e => { setText(e.target.value); setDemoText('') }} disabled={busy} placeholder="Paste the message or offer letter here" rows={12}/></label>
-        <div className={styles.uploadWell}><label htmlFor={fileInputId} className={styles.uploadLabel}>Choose a PDF, image or .eml</label><input id={fileInputId} type="file" accept=".pdf,.png,.jpg,.jpeg,.bmp,.tiff,.eml" disabled={busy} onChange={e => { setFile(e.target.files?.[0] ?? null); setDemoText('') }}/>
+        <div className={styles.uploadWell}><label htmlFor={fileInputId} className={styles.uploadLabel}>Choose a PDF, image, .eml or .txt file</label><input id={fileInputId} type="file" accept=".pdf,.png,.jpg,.jpeg,.bmp,.tiff,.eml,.txt" disabled={busy} onChange={e => { setFile(e.target.files?.[0] ?? null); setDemoText('') }}/>
           <p className={styles.help}>Uploading the original email lets us verify who actually sent it.</p><p className={styles.help}>Gmail: open the message → ⋮ → “Download message”.</p>
           {file && <p className={styles.selectedFile}>Selected: {file.name}</p>}{demoText && <p className={styles.selectedFile}>Sample loaded: {demoText.replace('.txt', '')}</p>}
         </div>
@@ -116,7 +116,7 @@ function ReportDialog({ token, indicators, onClose }: { token: string; indicator
   }, [onClose])
   const toggle = (id: string) => setSelected(old => { const next = new Set(old); next.has(id) ? next.delete(id) : next.add(id); return next })
   async function submit() {
-    if (!selected.size || !consented) return
+    if (!consented) return
     setBusy(true); setError('')
     try { const response = await submitReport({ report_token: token, consent: true, consent_version: CONSENT_VERSION, selected_indicators: [...selected] }); setWithdrawalCode(response.withdrawal_code) }
     catch (err) { setError(err instanceof Error ? err.message : 'The report could not be submitted.') }
@@ -128,11 +128,11 @@ function ReportDialog({ token, indicators, onClose }: { token: string; indicator
     {!withdrawalCode ? step === 1 ? <><h2 id="report-title">Choose details to share</h2><p>Review the masked details extracted from this offer.</p>
       <fieldset className={styles.indicators}><legend>Payment and contact details</legend>{indicators.map(indicator => <label key={indicator.id}><input type="checkbox" checked={selected.has(indicator.id)} onChange={() => toggle(indicator.id)}/><span>{({ upi: 'Payment UPI ID', bank: 'Payment bank account', phone: 'Contact phone', email: 'Sender email', domain: 'Sender email domain' })[indicator.indicator_type]}</span><span className={styles.masked}>{indicator.masked}</span></label>)}{!indicators.length && <p>No payment or contact details were available to share. The wording fingerprint can still be shared with consent.</p>}</fieldset>
       <p className={styles.help}>Untick anything that’s yours or that you don’t want to share.</p>
-      <button onClick={() => setStep(2)} disabled={!selected.size}>Continue</button>
+      <button onClick={() => setStep(2)}>Continue</button>
     </> : <><h2 id="report-title">Review and consent</h2><p>Only the selected indicators and a redacted wording fingerprint will be shared.</p>
       <label className={styles.consent}><input type="checkbox" checked={consented} onChange={e => setConsented(e.target.checked)}/><span>{CONSENT_TEXT}</span></label>
       {error && <p className={styles.error} role="alert">{error}</p>}
-      <div className={styles.actions}><button type="button" className={styles.secondaryButton} onClick={() => setStep(1)}>Back</button><button onClick={submit} disabled={!selected.size || !consented || busy}>{busy ? 'Sending…' : 'Report scam'}</button></div>
+      <div className={styles.actions}><button type="button" className={styles.secondaryButton} onClick={() => setStep(1)}>Back</button><button onClick={submit} disabled={!consented || busy}>{busy ? 'Sending…' : 'Report scam'}</button></div>
     </> : <><h2 id="report-title">Reported</h2><p>Future job seekers who receive the same details will be warned.</p><div className={styles.withdrawCode}><span>Withdrawal code</span><strong>{withdrawalCode}</strong></div><button className={styles.secondaryButton} onClick={copyCode}>Copy code</button><p className={styles.help}>Save this code. It’s the only way to withdraw this report, and we can’t show it again.</p><button className={styles.textButton} onClick={onClose}>Close</button></>}
   </div></div>
 }
@@ -174,7 +174,7 @@ function AddEvidence({ result, input, onResult }: { result: AnalyzeResponse; inp
     <form onSubmit={recheck}>
       <label className={styles.textWell}><span>More details to add</span><textarea value={extra} onChange={e => setExtra(e.target.value)} disabled={busy} rows={4} placeholder="Paste the sender's address, CIN or GSTIN, or anything else from the offer"/></label>
       <label htmlFor={fileId} className={styles.uploadLabel}>Add a file (original email, screenshot or QR code)</label>
-      <input id={fileId} type="file" accept=".pdf,.png,.jpg,.jpeg,.bmp,.tiff,.eml" disabled={busy} onChange={e => setFile(e.target.files?.[0] ?? null)}/>
+      <input id={fileId} type="file" accept=".pdf,.png,.jpg,.jpeg,.bmp,.tiff,.eml,.txt" disabled={busy} onChange={e => setFile(e.target.files?.[0] ?? null)}/>
       <p className={styles.help}>Only one file is checked at a time; a new file replaces the earlier one. Nothing you add is stored.</p>
       <button type="submit" disabled={busy}>{busy ? 'Checking…' : 'Check again with this'}</button>
       {error && <p className={styles.error} role="alert">{error}</p>}

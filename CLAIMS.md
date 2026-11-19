@@ -172,7 +172,7 @@ been verified in this workspace.
   Pasted text, PDFs, and images still check only the domain claimed in the content.
 - **Community indicator network is implemented.** `/analyze` offers a signed
   24-hour token and a masked, deselectable list of scammer-role indicators.
-  Reports require version-2 consent; identifiers are stored as peppered,
+  Reports require version-4 consent; identifiers are stored as peppered,
   key-versioned HMAC digests and template signatures are computed after
   redacting names, identifiers, amounts and dates. Indicator thresholds are 3+
   (+25) and 10+ (+40); template similarity >=0.8 adds +25. Correlated evidence

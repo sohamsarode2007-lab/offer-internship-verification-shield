@@ -16,7 +16,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   if (!response.ok) {
     const messages: Record<number, string> = {
       413: 'This file is over 10 MB. Upload a smaller file or paste the text instead.',
-      415: "This file type isn't supported. Use PDF, PNG, JPG or .eml.",
+      415: "This file type isn't supported. Use PDF, PNG, JPG, BMP, TIFF, .eml or .txt.",
       422: "We couldn't read any text in this file. Try a clearer image or paste the text.",
       429: 'Too many checks in a minute. Wait a moment and try again.',
     }
@@ -26,6 +26,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       detail = typeof body.detail === 'string' ? body.detail : ''
     } catch { /* The status message is enough. */ }
     let message = messages[response.status] ?? (detail || 'The request failed. Try again.')
+    // 413 covers both "file too big" and "text too long"; keep the server's wording for the text case.
+    if (response.status === 413 && /characters/i.test(detail)) message = detail
     if (response.status === 400 && detail) {
       const lower = detail.toLowerCase()
       if (path === '/report' && (lower.includes('expired') || lower.includes('already used') || lower.includes('invalid report token'))) {

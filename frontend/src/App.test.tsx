@@ -227,6 +227,19 @@ describe('community report consent', () => {
     expect(CONSENT_TEXT.endsWith("The public scam-trends page will show these details in masked form so it can warn other job seekers.")).toBe(true)
   })
 
+  it('allows a wording-only report when every detail is unticked', async () => {
+    vi.mocked(api.submitReport).mockResolvedValueOnce({ status: 'reported', withdrawal_code: 'wording-only-code-1234567890' })
+    const user = await showResult(payload({ report_token: 'signed-report-token-is-long-enough', reportable_indicators: indicators }))
+    await user.click(screen.getByRole('button', { name: 'Report this scam' }))
+    for (const box of screen.getAllByRole('checkbox')) await user.click(box)
+    await user.click(screen.getByRole('button', { name: 'Continue' }))
+    expect(screen.getByRole('button', { name: 'Report scam' })).toBeDisabled()
+    await user.click(screen.getByLabelText(CONSENT_TEXT))
+    await user.click(screen.getByRole('button', { name: 'Report scam' }))
+    expect(await screen.findByText('wording-only-code-1234567890')).toBeInTheDocument()
+    expect(vi.mocked(api.submitReport)).toHaveBeenCalledWith(expect.objectContaining({ selected_indicators: [] }))
+  })
+
   it('allows deselection, requires consent and does not store the withdrawal code', async () => {
     vi.mocked(api.submitReport).mockResolvedValueOnce({ status: 'reported', withdrawal_code: 'once-only-secret-code-123456' })
     const user = await showResult(payload({ report_token: 'signed-report-token-is-long-enough', reportable_indicators: indicators }))

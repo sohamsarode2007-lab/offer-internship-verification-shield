@@ -12,7 +12,7 @@ const response = (status: number, detail: string) => ({
 describe('backend error translation', () => {
   it.each([
     [413, 'text too large', 'This file is over 10 MB. Upload a smaller file or paste the text instead.'],
-    [415, 'unsupported type', "This file type isn't supported. Use PDF, PNG, JPG or .eml."],
+    [415, 'unsupported type', "This file type isn't supported. Use PDF, PNG, JPG, BMP, TIFF, .eml or .txt."],
     [422, 'no extracted text', "We couldn't read any text in this file. Try a clearer image or paste the text."],
     [429, 'rate limited', 'Too many checks in a minute. Wait a moment and try again.'],
   ])('shows the specified message for HTTP %i', async (status, detail, message) => {

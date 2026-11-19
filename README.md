@@ -36,7 +36,7 @@ master data; it does not contact a remote registry. Obtain the source data from
 an official MCA/data.gov.in release, then load it with
 `python scripts/load_mca_master.py <source.csv> --db data/mca_master.sqlite3`.
 
-Employer advisories: `ADVISORY_BOT_CONTACT=you@example.org python scripts/advisory_scraper.py fetch`
+Employer advisories: `ADVISORY_BOT_CONTACT=you@bot.example python scripts/advisory_scraper.py fetch`
 writes candidates to `advisory_candidates.json` (git-ignored); review, set `statement` and `approved`, then run
 `python scripts/advisory_scraper.py promote advisory_candidates.json`. See docs/JUDGMENT_CALLS.md #17.
 Set `MCA_DB_PATH` if the database is stored elsewhere. The matcher checks the
@@ -158,9 +158,9 @@ Category rules use the existing check results and follow this priority:
 ## Tests and migrations
 
 ```powershell
-..\.venv\Scripts\python.exe -m pytest -q
-..\.venv\Scripts\python.exe -m alembic upgrade head
-..\.venv\Scripts\python.exe -m alembic check
+.\.venv\Scripts\python.exe -m pytest -q
+.\.venv\Scripts\python.exe -m alembic upgrade head
+.\.venv\Scripts\python.exe -m alembic check
 ```
 
 CI runs migrations and tests against PostgreSQL.
