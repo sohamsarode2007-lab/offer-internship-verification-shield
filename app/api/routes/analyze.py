@@ -49,7 +49,8 @@ def build_user_guidance(risk_band: str, checks: list[dict], reasons: list[dict])
         next_steps = [
             "Do not send money or share OTPs, passwords, or banking credentials.",
             "Save the offer, messages, payment instructions, and transaction receipts.",
-            "If you've already paid, contact your bank or payment app immediately, then call the National Cyber Crime Helpline 1930 and report at cybercrime.gov.in.",
+            "If you've already paid, call the National Cyber Crime Helpline 1930 immediately and report at cybercrime.gov.in.",
+            "Also contact your bank or payment app immediately and ask what hold or reversal options are available.",
         ]
     elif risk_band == "likely legitimate":
         next_steps = [
