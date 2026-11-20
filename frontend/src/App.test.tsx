@@ -305,6 +305,22 @@ describe('add evidence and check again', () => {
     })
   })
 
+  describe('safety actions', () => {
+    const report = { id: 'report', title: 'If you have lost money or shared details', steps: ['Call 1930 straight away.'], urgent: true, helpline: '1930', url: 'https://cybercrime.gov.in/' }
+    it('shows nothing when there are no safety actions', async () => {
+      await showResult(payload({ safety_actions: [] }))
+      expect(screen.queryByRole('heading', { name: 'Protect yourself now' })).toBeNull()
+    })
+    it('shows the steps, a call link and the portal link', async () => {
+      await showResult(payload({ safety_actions: [report] }))
+      expect(screen.getByText('Call 1930 straight away.')).toBeTruthy()
+      expect(screen.getByRole('link', { name: 'Call 1930' }).getAttribute('href')).toBe('tel:1930')
+      const portal = screen.getAllByRole('link', { name: 'National Cyber Crime Reporting Portal' }).find(l => l.closest('[aria-label="Safety steps"]'))
+      expect(portal?.getAttribute('href')).toBe('https://cybercrime.gov.in/')
+      expect(portal?.getAttribute('rel')).toContain('noopener')
+    })
+  })
+
   describe('evidence source line', () => {
     it('shows source, score effect and confidence for a check', async () => {
       await showResult(payload({

@@ -189,6 +189,19 @@ function AddEvidence({ result, input, onResult }: { result: AnalyzeResponse; inp
     </form></section>
 }
 
+function SafetyActions({ actions }: { actions: NonNullable<AnalyzeResponse['safety_actions']> }) {
+  if (!actions.length) return null
+  return <section className={styles.guidance} aria-label="Safety steps"><h2>Protect yourself now</h2>
+    <ul className={styles.hintCards}>{actions.map(a => <li key={a.id}>
+      <strong>{a.urgent ? 'Important: ' : ''}{a.title}</strong>
+      <ul>{a.steps.map((step, i) => <li key={i}>{step}</li>)}</ul>
+      {a.helpline && a.url && <span className={styles.actions}>
+        <a href={`tel:${a.helpline}`}>Call {a.helpline}</a>
+        <a href={a.url} target="_blank" rel="noopener noreferrer">National Cyber Crime Reporting Portal</a>
+      </span>}
+    </li>)}</ul></section>
+}
+
 function SelfChecks({ checks }: { checks: NonNullable<AnalyzeResponse['self_checks']> }) {
   const [copied, setCopied] = useState('')
   if (!checks.length) return null
@@ -220,7 +233,7 @@ function Result({ result, input, onResult, onClear }: { result: AnalyzeResponse;
       <div className={styles.actions}>{canReport && <button onClick={() => setReportOpen(true)}>Report this scam</button>}<button className={styles.secondaryButton} onClick={onClear}>Check another offer</button></div>
       {result.complaint_summary?.trim() && <Complaint summary={result.complaint_summary}/>}
     </div>
-    <div className={styles.evidenceSide}><WhyList result={result}/><EvidenceLedger checks={result.checks ?? []} meta={result.evidence_meta ?? []}/><SelfChecks checks={result.self_checks ?? []}/><AddEvidence result={result} input={input} onResult={onResult}/></div>
+    <div className={styles.evidenceSide}><SafetyActions actions={result.safety_actions ?? []}/><WhyList result={result}/><EvidenceLedger checks={result.checks ?? []} meta={result.evidence_meta ?? []}/><SelfChecks checks={result.self_checks ?? []}/><AddEvidence result={result} input={input} onResult={onResult}/></div>
     {reportOpen && canReport && result.report_token && <ReportDialog token={result.report_token} indicators={result.reportable_indicators ?? []} onClose={() => setReportOpen(false)}/>}
   </section>
 }

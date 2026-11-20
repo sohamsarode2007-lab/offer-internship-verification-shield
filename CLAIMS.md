@@ -263,6 +263,15 @@ been verified in this workspace.
   effort, never written to disk; QR images embedded in oversized pages are skipped), only when OpenCV can
   detect them (small, blurred or angled codes may be missed), and QR codes holding web addresses are ignored.
 
+## Safety steps
+
+- When a payment demand, an advance-fee wording family (fake cheque, reshipping, OTP, gift card, crypto), a flagged
+  link or a high-risk result is found, the result lists matched what-to-do-now steps. They are fixed advice text:
+  nothing is built from the offer, nothing is stored, and no action is taken for the person.
+- The contacts are the National Cyber Crime Helpline 1930 and the National Cyber Crime Reporting Portal
+  (cybercrime.gov.in), confirmed against Kerala Police and Ministry of Home Affairs pages. The steps are general
+  advice, not legal advice, and a report does not guarantee any money is recovered.
+
 ## Careers-page note
 
 - With `CAREERS_PAGE_LOOKUPS=1` (off by default) and a domain that passed the domain check, one informational

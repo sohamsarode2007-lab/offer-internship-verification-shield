@@ -291,3 +291,10 @@ Status: **open** = not reviewed yet.
       (robots.txt), so I did not read it. Cognizant's page was read but names no official domain, so a
       domain-mismatch advisory would need an invented domain. Neither is listed; add them if you can confirm the
       domains by hand.
+
+35. **Safety playbook (B7) (open).**
+    - **Rule-based and fixed text:** steps are chosen from the checks found, never written from the offer. The old
+      one-line portal note is kept for compatibility.
+    - **"Call 1930" is a `tel:` link:** it helps on phones and does nothing on desktops. Say if you prefer plain text.
+    - **Not covered:** no employer-specific reporting mailboxes (I would have to invent or hand-copy addresses),
+      and no advice on chargebacks or bank-specific steps.
