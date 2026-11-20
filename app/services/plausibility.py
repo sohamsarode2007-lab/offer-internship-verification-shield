@@ -78,6 +78,7 @@ def pdf_metadata_note(file_bytes: Optional[bytes]) -> Optional[str]:
 
 
 def collect_notes(text: str, pdf_bytes: Optional[bytes] = None) -> List[str]:
-    from app.services.url_evidence import url_notes  # link-pattern notes are informational too
-    notes = [salary_note(text or ""), phone_note(text or ""), pdf_metadata_note(pdf_bytes)] + url_notes(text or "")
+    from app.services.pdf_forensics import pdf_notes  # structure notes are informational too
+    from app.services.url_evidence import url_notes
+    notes = [salary_note(text or ""), phone_note(text or ""), pdf_metadata_note(pdf_bytes)] + pdf_notes(pdf_bytes) + url_notes(text or "")
     return [n for n in notes if n]

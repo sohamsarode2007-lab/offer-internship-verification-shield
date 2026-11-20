@@ -306,3 +306,8 @@ been verified in this workspace.
   domain, a domain mixing look-alike alphabets, a raw IP address or an `@` trick. These are structural checks of the
   text only: no link is opened, no redirect is followed and no reputation service is asked. They add no score and never
   repeat the link.
+
+- **PDF structure notes.** For an uploaded PDF, the "Why" list notes active content (scripts or auto-run actions),
+  embedded files, a modification date well after creation, a future creation date, changes appended after the first
+  save, and pages of mixed sizes. The file is only parsed, never run, and stays in memory; notes add no score and never
+  repeat a metadata value. Genuine letters are sometimes edited, so these are hints, not proof.

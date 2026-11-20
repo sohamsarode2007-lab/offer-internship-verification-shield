@@ -263,3 +263,10 @@ Status: **open** = not reviewed yet.
 - **Link patterns (B3)** are informational (no score). A shortener or `@` in a link has many innocent uses, and a score
   would punish genuine recruiters. Redirect-following and TLS checks need network calls, so they sit with the optional,
   consented lookups (group C), not here.
+
+31. **PDF forensics (B4) kept stateless and informational (open).**
+- **No score:** edited or re-saved PDFs have many innocent causes; active content is rare in offer letters but still left
+  informational until an independent test set shows how often it occurs in genuine ones.
+- **Duplicate-PDF detection not built as a stored fingerprint:** remembering file hashes across users would be a new
+  identifier store that docs/PRIVACY_DESIGN.md does not allow. Near-duplicate wording is already matched against
+  consented community reports (MinHash shingles). Comparing files inside one multi-file check comes with B5.
