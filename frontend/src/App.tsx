@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { analyze, loadDashboard, SENDERS_CSV_URL, submitDispute, submitReport, WEEKLY_CSV_URL, withdrawReport } from './api/client'
+import { buildInvestigationReport } from './investigationReport'
 import { CONSENT_TEXT, CONSENT_VERSION } from './consent'
 import type { AnalyzeResponse, CheckResult, DisputeRequest, InstitutionDashboard, ReportableIndicator, RiskBand, ScamCategory, TopSender } from './api/types'
 import styles from './App.module.css'
@@ -88,6 +89,11 @@ function EvidenceLedger({ checks, meta = [] }: { checks: CheckResult[]; meta?: N
       <td><span className={styles.status}><span aria-hidden="true">{statusGlyph[check.status]}</span> {statusText[check.status]}</span>{demoMarker && <span className={styles.demoNote}>Demo fixture, not a live check</span>}{m && <span className={styles.sourceNote}>Source: {sourceText[m.source] ?? m.source} · {affectsText[m.affects] ?? m.affects} · confidence: {m.confidence === 'none' ? 'not enough to tell' : m.confidence}</span>}{details && <details className={styles.details}><summary>Details</summary><p>{details}</p></details>}</td>
     </tr>
   })}</tbody></table></div></section>
+}
+
+function downloadReport(result: AnalyzeResponse) {
+  const url = URL.createObjectURL(new Blob([buildInvestigationReport(result)], { type: 'text/markdown' }))
+  const link = document.createElement('a'); link.href = url; link.download = 'offer-check-report.md'; link.click(); URL.revokeObjectURL(url)
 }
 
 function Complaint({ summary }: { summary: string }) {
@@ -230,7 +236,7 @@ function Result({ result, input, onResult, onClear }: { result: AnalyzeResponse;
     <div className={styles.resultSide}>{band && verdict && <div className={`${styles.verdict} ${bandClass(band)}`}><h1>{verdict.title}</h1>{verdict.subline && <p className={styles.verdictSubline}>{verdict.subline}</p>}<p className={styles.score}><span>{Number.isInteger(result.overall_risk_score) ? result.overall_risk_score : result.overall_risk_score.toFixed(1)}</span> / 100</p><p className={styles.completeness}>{result.completeness_percentage}% information completeness</p></div>}
       {result.company_name?.trim() && <p className={styles.checkedCompany}>Checked: {result.company_name.trim()}</p>}
       {result.next_steps?.length > 0 && <section className={styles.guidance}><h2>What to do next</h2><ul>{result.next_steps.map((step, i) => <li key={i}>{step}</li>)}</ul>{(band === 'high risk' || band === 'insufficient evidence, verify manually') && <p className={styles.portalNote}>You can report this sender on the government's <a href="https://cybercrime.gov.in/" target="_blank" rel="noopener noreferrer">National Cyber Crime Reporting Portal</a>. If you have already paid, call 1930 first.</p>}</section>}
-      <div className={styles.actions}>{canReport && <button onClick={() => setReportOpen(true)}>Report this scam</button>}<button className={styles.secondaryButton} onClick={onClear}>Check another offer</button></div>
+      <div className={styles.actions}>{canReport && <button onClick={() => setReportOpen(true)}>Report this scam</button>}<button type="button" className={styles.secondaryButton} onClick={() => downloadReport(result)}>Download full report</button><button className={styles.secondaryButton} onClick={onClear}>Check another offer</button></div>
       {result.complaint_summary?.trim() && <Complaint summary={result.complaint_summary}/>}
     </div>
     <div className={styles.evidenceSide}><SafetyActions actions={result.safety_actions ?? []}/><WhyList result={result}/><EvidenceLedger checks={result.checks ?? []} meta={result.evidence_meta ?? []}/><SelfChecks checks={result.self_checks ?? []}/><AddEvidence result={result} input={input} onResult={onResult}/></div>

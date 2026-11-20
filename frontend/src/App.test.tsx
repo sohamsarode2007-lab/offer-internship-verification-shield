@@ -335,6 +335,19 @@ describe('add evidence and check again', () => {
     })
   })
 
+  describe('full report download', () => {
+    it('offers a download button and builds the file in the browser', async () => {
+      const create = vi.fn(() => 'blob:x'); const revoke = vi.fn()
+      Object.assign(URL, { createObjectURL: create, revokeObjectURL: revoke })
+      const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+      const user = await showResult(payload({}))
+      await user.click(screen.getByRole('button', { name: 'Download full report' }))
+      expect(create).toHaveBeenCalledTimes(1)
+      expect(click).toHaveBeenCalled()
+      click.mockRestore()
+    })
+  })
+
   describe('evidence source line', () => {
     it('shows source, score effect and confidence for a check', async () => {
       await showResult(payload({

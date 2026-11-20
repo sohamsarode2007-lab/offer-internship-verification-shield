@@ -277,6 +277,13 @@ been verified in this workspace.
   charge, or security amount as a condition of getting the job or internship; it is guidance, not proof about a
   particular employer.
 
+## Downloadable report
+
+- "Download full report" builds a Markdown file in the browser from the result already on screen: outcome, score,
+  reasons, checks, where each check comes from, safety steps, self-checks, next steps and the limits. Nothing is
+  uploaded or stored, and the offer text and uploaded file names are never included (a test checks this). It names
+  the company if the result did. It is an automated, rule-based review, not legal advice or a police finding.
+
 ## Careers-page note
 
 - With `CAREERS_PAGE_LOOKUPS=1` (off by default) and a domain that passed the domain check, one informational

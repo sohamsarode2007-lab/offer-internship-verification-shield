@@ -298,3 +298,10 @@ Status: **open** = not reviewed yet.
     - **"Call 1930" is a `tel:` link:** it helps on phones and does nothing on desktops. Say if you prefer plain text.
     - **Not covered:** no employer-specific reporting mailboxes (I would have to invent or hand-copy addresses),
       and no advice on chargebacks or bank-specific steps.
+
+36. **Downloadable report (B8) (open).**
+    - **Markdown, not PDF:** no new dependency and it opens anywhere; a PDF would need a library in the browser bundle.
+      Say if you want a printable HTML or PDF version.
+    - **Company name included** when the result shows one, since the report is for the person's own use or a complaint.
+      Remove it if you would rather the file carried no names.
+    - **Your edits (eb93c23, 5bc8719) were merged first;** I did not change them.
