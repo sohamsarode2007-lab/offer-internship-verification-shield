@@ -277,3 +277,9 @@ Status: **open** = not reviewed yet.
 - **.eml alone:** the sender-authentication check is about one message, so mixing an .eml with other files is refused (422)
   rather than guessed at. The existing "add more evidence" re-check still takes one file at a time.
 - **Limits:** 5 files, 10 MB each, 50,000 characters of text in total.
+
+33. **QR codes inside PDFs (B5, part 2) (open).**
+    - **Scope:** the first 3 pages only, rendered in memory at 150 dpi, to bound time and memory. A UPI QR on page 4+
+      is missed. Pages over the pixel limit are skipped.
+    - **Fail-soft:** any render or decode error yields no QR lines; it never blocks an analysis.
+    - **Same rule as images:** only `upi://` payloads are kept and count as a payment demand; other QR content is dropped.

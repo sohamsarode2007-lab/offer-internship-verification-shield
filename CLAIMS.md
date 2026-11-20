@@ -255,11 +255,12 @@ been verified in this workspace.
 
 ## UPI payment links and QR codes
 
-- A `upi://pay` or `upi://mandate` link in the text, or in a QR code inside an uploaded image (decoded
+- A `upi://pay` or `upi://mandate` link in the text, or in a QR code inside an uploaded image or PDF (decoded
   offline with OpenCV), counts as a payment demand and so forces "high risk" like any other payment demand.
 - Only the payee address and amount are read. The payee name and note are ignored and not shown or stored;
   the redaction step removes the whole link before any text is used for similarity matching.
-- Limits: QR codes are read only from image uploads (not from images embedded in PDFs), only when OpenCV can
+- Limits: QR codes are read from image uploads and from the first 3 pages of a PDF (rendered in memory at 150 dpi, best
+  effort, never written to disk; QR images embedded in oversized pages are skipped), only when OpenCV can
   detect them (small, blurred or angled codes may be missed), and QR codes holding web addresses are ignored.
 
 ## Add evidence and check again

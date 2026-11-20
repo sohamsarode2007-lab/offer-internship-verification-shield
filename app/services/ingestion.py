@@ -261,6 +261,37 @@ def check_pdf_ocr_limits(file_bytes: bytes) -> int:
     return len(pages)
 
 
+QR_SCAN_DPI = 150
+QR_SCAN_MAX_PAGES = 3
+
+
+def _pdf_upi_qr_lines(file_bytes: bytes, doc: str) -> str:
+    """Best effort: UPI payment QR codes on the first pages of a PDF, held in memory only.
+
+    Never raises: a PDF that cannot be rendered simply yields no QR lines.
+    """
+    try:
+        import pdf2image
+        from pypdf import PdfReader
+        reader = PdfReader(io.BytesIO(file_bytes))
+        pages = min(len(reader.pages), QR_SCAN_MAX_PAGES)
+        for page in list(reader.pages)[:pages]:
+            w_pt, h_pt = float(page.mediabox.width), float(page.mediabox.height)
+            scale = QR_SCAN_DPI / 72.0
+            if (w_pt * scale) * (h_pt * scale) > upi_payment.MAX_QR_PIXELS:
+                return ""
+        images = pdf2image.convert_from_bytes(file_bytes, dpi=QR_SCAN_DPI, first_page=1, last_page=pages)
+        found = []
+        for img in images:
+            lines = upi_payment.upi_lines_from_image(cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR))
+            if lines:
+                found.append(lines)
+        return "\n".join(found)
+    except Exception as e:
+        logger.info("[INGESTION] %s: PDF QR scan skipped (%s).", doc, type(e).__name__)
+        return ""
+
+
 def _extract_pdf_text(file_bytes: bytes, doc: str) -> str:
     """Text-layer PDF first (pdfplumber, then pypdf); OCR only for scanned PDFs, within limits."""
     try:
@@ -345,6 +376,9 @@ def ingest_offer(
 
         elif ext == 'pdf':
             extracted_pdf = _extract_pdf_text(file_bytes, doc)
+            qr_lines = _pdf_upi_qr_lines(file_bytes, doc)
+            if qr_lines:
+                extracted_pdf = f"{extracted_pdf}\n{qr_lines}".strip()
             if not extracted_pdf:
                 logger.error("[INGESTION] %s: no text extracted.", doc)
             raw_text = f"{raw_text}\n{extracted_pdf}" if raw_text else extracted_pdf
