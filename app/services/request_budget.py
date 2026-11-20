@@ -5,7 +5,6 @@ It protects the free tier and the operator's bill, not the person: when a budget
 skipped and the check reports nothing extra. Counts are numbers only; nothing about a request is kept.
 A multi-worker deployment gets one budget per worker (so the effective limit is workers x budget).
 """
-import os
 import threading
 from datetime import datetime, timezone
 from typing import Dict

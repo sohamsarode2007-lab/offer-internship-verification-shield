@@ -4,7 +4,6 @@ What the checks are built on and how old it is, for the public "data sources" pa
 Each source reports a date and an age in days, and is flagged "stale" past a threshold so people (and the operator)
 can see when a snapshot needs refreshing. A source with no date is reported as "unknown", never as fresh.
 """
-import json
 import os
 import sqlite3
 from datetime import date, datetime, timezone
