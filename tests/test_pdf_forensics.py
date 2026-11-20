@@ -13,7 +13,12 @@ def build(pages=((612, 792),), js=False, attach=False, created=None, modified=No
     for width, height in pages:
         w.add_blank_page(width, height)
     if js:
-        w.add_js("app.alert('x');")
+        from pypdf.generic import DictionaryObject, NameObject, TextStringObject
+        action = DictionaryObject({
+            NameObject("/S"): NameObject("/JavaScript"),
+            NameObject("/JS"): TextStringObject("app.alert('x');"),
+        })
+        w._root_object[NameObject("/OpenAction")] = w._add_object(action)
     if attach:
         w.add_attachment("note.txt", b"hello")
     meta = {"/Producer": "Test Producer"}
