@@ -263,6 +263,15 @@ been verified in this workspace.
   effort, never written to disk; QR images embedded in oversized pages are skipped), only when OpenCV can
   detect them (small, blurred or angled codes may be missed), and QR codes holding web addresses are ignored.
 
+## Careers-page note
+
+- With `CAREERS_PAGE_LOOKUPS=1` (off by default) and a domain that passed the domain check, one informational
+  sentence says the domain serves a page that reads like a careers page. It never changes the status or the
+  score, and a missing page is never reported: anyone can publish a careers page on a domain they control, so
+  it does not show who sent an offer. Fetches are https only, to public addresses only, with no redirects,
+  a 64 KB cap and a 3 s timeout; page content is not stored or shown. Tests use mocked responses; the check
+  has not been run against live sites from the build environment.
+
 ## Add evidence and check again
 
 - The result page lists what could make the check stronger (original email, sender address, company

@@ -283,3 +283,11 @@ Status: **open** = not reviewed yet.
       is missed. Pages over the pixel limit are skipped.
     - **Fail-soft:** any render or decode error yields no QR lines; it never blocks an analysis.
     - **Same rule as images:** only `upi://` payloads are kept and count as a payment demand; other QR content is dropped.
+
+34. **Careers-page check (B6) (open).**
+    - **Informational only, off by default:** a page on a domain the sender controls is weak evidence, so it adds a
+      sentence and never score. Absence is never reported.
+    - **Wipro and Cognizant advisories not added:** Wipro's fraud page is blocked to automated readers
+      (robots.txt), so I did not read it. Cognizant's page was read but names no official domain, so a
+      domain-mismatch advisory would need an invented domain. Neither is listed; add them if you can confirm the
+      domains by hand.

@@ -36,7 +36,7 @@ import dns.resolver
 from rapidfuzz.distance import Levenshtein
 
 from app.utils.field_utils import get_field_value
-from app.services import brand_advisories, web_archive
+from app.services import brand_advisories, careers_page, web_archive
 from app.utils.email_domains import is_disposable_mailbox, is_free_mailbox
 
 logger = logging.getLogger(__name__)
@@ -308,5 +308,8 @@ def verify_domain(input_data: Union[Dict[str, Any], str, None]) -> Dict[str, Any
         if first_seen:
             details += (f" The Internet Archive's earliest saved copy of '{reg_domain}' is from {first_seen} "
                         "(informational only; it does not show who sent this offer).")
+    if careers_page.careers_page_found(reg_domain):
+        details += (f" '{reg_domain}' publishes a page that reads like a careers page (informational only; "
+                    "anyone can publish one, so it does not show who sent this offer).")
     details += " Note: this checks the domain written in the text, not the actual sender."
     return _result("pass", host, details, sub_checks, warnings)
