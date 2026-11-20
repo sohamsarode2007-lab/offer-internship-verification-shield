@@ -1,7 +1,7 @@
 import { FormEvent, useEffect, useId, useMemo, useRef, useState } from 'react'
-import { analyze, loadDashboard, SENDERS_CSV_URL, submitDispute, submitReport, WEEKLY_CSV_URL, withdrawReport } from './api/client'
+import { analyze, loadConfig, loadDashboard, SENDERS_CSV_URL, submitDispute, submitReport, WEEKLY_CSV_URL, withdrawReport } from './api/client'
 import { buildInvestigationReport } from './investigationReport'
-import { CONSENT_TEXT, CONSENT_VERSION } from './consent'
+import { CONSENT_TEXT, CONSENT_VERSION, LINK_CONSENT_TEXT } from './consent'
 import type { AnalyzeResponse, CheckResult, DisputeRequest, InstitutionDashboard, ReportableIndicator, RiskBand, ScamCategory, TopSender } from './api/types'
 import styles from './App.module.css'
 
@@ -38,13 +38,16 @@ function Home({ onResult }: { onResult: (result: AnalyzeResponse, input: Submitt
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [demoText, setDemoText] = useState('')
+  const [linkOffer, setLinkOffer] = useState(false)
+  const [linkConsent, setLinkConsent] = useState(false)
+  useEffect(() => { let live = true; loadConfig().then(c => { if (live) setLinkOffer(c.link_lookups) }); return () => { live = false } }, [])
   const fileInputId = useId()
   const demo = import.meta.env.VITE_DEMO === '1'
   async function run(event: FormEvent) {
     event.preventDefault(); setError('')
     if (!text.trim() && !file) { setError('Paste offer text or choose a file to check.'); return }
     setBusy(true)
-    try { onResult(await analyze(text, file), { text, file }); window.scrollTo({ top: 0, behavior: 'instant' }) }
+    try { onResult(await (linkOffer && linkConsent ? analyze(text, file, true) : analyze(text, file)), { text, file }); window.scrollTo({ top: 0, behavior: 'instant' }) }
     catch (err) { setError(err instanceof Error ? err.message : 'The request failed. Try again.') }
     finally { setBusy(false) }
   }
@@ -66,6 +69,7 @@ function Home({ onResult }: { onResult: (result: AnalyzeResponse, input: Submitt
           {files.length > 0 && <p className={styles.selectedFile}>Selected: {files.map(f => f.name).join(', ')}</p>}{demoText && <p className={styles.selectedFile}>Sample loaded: {demoText.replace('.txt', '')}</p>}
         </div>
       </div>
+      {linkOffer && <label className={styles.consent}><input type="checkbox" checked={linkConsent} onChange={e => setLinkConsent(e.target.checked)} disabled={busy}/><span>{LINK_CONSENT_TEXT}</span></label>}
       <div className={styles.submitLine}><button type="submit" disabled={busy}>{busy ? 'Checking…' : 'Check offer'}</button><p>We don’t store your offer or your personal details. Only the result is kept.</p></div>
       {error && <p className={styles.error} role="alert">{error}</p>}
     </form>

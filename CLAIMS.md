@@ -277,6 +277,19 @@ been verified in this workspace.
   charge, or security amount as a condition of getting the job or internship; it is guidance, not proof about a
   particular employer.
 
+## Link lookups (Web Risk, redirects, certificates)
+
+- Off by default. Runs only when the operator sets `LINK_LOOKUPS=1` and the person ticks the consent box for that
+  check. For up to 3 links it asks Google Web Risk's Lookup API (needs `WEB_RISK_API_KEY`) and follows redirects from
+  this server (HEAD only) to read the landing site's certificate.
+- Possible findings, all informational with no score effect: "threat-listed" by Web Risk, a redirect to a different
+  site, 3+ redirects, a certificate that does not verify, or one issued under 14 days ago. Everything else is
+  "unknown": a link that is not flagged is never described as safe, and an unreachable service adds nothing.
+- Only a minimised address is sent (no query, fragment or login part); nothing is stored or logged. See
+  docs/PRIVACY_DESIGN.md. Tests use mocked responses: the Web Risk request shape follows Google's published
+  Lookup API documentation but was not run against the live service from the build environment.
+- VirusTotal is not used: its free API is capped at 500 requests a day and barred from commercial products.
+
 ## Downloadable report
 
 - "Download full report" builds a Markdown file in the browser from the result already on screen: outcome, score,

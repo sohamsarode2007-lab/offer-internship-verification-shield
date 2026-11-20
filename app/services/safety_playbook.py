@@ -31,7 +31,7 @@ def _check(checks: List[dict], name: str) -> dict:
     return next((c for c in checks if c.get("check_name") == name), {})
 
 
-def build_safety_actions(checks: List[dict], raw_text: str, risk_band: str) -> List[Dict[str, Any]]:
+def build_safety_actions(checks: List[dict], raw_text: str, risk_band: str, link_threat: bool = False) -> List[Dict[str, Any]]:
     actions: List[Dict[str, Any]] = []
     payment = _check(checks, "payment_detection").get("status") == "fail"
     scam = _check(checks, "scam_text_patterns")
@@ -56,7 +56,7 @@ def build_safety_actions(checks: List[dict], raw_text: str, risk_band: str) -> L
         actions.append(_action("gift_or_crypto", "Do not buy gift cards or crypto for an employer", [
             "Payment by gift card or cryptocurrency is a common scam signal and is very hard to reverse.",
         ], urgent=True))
-    if url_evidence.url_flags(raw_text):
+    if link_threat or url_evidence.url_flags(raw_text):
         actions.append(_action("links", "Be careful with the links", [
             "Do not click or log in through links in this offer. Type the company's website address yourself.",
             "Never enter your Aadhaar, PAN or bank details on a page you reached from this message.",

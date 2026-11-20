@@ -112,6 +112,24 @@ The response to `/report` includes a one-time withdrawal code. `POST
 that report's contributions and decrements its counts. The code is shown once;
 store only a verifier, not the plaintext code.
 
+## Link lookups (optional, consented per check)
+
+Decision: link lookups are off unless the operator sets `LINK_LOOKUPS=1`, and even then run only when the person
+ticks an unchecked-by-default box on that check (wording: `LINK_CONSENT_TEXT` in `frontend/src/consent.ts`). The
+consent covers that one check and is not remembered or stored.
+
+- **What leaves the server:** for at most 3 links, a minimised web address (scheme, host and a short path; never the
+  query, fragment, login part, or a path that looks like it holds an email, a name-like `@` or an 8+ digit number)
+  goes to Google Web Risk with the operator's API key. Raw IP addresses are dropped. Nothing else from the offer is sent.
+- **What the server does:** it makes a HEAD request to each link (public addresses only, at most 4 redirects, no
+  body read) and reads the TLS certificate. The site's owner can see that a server opened the link; the person's own
+  address is never involved.
+- **What is kept:** nothing. Links and results are not stored or logged (log lines carry only an error type).
+  Results appear as informational notes with no score effect, naming hosts only.
+- **Honest limits:** the only outcomes are "threat-listed" or "unknown". "Not listed" is never shown as safe. DNS can
+  change between our address check and the visit (rebinding); a hardened egress proxy would be the next step.
+  A lookup to Google is a transfer to a third party; keep the switch off if that is not acceptable for your deployment.
+
 ## Abuse resistance, matching, and disclosure
 
 - A signed, single-use `/analyze` report token expires after 24 hours. Before

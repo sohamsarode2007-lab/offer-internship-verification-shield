@@ -10,8 +10,8 @@ Looks at the links written in an offer and notes structural tricks, from the tex
   userinfo    "name@host" inside the link, which makes the start look like a trusted site
 
 Each is a weak signal with innocent explanations (shorteners are common), so a note is shown in 'Why'
-with no score impact. Nothing is fetched: no redirect is followed and no reputation service is asked
-(see docs/JUDGMENT_CALLS.md). Notes never repeat the link or its domain. Nothing here is stored.
+with no score impact. This module fetches nothing: redirects and reputation lookups live in link_lookup.py and are
+opt-in with consent (see docs/JUDGMENT_CALLS.md). Notes never repeat the link or its domain. Nothing here is stored.
 """
 import ipaddress
 import re

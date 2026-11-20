@@ -12,7 +12,7 @@ import styles from './App.module.css'
 
 vi.mock('./api/client', async importOriginal => {
   const actual = await importOriginal<typeof import('./api/client')>()
-  return { ...actual, analyze: vi.fn(), submitReport: vi.fn(), withdrawReport: vi.fn(), submitDispute: vi.fn(), loadDashboard: vi.fn() }
+  return { ...actual, analyze: vi.fn(), submitReport: vi.fn(), withdrawReport: vi.fn(), submitDispute: vi.fn(), loadDashboard: vi.fn(), loadConfig: vi.fn() }
 })
 
 const indicators: ReportableIndicator[] = [
@@ -35,7 +35,35 @@ async function showResult(data: AnalyzeResponse) {
   return user
 }
 afterEach(cleanup)
-beforeEach(() => { vi.clearAllMocks(); window.history.replaceState({}, '', '/') })
+beforeEach(() => { vi.clearAllMocks(); vi.mocked(api.loadConfig).mockResolvedValue({ link_lookups: false }); window.history.replaceState({}, '', '/') })
+
+describe('link lookup consent', () => {
+  async function home(enabled: boolean) {
+    vi.mocked(api.loadConfig).mockResolvedValue({ link_lookups: enabled })
+    vi.mocked(api.analyze).mockResolvedValue(payload())
+    const user = userEvent.setup()
+    render(<App />)
+    await user.type(screen.getByLabelText('Paste offer text'), 'Offer https://x.example/a')
+    return user
+  }
+  it('shows no consent box when the server has the feature off', async () => {
+    await home(false)
+    expect(screen.queryByRole('checkbox')).toBeNull()
+  })
+  it('is unchecked by default and sends nothing extra when left unchecked', async () => {
+    const user = await home(true)
+    const box = await screen.findByRole('checkbox')
+    expect((box as HTMLInputElement).checked).toBe(false)
+    await user.click(screen.getByRole('button', { name: 'Check offer' }))
+    expect(vi.mocked(api.analyze)).toHaveBeenCalledWith('Offer https://x.example/a', null)
+  })
+  it('sends the flag only after the person ticks the box', async () => {
+    const user = await home(true)
+    await user.click(await screen.findByRole('checkbox'))
+    await user.click(screen.getByRole('button', { name: 'Check offer' }))
+    expect(vi.mocked(api.analyze)).toHaveBeenCalledWith('Offer https://x.example/a', null, true)
+  })
+})
 
 describe('analysis result', () => {
   it.each([

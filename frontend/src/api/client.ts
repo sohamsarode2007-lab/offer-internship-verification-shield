@@ -48,11 +48,12 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 /** One file goes as "file"; several (up to 5) go as repeated "files" fields. */
-export function analyze(text: string, file: File | File[] | null) {
+export function analyze(text: string, file: File | File[] | null, linkLookups = false) {
   const body = new FormData()
   if (text.trim()) body.set('text', text)
   if (Array.isArray(file)) file.forEach(f => body.append('files', f))
   else if (file) body.set('file', file)
+  if (linkLookups) body.set('link_lookups', 'true')
   return request<AnalyzeResponse>('/analyze', { method: 'POST', body })
 }
 
@@ -70,3 +71,9 @@ export function loadDashboard() {
 }
 export const SENDERS_CSV_URL = `${API_BASE}/trends/senders.csv`
 export const WEEKLY_CSV_URL = `${API_BASE}/trends/weekly.csv`
+
+/** Which optional features the server has switched on. Any failure means none. */
+export async function loadConfig(): Promise<{ link_lookups: boolean }> {
+  try { const data = await request<{ link_lookups?: boolean }>('/config'); return { link_lookups: data.link_lookups === true } }
+  catch { return { link_lookups: false } }
+}

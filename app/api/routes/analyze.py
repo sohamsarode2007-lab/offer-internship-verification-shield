@@ -21,6 +21,7 @@ from app.services import (
     evidence_hints,
     self_checks,
     safety_playbook,
+    link_lookup,
     multi_file,
     evidence_meta,
     plausibility,
@@ -84,6 +85,7 @@ def analyze_offer(
     text: Optional[str] = Form(None),
     file: Optional[UploadFile] = File(None),
     files: List[UploadFile] = File(default=[]),
+    link_lookups: bool = Form(False),
     db: Session = Depends(get_db)
 ):
     """
@@ -199,6 +201,8 @@ def analyze_offer(
     for name, data in loaded:
         if name.lower().endswith(".pdf"):
             notes += plausibility.collect_notes("", data)  # file-level notes for each PDF
+    link_result = link_lookup.build_link_checks(raw_text, link_lookups)
+    notes += link_result["notes"]
     duplicate = multi_file.duplicate_note(file_texts)
     if duplicate:
         notes.append(duplicate)
@@ -294,7 +298,7 @@ def analyze_offer(
         # Returned for display only; never persisted (Offer.company_name stays NULL).
         company_name=get_field_value(facts, "company_name", "company_name_legacy"),
         self_checks=self_checks.build_self_checks(facts, check_dicts),
-        safety_actions=safety_playbook.build_safety_actions(check_dicts, raw_text, risk_band),
+        safety_actions=safety_playbook.build_safety_actions(check_dicts, raw_text, risk_band, link_result["threat_listed"]),
         evidence_meta=evidence_meta.build_evidence_meta(check_dicts),
         evidence_hints=evidence_hints.build_evidence_hints(
             check_dicts, had_file=bool(email_result),

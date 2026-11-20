@@ -87,6 +87,13 @@ def health_check():
     return {"status": "ok", "service": "Verification Shield Backend"}
 
 
+@app.get("/config")
+def public_config():
+    """What the page may offer. Flags only; no secrets."""
+    from app.services import link_lookup
+    return {"link_lookups": link_lookup.is_enabled()}
+
+
 @app.get("/ready")
 def readiness_check():
     """Deep check: the database answers. Use /health for liveness (no dependencies)."""

@@ -305,3 +305,16 @@ Status: **open** = not reviewed yet.
     - **Company name included** when the result shows one, since the report is for the person's own use or a complaint.
       Remove it if you would rather the file carried no names.
     - **Your edits (eb93c23, 5bc8719) were merged first;** I did not change them.
+
+37. **Link lookups (group C) (open).**
+    - **Web Risk only, no VirusTotal:** Web Risk's Lookup API is free to 100,000 calls a month (needs a Google Cloud
+      project with billing enabled; no non-commercial clause appears on Google's pricing page). VirusTotal's free
+      API is 500 requests a day, 4 a minute and barred from commercial products. Say if you want VirusTotal anyway.
+    - **Informational, not scored:** "threat-listed" adds a note and the link safety step but no points, so no new
+      weight needed. Scoring it later would need a documented weight, CLAIMS entry and trigger/non-trigger tests.
+    - **One consent covers both** the Google lookup and the visit from our server, shown only if the operator turns
+      the feature on. It is not remembered.
+    - **Rebinding gap:** the public-address check and the connection resolve DNS separately. Fine for a small, opt-in
+      feature; an egress proxy would close it.
+    - **Uploads are in memory:** confirmed by search (no temp files or disk writes in the upload path), so no extra
+      test was added, as you asked.
