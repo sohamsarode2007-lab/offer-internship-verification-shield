@@ -47,10 +47,12 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>
 }
 
-export function analyze(text: string, file: File | null) {
+/** One file goes as "file"; several (up to 5) go as repeated "files" fields. */
+export function analyze(text: string, file: File | File[] | null) {
   const body = new FormData()
   if (text.trim()) body.set('text', text)
-  if (file) body.set('file', file)
+  if (Array.isArray(file)) file.forEach(f => body.append('files', f))
+  else if (file) body.set('file', file)
   return request<AnalyzeResponse>('/analyze', { method: 'POST', body })
 }
 

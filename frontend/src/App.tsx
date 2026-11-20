@@ -28,11 +28,12 @@ function Footer() {
 }
 function Shell({ children }: { children: React.ReactNode }) { return <><Header/><main className={styles.main}>{children}</main><Footer/></> }
 
-type Submitted = { text: string; file: File | null }
+type Submitted = { text: string; file: File | File[] | null }
 
 function Home({ onResult }: { onResult: (result: AnalyzeResponse, input: Submitted) => void }) {
   const [text, setText] = useState('')
-  const [file, setFile] = useState<File | null>(null)
+  const [files, setFiles] = useState<File[]>([])
+  const file: File | File[] | null = files.length === 0 ? null : files.length === 1 ? files[0] : files
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [demoText, setDemoText] = useState('')
@@ -51,7 +52,7 @@ function Home({ onResult }: { onResult: (result: AnalyzeResponse, input: Submitt
     try {
       const response = await fetch(`/demo/${name}`)
       if (!response.ok) throw new Error('Sample could not be loaded.')
-      setText(await response.text()); setFile(null); setDemoText(name)
+      setText(await response.text()); setFiles([]); setDemoText(name)
     } catch { setError('The sample could not be loaded. Try again.') }
   }
   return <section className={styles.home}>
@@ -59,9 +60,9 @@ function Home({ onResult }: { onResult: (result: AnalyzeResponse, input: Submitt
     <form onSubmit={run} className={styles.intake}>
       <div className={styles.intakeGrid}>
         <label className={styles.textWell}><span>Paste offer text</span><textarea value={text} onChange={e => { setText(e.target.value); setDemoText('') }} disabled={busy} placeholder="Paste the message or offer letter here" rows={12}/></label>
-        <div className={styles.uploadWell}><label htmlFor={fileInputId} className={styles.uploadLabel}>Choose a PDF, image, .eml or .txt file</label><input id={fileInputId} type="file" accept=".pdf,.png,.jpg,.jpeg,.bmp,.tiff,.eml,.txt" disabled={busy} onChange={e => { setFile(e.target.files?.[0] ?? null); setDemoText('') }}/>
-          <p className={styles.help}>Uploading the original email lets us verify who actually sent it.</p><p className={styles.help}>Gmail: open the message → ⋮ → “Download message”.</p>
-          {file && <p className={styles.selectedFile}>Selected: {file.name}</p>}{demoText && <p className={styles.selectedFile}>Sample loaded: {demoText.replace('.txt', '')}</p>}
+        <div className={styles.uploadWell}><label htmlFor={fileInputId} className={styles.uploadLabel}>Choose up to 5 files (PDF, image, .eml or .txt)</label><input id={fileInputId} type="file" multiple accept=".pdf,.png,.jpg,.jpeg,.bmp,.tiff,.eml,.txt" disabled={busy} onChange={e => { setFiles(Array.from(e.target.files ?? []).slice(0, 5)); setDemoText('') }}/>
+          <p className={styles.help}>Uploading the original email lets us verify who actually sent it. Send an .eml on its own; other files can be checked together as one offer.</p><p className={styles.help}>Gmail: open the message → ⋮ → “Download message”.</p>
+          {files.length > 0 && <p className={styles.selectedFile}>Selected: {files.map(f => f.name).join(', ')}</p>}{demoText && <p className={styles.selectedFile}>Sample loaded: {demoText.replace('.txt', '')}</p>}
         </div>
       </div>
       <div className={styles.submitLine}><button type="submit" disabled={busy}>{busy ? 'Checking…' : 'Check offer'}</button><p>We don’t store your offer or your personal details. Only the result is kept.</p></div>

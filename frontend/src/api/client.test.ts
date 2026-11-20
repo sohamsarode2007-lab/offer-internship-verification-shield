@@ -38,3 +38,20 @@ describe('backend error translation', () => {
     expect(new ApiError(0, 'example')).toBeInstanceOf(Error)
   })
 })
+
+describe('analyze file packing', () => {
+  const sent = async (file: File | File[] | null) => {
+    const spy = vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) })
+    vi.stubGlobal('fetch', spy)
+    await analyze('', file)
+    return spy.mock.calls[0][1].body as FormData
+  }
+  it('sends one file as "file"', async () => {
+    const body = await sent(new File(['a'], 'a.txt'))
+    expect(body.getAll('file')).toHaveLength(1); expect(body.getAll('files')).toHaveLength(0)
+  })
+  it('sends several files as repeated "files" fields', async () => {
+    const body = await sent([new File(['a'], 'a.txt'), new File(['b'], 'b.pdf')])
+    expect(body.getAll('files')).toHaveLength(2); expect(body.getAll('file')).toHaveLength(0)
+  })
+})

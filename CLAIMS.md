@@ -311,3 +311,7 @@ been verified in this workspace.
   embedded files, a modification date well after creation, a future creation date, changes appended after the first
   save, and pages of mixed sizes. The file is only parsed, never run, and stays in memory; notes add no score and never
   repeat a metadata value. Genuine letters are sometimes edited, so these are hints, not proof.
+
+- **Several files in one check.** Up to five files (PDF, image, `.txt`) can be sent together with pasted text; their text
+  is joined and scored as one offer, and nothing is stored. An `.eml` must be sent on its own so its sender checks run.
+  A note appears when two files contain almost the same wording; it adds no score.

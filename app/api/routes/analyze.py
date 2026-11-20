@@ -1,6 +1,6 @@
 import logging
 import os
-from typing import Optional
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, File, Form, Request, UploadFile, HTTPException, status
 from sqlalchemy.orm import Session
@@ -20,6 +20,7 @@ from app.services import (
     email_auth,
     evidence_hints,
     self_checks,
+    multi_file,
     evidence_meta,
     plausibility,
     risk_scoring,
@@ -80,6 +81,7 @@ def analyze_offer(
     request: Request,
     text: Optional[str] = Form(None),
     file: Optional[UploadFile] = File(None),
+    files: List[UploadFile] = File(default=[]),
     db: Session = Depends(get_db)
 ):
     """
@@ -90,7 +92,8 @@ def analyze_offer(
     Privacy (DPDP): the offer text and file name are NOT stored; only the verdict
     and per-check results are persisted.
     """
-    if not text and not file:
+    uploads = [u for u in ([file] if file is not None else []) + list(files or []) if u.filename]
+    if not text and not uploads:
         raise HTTPException(status.HTTP_400_BAD_REQUEST,
                             "Either 'text' form field or 'file' upload must be provided.")
 
@@ -100,18 +103,25 @@ def analyze_offer(
         raise HTTPException(status.HTTP_413_CONTENT_TOO_LARGE,
                             f"Text is longer than {MAX_TEXT_CHARS:,} characters.")
 
-    file_bytes = None
-    filename = None
-    if file is not None and file.filename:
-        filename = file.filename
-        ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+    if len(uploads) > multi_file.MAX_FILES:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Send at most {multi_file.MAX_FILES} files at a time.")
+    loaded = []  # (file name, bytes): names are used only to pick the reader and are never logged or stored
+    for upload in uploads:
+        name = upload.filename
+        ext = name.rsplit(".", 1)[-1].lower() if "." in name else ""
         if ext not in ALLOWED_EXTENSIONS:
             raise HTTPException(status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
                                 f"Unsupported file type. Allowed: {', '.join(sorted(ALLOWED_EXTENSIONS))}.")
-        file_bytes = file.file.read(MAX_FILE_BYTES + 1)
-        if len(file_bytes) > MAX_FILE_BYTES:
+        data = upload.file.read(MAX_FILE_BYTES + 1)
+        if len(data) > MAX_FILE_BYTES:
             raise HTTPException(status.HTTP_413_CONTENT_TOO_LARGE,
                                 f"File is larger than {MAX_FILE_BYTES // (1024 * 1024)} MB.")
+        loaded.append((name, data))
+    if len(loaded) > 1 and any(n.lower().endswith(".eml") for n, _ in loaded):
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT,
+                            "Send an .eml on its own so its sender checks can run; other files can be checked separately.")
+    file_bytes, filename = (loaded[0][1], loaded[0][0]) if loaded else (None, None)
+    file_texts: List[str] = []
 
     # Step 1: Ingestion. Parse .eml headers only in memory; only extracted body and
     # supported PDF/image attachments enter the existing check pipeline.
@@ -134,6 +144,14 @@ def analyze_offer(
                 raise HTTPException(status.HTTP_413_CONTENT_TOO_LARGE,
                                     f"Extracted email text is longer than {MAX_TEXT_CHARS:,} characters.")
             email_result = parsed_email
+        elif len(loaded) > 1:
+            parts = [text] if text else []
+            for name, data in loaded:
+                extracted, _ = ingestion.ingest_offer(file_bytes=data, filename=name)
+                if extracted:
+                    parts.append(extracted)
+                    file_texts.append(extracted)
+            raw_text = "\n".join(parts).strip()
         else:
             raw_text, _ = ingestion.ingest_offer(text=text, file_bytes=file_bytes, filename=filename)
     except ValueError as e:
@@ -175,9 +193,15 @@ def analyze_offer(
     completeness_percentage = scoring_res["completeness_percentage"]
     risk_band = scoring_res["risk_band"]
     # Informational notes (no score impact); never include submitted values.
-    pdf_bytes = file_bytes if filename and filename.lower().endswith(".pdf") else None
+    notes = plausibility.collect_notes(raw_text, None)
+    for name, data in loaded:
+        if name.lower().endswith(".pdf"):
+            notes += plausibility.collect_notes("", data)  # file-level notes for each PDF
+    duplicate = multi_file.duplicate_note(file_texts)
+    if duplicate:
+        notes.append(duplicate)
     scoring_res["reasons"] = list(scoring_res["reasons"]) + [
-        {"text": note, "impact": None} for note in plausibility.collect_notes(raw_text, pdf_bytes)]
+        {"text": note, "impact": None} for note in dict.fromkeys(notes)]
 
     check_schemas = [
         CheckResultSchema(

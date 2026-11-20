@@ -270,3 +270,10 @@ Status: **open** = not reviewed yet.
 - **Duplicate-PDF detection not built as a stored fingerprint:** remembering file hashes across users would be a new
   identifier store that docs/PRIVACY_DESIGN.md does not allow. Near-duplicate wording is already matched against
   consented community reports (MinHash shingles). Comparing files inside one multi-file check comes with B5.
+
+32. **Multi-file intake (B5, part 1) (open).**
+- **Joined, not scored per file:** a payment demand in any file makes the whole pack high risk, which matches how a person
+  reads a pack. The cost is that one noisy file can colour the result.
+- **.eml alone:** the sender-authentication check is about one message, so mixing an .eml with other files is refused (422)
+  rather than guessed at. The existing "add more evidence" re-check still takes one file at a time.
+- **Limits:** 5 files, 10 MB each, 50,000 characters of text in total.
