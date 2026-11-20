@@ -318,3 +318,11 @@ Status: **open** = not reviewed yet.
       feature; an egress proxy would close it.
     - **Uploads are in memory:** confirmed by search (no temp files or disk writes in the upload path), so no extra
       test was added, as you asked.
+
+38. **Freshness panel and request budget (D) (open).**
+    - **Thresholds:** 90 days for the registry snapshot and 180 for employer advisories are my guesses at "worth
+      refreshing"; change `REGISTRY_STALE_DAYS` and `ADVISORY_STALE_DAYS` if you know better.
+    - **Budget is per process and in memory:** it protects the free quota roughly, not exactly (restarts reset it,
+      several workers each get their own). Only Web Risk is budgeted; the live registry lookup already has a 0.5 s throttle.
+    - **Public endpoint:** `/sources` is unauthenticated and shows which optional lookups are on and the Web Risk
+      usage count. It shows no keys. Say if you would rather hide the counts.

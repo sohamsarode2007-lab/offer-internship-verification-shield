@@ -77,3 +77,7 @@ export async function loadConfig(): Promise<{ link_lookups: boolean }> {
   try { const data = await request<{ link_lookups?: boolean }>('/config'); return { link_lookups: data.link_lookups === true } }
   catch { return { link_lookups: false } }
 }
+
+export function loadSources() {
+  return request<import('./types').DataSources>('/sources')
+}

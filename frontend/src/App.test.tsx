@@ -12,7 +12,7 @@ import styles from './App.module.css'
 
 vi.mock('./api/client', async importOriginal => {
   const actual = await importOriginal<typeof import('./api/client')>()
-  return { ...actual, analyze: vi.fn(), submitReport: vi.fn(), withdrawReport: vi.fn(), submitDispute: vi.fn(), loadDashboard: vi.fn(), loadConfig: vi.fn() }
+  return { ...actual, analyze: vi.fn(), submitReport: vi.fn(), withdrawReport: vi.fn(), submitDispute: vi.fn(), loadDashboard: vi.fn(), loadConfig: vi.fn(), loadSources: vi.fn() }
 })
 
 const indicators: ReportableIndicator[] = [
@@ -36,6 +36,28 @@ async function showResult(data: AnalyzeResponse) {
 }
 afterEach(cleanup)
 beforeEach(() => { vi.clearAllMocks(); vi.mocked(api.loadConfig).mockResolvedValue({ link_lookups: false }); window.history.replaceState({}, '', '/') })
+
+describe('data sources panel', () => {
+  const data = { scoring_model: 'rule_based_v2', optional_lookups: { link_lookups: false, careers_page: true },
+    sources: [{ id: 'company_registry', name: 'Company registry snapshot (local copy)', updated: '2026-08-01', age_days: 112, status: 'stale' as const, detail: 'Source label MCA_CSV.' },
+              { id: 'employer_advisories', name: 'Employer fraud advisories (read by hand)', updated: null, age_days: null, status: 'unknown' as const, detail: '0 employers.' }],
+    request_budgets: [{ id: 'web_risk', used_today: 3, daily_limit: 3000 }] }
+  it('shows each source with its age and status, never calling an undated one fresh', async () => {
+    window.history.replaceState({}, '', '/how-it-works')
+    vi.mocked(api.loadSources).mockResolvedValueOnce(data)
+    render(<App />)
+    expect(await screen.findByText(/Out of date, refreshed 2026-08-01 \(112 days ago\)/)).toBeTruthy()
+    expect(screen.getByText(/Date unknown/)).toBeTruthy()
+    expect(screen.getByText(/1 optional online lookup is switched on/)).toBeTruthy()
+    expect(screen.getByText(/3 of 3000 used today/)).toBeTruthy()
+  })
+  it('says so when the details cannot be loaded', async () => {
+    window.history.replaceState({}, '', '/how-it-works')
+    vi.mocked(api.loadSources).mockRejectedValueOnce(new Error('x'))
+    render(<App />)
+    expect(await screen.findByText(/could not be loaded right now/)).toBeTruthy()
+  })
+})
 
 describe('link lookup consent', () => {
   async function home(enabled: boolean) {

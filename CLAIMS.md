@@ -290,6 +290,17 @@ been verified in this workspace.
   Lookup API documentation but was not run against the live service from the build environment.
 - VirusTotal is not used: its free API is capped at 500 requests a day and barred from commercial products.
 
+## Data sources panel and request budget
+
+- The "How it works" page shows each source with the date it was last refreshed and its age: the local company
+  registry snapshot (flagged out of date after 90 days, labelled demo when it is the fictional snapshot) and the
+  hand-read employer advisories (out of date after 180 days, measured from the oldest page read). A source with no
+  date is shown as "date unknown", never as current. It also shows the rules version and how many optional online
+  lookups are switched on. No secrets and no offer data are involved.
+- Web Risk lookups have a daily budget (default 3,000 a day, `WEB_RISK_DAILY_BUDGET`) held in memory per server
+  process. When it is spent, the lookup is skipped and shows as "unknown". The count resets each UTC day and on restart.
+- The 90 and 180 day thresholds are our judgement, not a published schedule of the sources.
+
 ## Downloadable report
 
 - "Download full report" builds a Markdown file in the browser from the result already on screen: outcome, score,

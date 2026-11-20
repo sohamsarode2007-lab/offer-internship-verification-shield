@@ -94,6 +94,13 @@ def public_config():
     return {"link_lookups": link_lookup.is_enabled()}
 
 
+@app.get("/sources")
+def data_sources():
+    """How old each data source is and which optional lookups are on. No secrets, no offer data."""
+    from app.services import source_freshness
+    return source_freshness.build_sources()
+
+
 @app.get("/ready")
 def readiness_check():
     """Deep check: the database answers. Use /health for liveness (no dependencies)."""

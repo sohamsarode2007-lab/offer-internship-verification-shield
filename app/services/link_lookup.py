@@ -26,7 +26,7 @@ import urllib.parse
 import urllib.request
 from typing import Any, Dict, List, Optional
 
-from app.services import careers_page, domain_verification, url_evidence
+from app.services import careers_page, domain_verification, request_budget, url_evidence
 from app.services.env_config import float_env
 
 logger = logging.getLogger(__name__)
@@ -86,7 +86,7 @@ def _get_json(url: str) -> Dict[str, Any]:
 
 def web_risk(link: str) -> Dict[str, Any]:
     key = os.getenv("WEB_RISK_API_KEY", "")
-    if not key:
+    if not key or not request_budget.try_spend("web_risk"):
         return {"status": "unknown", "threat_types": []}
     query = urllib.parse.urlencode([("threatTypes", t) for t in THREAT_TYPES] + [("uri", link), ("key", key)])
     try:

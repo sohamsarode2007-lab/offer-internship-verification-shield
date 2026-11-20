@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useId, useMemo, useRef, useState } from 'react'
-import { analyze, loadConfig, loadDashboard, SENDERS_CSV_URL, submitDispute, submitReport, WEEKLY_CSV_URL, withdrawReport } from './api/client'
+import { analyze, loadConfig, loadDashboard, loadSources, SENDERS_CSV_URL, submitDispute, submitReport, WEEKLY_CSV_URL, withdrawReport } from './api/client'
 import { buildInvestigationReport } from './investigationReport'
 import { CONSENT_TEXT, CONSENT_VERSION, LINK_CONSENT_TEXT } from './consent'
 import type { AnalyzeResponse, CheckResult, DisputeRequest, InstitutionDashboard, ReportableIndicator, RiskBand, ScamCategory, TopSender } from './api/types'
@@ -306,6 +306,23 @@ function DashboardPage() {
   return <section className={styles.dashboardPage}><h1>Scam trends</h1><p>Weekly results, scam categories and reported senders from checks on this site. Counts are checks, not verified unique people.</p>{!dashboard && !error && <p className={styles.help} role="status">Loading…</p>}{error && <p role="alert" className={styles.error}>{error}</p>}{dashboard && <div className={styles.dashboardResults}><SendersTable dashboard={dashboard}/><h2>Results by week</h2><TrendChart dashboard={dashboard}/><CategorySummary dashboard={dashboard}/></div>}</section>
 }
 
+const sourceStatusText: Record<string, string> = { current: 'Up to date', stale: 'Out of date', demo: 'Demo data', unknown: 'Date unknown' }
+
+function SourcesPanel() {
+  const [data, setData] = useState<Awaited<ReturnType<typeof loadSources>> | null>(null)
+  const [failed, setFailed] = useState(false)
+  useEffect(() => { let live = true; loadSources().then(d => { if (live) setData(d) }).catch(() => { if (live) setFailed(true) }); return () => { live = false } }, [])
+  if (failed) return <section><h2>Data sources</h2><p>The data-source details could not be loaded right now.</p></section>
+  if (!data) return null
+  const on = Object.entries(data.optional_lookups).filter(([, v]) => v).length
+  return <section><h2>Data sources and freshness</h2>
+    <p>Rules version {data.scoring_model}. Dates show when each source was last refreshed; an old source can miss recent changes.</p>
+    <ul>{data.sources.map(s => <li key={s.id}><strong>{s.name}:</strong> {sourceStatusText[s.status] ?? s.status}{s.updated ? `, refreshed ${s.updated} (${s.age_days} days ago)` : ''}. {s.detail}</li>)}</ul>
+    <p>{on} optional online lookup{on === 1 ? ' is' : 's are'} switched on for this service.</p>
+    {data.request_budgets.map(b => <p key={b.id}>Daily limit for the {b.id.replace('_', ' ')} lookup: {b.used_today} of {b.daily_limit} used today.</p>)}
+  </section>
+}
+
 function HowPage() {
   return <article className={styles.howPage}><h1>What this checks</h1><p className={styles.lede}>An automated review of specific signals in an offer. It helps you decide what to verify; it cannot prove who wrote a message or whether a job is real.</p>
     <section><h2>Who sent it</h2><p>For an original .eml, the service reads the recipient provider’s topmost Authentication-Results, DMARC, SPF and aligned DKIM, plus sender details. This verifies sender authentication as recorded by that mail provider, not message authorship. Pasted text and documents show only the domain claimed in the content.</p></section>
@@ -315,6 +332,7 @@ function HowPage() {
     <section><h2>Reports from other job seekers</h2><p>With consent, selected scammer-role indicators and a redacted wording fingerprint can be matched against reports. Evidence is bucketed, correlated evidence is capped, and community evidence alone cannot cause a high-risk verdict. Reports are not independently verified.</p></section>
     <section><h2>How to read the result</h2><p>Likely legitimate requires a passing domain, present non-failing registration and an external verification signal. Otherwise structural checks alone cannot establish legitimacy. A payment demand forces high risk. These are rules, not a trained model.</p></section>
     <section><h2>Planned and unavailable checks</h2><p>No additional future check is claimed in the current capability statements. Company registry records are looked up locally; this service does not query a registry over the network. Sender authentication is available for .eml uploads only. Other input types cannot authenticate the sender.</p></section>
+    <SourcesPanel/>
     <section><h2>Privacy and limits</h2><p>The offer text and file aren’t stored. Analysis results are retained. Every check adds one anonymous count (week, result and scam category only; no text, contact details, file name or IP address) to the public Scam trends page, where any count below five is shown as &lt;5. These counts are kept for 24 months. Counts represent checks, not verified unique people.</p><p><a href="https://github.com/sohamsarode2007-lab/offer-internship-verification-shield/blob/main/docs/PRIVACY_DESIGN.md">Read the privacy design</a>. <a href="https://github.com/sohamsarode2007-lab/offer-internship-verification-shield/blob/main/CLAIMS.md">Read current capability claims</a>.</p></section>
   </article>
 }
