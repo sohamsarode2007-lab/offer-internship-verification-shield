@@ -192,7 +192,7 @@ function AddEvidence({ result, input, onResult }: { result: AnalyzeResponse; inp
 function SafetyActions({ actions }: { actions: NonNullable<AnalyzeResponse['safety_actions']> }) {
   if (!actions.length) return null
   return <section className={styles.guidance} aria-label="Safety steps"><h2>Protect yourself now</h2>
-    <ul className={styles.hintCards}>{actions.map(a => <li key={a.id}>
+    <ul className={styles.safetyCards}>{actions.map(a => <li key={a.id} className={a.urgent ? styles.urgentSafety : undefined}>
       <strong>{a.urgent ? 'Important: ' : ''}{a.title}</strong>
       <ul>{a.steps.map((step, i) => <li key={i}>{step}</li>)}</ul>
       {a.helpline && a.url && <span className={styles.actions}>

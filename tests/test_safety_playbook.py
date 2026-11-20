@@ -18,7 +18,17 @@ def test_payment_demand_gets_do_not_pay_and_report():
     assert ids(actions) == ["payment", "report"]
     report = actions[-1]
     assert report["helpline"] == HELPLINE == "1930" and report["url"] == PORTAL_URL
+    assert report["url"].startswith("https://") and "cybercrime.gov.in" in report["url"]
     assert actions[0]["urgent"] is True
+    assert "bank or payment app" in report["steps"][0]
+    assert "A legitimate employer should not require" in actions[0]["steps"][1]
+
+
+def test_high_risk_without_payment_still_uses_conditional_reporting_advice():
+    actions = build_safety_actions([], "", "high risk")
+    assert ids(actions) == ["report"]
+    assert actions[0]["title"] == "If you have lost money or shared details"
+    assert actions[0]["urgent"] is False
 
 
 def test_family_specific_steps():

@@ -134,6 +134,20 @@ describe('analysis result', () => {
     expect(screen.queryByRole('link', { name: 'National Cyber Crime Reporting Portal' })).not.toBeInTheDocument()
   })
 
+  it('renders matched safety actions with urgent styling and recovery links', async () => {
+    await showResult(payload({ safety_actions: [
+      { id: 'payment', title: 'Do not pay', urgent: true, steps: ['Do not pay a fee.'] },
+      { id: 'report', title: 'If you have lost money or shared details', urgent: true,
+        steps: ['Contact your bank or payment app immediately.'], helpline: '1930', url: 'https://cybercrime.gov.in/' },
+    ] }))
+    const section = screen.getByRole('region', { name: 'Safety steps' })
+    expect(within(section).getByText('Important: Do not pay')).toBeInTheDocument()
+    expect(within(section).getByRole('link', { name: 'Call 1930' })).toHaveAttribute('href', 'tel:1930')
+    expect(within(section).getByRole('link', { name: 'National Cyber Crime Reporting Portal' })).toHaveAttribute('href', 'https://cybercrime.gov.in/')
+    expect(within(section).getByText('Contact your bank or payment app immediately.')).toBeInTheDocument()
+    expect(section.querySelector('ul')).toHaveClass(styles.safetyCards)
+  })
+
   it('labels demo fixture evidence', async () => {
     await showResult(payload({ checks: [{ check_name: 'domain_verification', status: 'pass', details: '[DEMO FIXTURE — not a live DNS result] emberlakeanalytics.example.' }] }))
     expect(screen.getByText('Demo fixture, not a live check')).toBeInTheDocument()

@@ -15,7 +15,8 @@ PORTAL_URL = "https://cybercrime.gov.in/"
 _REPORT = {
     "label": "Report it",
     "steps": [
-        "If money has already left your account, call 1930 straight away (the sooner, the better the chance of a hold).",
+        "If money has already left your account, contact your bank or payment app immediately and ask what hold or reversal options are available.",
+        "Then call 1930 straight away (the sooner, the better the chance of a hold).",
         "Then file a complaint on the National Cyber Crime Reporting Portal (cybercrime.gov.in).",
         "Keep screenshots of the offer, the sender's address, payment details and any receipts. Do not delete the chat.",
     ],
@@ -39,7 +40,7 @@ def build_safety_actions(checks: List[dict], raw_text: str, risk_band: str) -> L
     if payment:
         actions.append(_action("payment", "Do not pay", [
             "Do not pay any fee, deposit, kit or 'security' amount to get a job or internship.",
-            "A genuine employer does not ask you to pay to be hired.",
+            "A legitimate employer should not require a fee, deposit, kit charge or security amount as a condition of getting the job or internship.",
         ], urgent=True))
     if "fake_cheque" in families or "reshipping" in families:
         actions.append(_action("cheque_or_shipping", "Do not deposit cheques or forward parcels", [

@@ -271,6 +271,11 @@ been verified in this workspace.
 - The contacts are the National Cyber Crime Helpline 1930 and the National Cyber Crime Reporting Portal
   (cybercrime.gov.in), confirmed against Kerala Police and Ministry of Home Affairs pages. The steps are general
   advice, not legal advice, and a report does not guarantee any money is recovered.
+- If money may have been transferred, the advice also says to contact the bank or payment app immediately and ask
+  what hold or reversal options are available. The application does not contact the bank, file a complaint, or take
+  any action for the person. A payment warning says a legitimate employer should not require a fee, deposit, kit
+  charge, or security amount as a condition of getting the job or internship; it is guidance, not proof about a
+  particular employer.
 
 ## Careers-page note
 
