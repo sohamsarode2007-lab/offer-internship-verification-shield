@@ -36,7 +36,8 @@ import dns.resolver
 from rapidfuzz.distance import Levenshtein
 
 from app.utils.field_utils import get_field_value
-from app.utils.email_domains import is_free_mailbox
+from app.services import brand_advisories, careers_page, web_archive
+from app.utils.email_domains import is_disposable_mailbox, is_free_mailbox
 
 logger = logging.getLogger(__name__)
 
@@ -259,12 +260,24 @@ def verify_domain(input_data: Union[Dict[str, Any], str, None]) -> Dict[str, Any
                        [{"check_name": "free_mailbox", "status": "fail",
                          "explanation": f"'{host}' is a free/public mailbox provider."}])
 
+    if is_disposable_mailbox(host):
+        return _result("fail", host,
+                       f"Contact address uses the disposable (temporary) mailbox service '{host}'; "
+                       "companies do not send offers from these.",
+                       [{"check_name": "disposable_mailbox", "status": "fail",
+                         "explanation": f"'{host}' is a throwaway mailbox service."}])
+
     lookalike = find_lookalike(host)
     if lookalike:
         return _result("fail", host, f"Lookalike domain: {lookalike}.",
                        [{"check_name": "brand_lookalike", "status": "fail", "explanation": lookalike}])
 
     reg_domain, _ = registrable_domain(host)
+    claimed = get_field_value(input_data, "company_name", "company_name_legacy") if isinstance(input_data, dict) else None
+    mismatch = brand_advisories.official_domain_mismatch(claimed, reg_domain)
+    if mismatch:
+        return _result("fail", host, mismatch,
+                       [{"check_name": "employer_official_domain", "status": "fail", "explanation": mismatch}])
     if os.getenv("DEMO_MODE") == "1" and (host in _demo_fixture_domains() or reg_domain in _demo_fixture_domains()):
         logger.warning("[DOMAIN_VERIFY] DEMO_MODE fixture applied; result is not a live DNS lookup.")
         return _result("pass", host,
@@ -290,5 +303,13 @@ def verify_domain(input_data: Union[Dict[str, Any], str, None]) -> Dict[str, Any
     details = f"Claimed contact domain '{host}' exists and accepts email (MX present)."
     if warnings:
         details += " Warnings: " + " ".join(warnings)
+    if age["status"] in ("warning", "unknown"):
+        first_seen = web_archive.first_capture_month(reg_domain)
+        if first_seen:
+            details += (f" The Internet Archive's earliest saved copy of '{reg_domain}' is from {first_seen} "
+                        "(informational only; it does not show who sent this offer).")
+    if careers_page.careers_page_found(reg_domain):
+        details += (f" '{reg_domain}' publishes a page that reads like a careers page (informational only; "
+                    "anyone can publish one, so it does not show who sent this offer).")
     details += " Note: this checks the domain written in the text, not the actual sender."
     return _result("pass", host, details, sub_checks, warnings)

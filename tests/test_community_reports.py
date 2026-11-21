@@ -76,15 +76,15 @@ def test_masked_preview_and_deselected_indicator_is_not_stored(db):
     assert db.query(CommunityIndicator).filter_by(digest=phone["digest"]).count() == 0
 
 
-def test_report_consent_is_required_and_only_version_three_is_valid(db):
+def test_report_consent_is_required_and_only_version_four_is_valid(db):
     token, _ = cr.issue_report_token(db, [], cr.minhash_signature("A template text has sufficient words to compare."))
     with pytest.raises(ValueError, match="consent"):
         cr.accept_report(db, token, [], False, cr.CONSENT_VERSION)
-    for obsolete in (1, 2):
+    for obsolete in (1, 2, 3):  # v3 named a single college; it is no longer accepted
         with pytest.raises(ValueError, match="consent"):
             cr.accept_report(db, token, [], True, obsolete)
-    assert cr.CONSENT_VERSION == 3
-    cr.accept_report(db, token, [], True, 3)
+    assert cr.CONSENT_VERSION == 4
+    cr.accept_report(db, token, [], True, 4)
 
 
 def test_report_token_tamper_reuse_and_expiry_are_rejected(db):
@@ -101,7 +101,7 @@ def test_report_token_tamper_reuse_and_expiry_are_rejected(db):
     payload["exp"] = int((cr._utcnow() - timedelta(hours=1)).timestamp())
     state = db.get(CommunityToken, payload["jti"])
     state.expires_at = cr._utcnow() - timedelta(hours=1)
-    import base64, json, hmac, hashlib
+    import base64, hmac, hashlib
     body = base64.urlsafe_b64encode(json.dumps(payload, separators=(",", ":"), sort_keys=True).encode()).decode().rstrip("=")
     sig = hmac.new(b"test-secret-pepper", ("report-token:" + body).encode(), hashlib.sha256).hexdigest()
     with pytest.raises(ValueError, match="expired"):
@@ -117,12 +117,12 @@ def test_indicator_thresholds_are_three_then_ten_reports(db):
     store_report(db, item)
     match = cr.lookup_community(db, [item], cr.minhash_signature("An incoming letter that does not resemble template."))
     assert match["risk_points"] == 25
-    assert "reported by 3+ students" in match["details"] and "3 reports" not in match["details"]
+    assert "reported by 3+ people" in match["details"] and "3 reports" not in match["details"]
     for _ in range(7):
         store_report(db, item)
     match = cr.lookup_community(db, [item], cr.minhash_signature("An incoming letter that does not resemble template."))
     assert match["risk_points"] == 40
-    assert "reported by 10+ students" in match["details"] and "10 reports" not in match["details"]
+    assert "reported by 10+ people" in match["details"] and "10 reports" not in match["details"]
 
 
 def test_correlated_indicator_and_template_evidence_caps_at_forty(db):
@@ -149,7 +149,7 @@ def test_community_only_high_score_is_capped_to_manual_review():
     ])
     assert result["overall_risk_score"] == 60
     assert result["risk_band"] == "insufficient evidence, verify manually"
-    assert "Reported by other students; not enough independent evidence to call this high risk." in result["risk_factors"]
+    assert "Reported by other job seekers; not enough independent evidence to call this high risk." in result["risk_factors"]
 
 
 def test_payment_demand_still_allows_high_risk_with_community_evidence():
@@ -171,7 +171,7 @@ def test_community_match_does_not_satisfy_external_verification_guard():
         {"check_name": "gstin_verification", "status": "pass", "identifier_present": True},
         {"check_name": "payment_detection", "status": "pass"},
         {"check_name": "community_reports", "status": "fail", "risk_points": 25,
-         "details": "This upi appears in reports from 3+ students."},
+         "details": "This upi appears in reports from 3+ people."},
     ])
     assert result["risk_band"] == "insufficient evidence, verify manually"
     assert any("no externally verified registry match or authenticated sender" in x

@@ -40,7 +40,7 @@ reports. It stores no offer text, names, student identity, raw indicator
 values, or IP addresses. The only contact email stored is the contact address
 on a dispute, retained until 12 months after that dispute is resolved.
 
-### Per-indicator data for the VIT Pune placement cell (consented reports only)
+### Per-indicator data for the public scam-trends page (consented reports only)
 
 For each indicator the student selects in a **consented** report, store exactly:
 
@@ -59,11 +59,11 @@ a student consents to a report. Withdrawing a report deletes its indicators.
 
 ### Anonymous trend counts (every check)
 
-**Purpose:** anonymous weekly trend counts for the VIT Pune placement cell
+**Purpose:** anonymous weekly trend counts for the public scam-trends page
 (the 12-week results chart and the category summary).
 
-Every successful `/analyze` call records exactly **one** aggregate row for
-VIT Pune with three fields only:
+Every successful `/analyze` call records exactly **one** aggregate row with
+three fields only:
 
 | Field | Content |
 | --- | --- |
@@ -78,17 +78,17 @@ text, which are then discarded as before. Because the row is unlinked, a
 report withdrawal does not remove it. Checks made with `DEMO_MODE=1` are
 flagged demo and count only in demo mode.
 
-**Disclosure:** the placement-cell page and its CSV export show these counts
+**Disclosure:** the scam-trends page and its CSV export show these counts
 only as aggregates, and every count below five is shown as `<5`.
 **Retention:** rows older than 24 months (by ISO week) are deleted by the
 same hourly retention worker.
 
-The VIT Pune placement cell page lists a sender only after **3 or more**
+The public scam-trends page lists a sender only after **3 or more**
 distinct consented reports of the same indicator, showing its masked form,
 type, report count, first and last week, most common category and dispute
 status. Senders with fewer reports never appear. The CSV export contains the
-same fields only. Only reports given under consent version 3 (which names the
-placement cell) are shown there.
+same fields only. Only reports given under consent version 4 (which says the
+public scam-trends page shows them) are shown there.
 
 If `INDICATOR_PEPPER` is unset, report creation and matching are disabled; do
 not fall back to a checked-in or default secret. Rotation assigns a new
@@ -99,18 +99,36 @@ only after all digests using that version have expired or been removed.
 ## Consent
 
 Before the report is sent, show the exact masked selected indicators. Require
-an unchecked-by-default checkbox with this exact wording, version `3`:
+an unchecked-by-default checkbox with this exact wording, version `4`:
 
-> Share these details to warn other students: the payment and contact details you selected above, and a scrambled fingerprint of the letter's wording with names and numbers removed. We don't store the letter, your name or your contact details. You can withdraw this report later with the code we give you. VIT's placement cell will see these details in masked form so it can warn other students.
+> Share these details to warn other job seekers: the payment and contact details you selected above, and a scrambled fingerprint of the letter's wording with names and numbers removed. We don't store the letter, your name or your contact details. You can withdraw this report later with the code we give you. The public scam-trends page will show these details in masked form so it can warn other job seekers.
 
-Store `consent_version=3` with each accepted report. Only version 3 is
-accepted; versions 1 and 2 are obsolete (version 2 did not mention the
-placement cell). No report is accepted without affirmative consent.
+Store `consent_version=4` with each accepted report. Only version 4 is
+accepted; versions 1 to 3 are obsolete (version 3 named a single college
+instead of the public scam-trends page). No report is accepted without affirmative consent.
 
 The response to `/report` includes a one-time withdrawal code. `POST
 /report/withdraw {code}` is the report consent-withdrawal mechanism: it deletes
 that report's contributions and decrements its counts. The code is shown once;
 store only a verifier, not the plaintext code.
+
+## Link lookups (optional, consented per check)
+
+Decision: link lookups are off unless the operator sets `LINK_LOOKUPS=1`, and even then run only when the person
+ticks an unchecked-by-default box on that check (wording: `LINK_CONSENT_TEXT` in `frontend/src/consent.ts`). The
+consent covers that one check and is not remembered or stored.
+
+- **What leaves the server:** for at most 3 links, a minimised web address (scheme, host and a short path; never the
+  query, fragment, login part, or a path that looks like it holds an email, a name-like `@` or an 8+ digit number)
+  goes to Google Web Risk with the operator's API key. Raw IP addresses are dropped. Nothing else from the offer is sent.
+- **What the server does:** it makes a HEAD request to each link (public addresses only, at most 4 redirects, no
+  body read) and reads the TLS certificate. The site's owner can see that a server opened the link; the person's own
+  address is never involved.
+- **What is kept:** nothing. Links and results are not stored or logged (log lines carry only an error type).
+  Results appear as informational notes with no score effect, naming hosts only.
+- **Honest limits:** the only outcomes are "threat-listed" or "unknown". "Not listed" is never shown as safe. DNS can
+  change between our address check and the visit (rebinding); a hardened egress proxy would be the next step.
+  A lookup to Google is a transfer to a third party; keep the switch off if that is not acceptable for your deployment.
 
 ## Abuse resistance, matching, and disclosure
 
@@ -135,11 +153,11 @@ store only a verifier, not the plaintext code.
   bucket plus any template match, capped at +40 total; matching more identifiers
   never stacks. Community evidence alone cannot produce high risk: if community
   evidence alone crosses 60, cap the result at manual review with the factor
-  “Reported by other students; not enough independent evidence to call this high
+  “Reported by other job seekers; not enough independent evidence to call this high
   risk.” Neither community signal satisfies the external-verification low-risk
   guard. These limits address the [poisoning threat](#poisoning-a-legitimate-companys-identifiers).
-- Details use buckets only: “reported by 3+ students” or “reported by 10+
-  students”; never disclose exact counts or other reports' contents. `/indicators/stats`
+- Details use buckets only: “reported by 3+ people” or “reported by 10+
+  people”; never disclose exact counts or other reports' contents. `/indicators/stats`
   is aggregate-only and suppresses cells below 5.
 - Synthetic demo reports are marked `is_demo` and participate only when
   `DEMO_MODE=1`; they never inflate production counts.
@@ -152,7 +170,9 @@ company, under review”. The exception is a domain dispute verified by a
 one-time link sent to an address at that same domain; that domain may be
 suppressed while pending manual review. Store the dispute contact email only
 for follow-up, and delete it 12 months after resolution. The dispute reason
-must not be used to submit offer text or unrelated personal information.
+is a fixed code (our_business_detail, reported_in_error, someone_else_misused_it, other), never free
+text, so offer text and unrelated personal information cannot be submitted. Migration 008 overwrote
+free-text reasons stored earlier.
 
 Anonymous trend rows (ISO week, band, category) are deleted 24 months after
 their ISO week. Indicators and their report contributions not seen for 24 months are deleted
@@ -180,7 +200,7 @@ independent evidence that the offer is fraudulent.
 | Infer wording from template signatures | Obtain signatures and compare against known letters | Redact names, emails, phone, VPA, accounts, amounts and dates before MinHash; store only 128 values; access controls and expiry | Signature linkage and similarity inference remain possible; it is pseudonymous, not anonymous. |
 | Abuse disputes to suppress scam reports | File false company disputes | Disputed indicators keep scoring; only a domain verified through a same-domain one-time link is temporarily suppressed; rate limits and review | Validly controlled domains can still suppress their domain temporarily while review is pending. |
 | Harvest a candidate's own details | Place candidate email/phone in a letter and induce reporting | Role-based extraction excludes To/Cc/Dear lines and candidate details; only eligible masked values are selectable; tests enforce exclusions | Ambiguous or deliberately misleading prose may still confuse extraction, so student review and deselection remain necessary. |
-| Read the placement-cell senders list | Open the VIT Pune placement cell page or its CSV export | Masked forms only; a sender appears only at 3+ consented v3 reports; disputes shown; CSV cells starting with `=`, `+`, `-` or `@` are prefixed to prevent spreadsheet formula injection | **There is no staff login yet** (single-college simulation; login is future scope), so anyone who can reach the site can read the masked list. Full sender domains are visible by design. |
+| Read the reported-senders list | Open the public scam-trends page or its CSV export | Masked forms only; a sender appears only at 3+ consented v4 reports; disputes shown; CSV cells starting with `=`, `+`, `-` or `@` are prefixed to prevent spreadsheet formula injection | **There is no staff login yet** (single-college simulation; login is future scope), so anyone who can reach the site can read the masked list. Full sender domains are visible by design. |
 
 ## Honest limits and legal review
 

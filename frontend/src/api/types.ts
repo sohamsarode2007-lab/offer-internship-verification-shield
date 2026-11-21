@@ -46,6 +46,12 @@ export interface AnalyzeResponse {
   registry_source?: string | null
   /** Company name extracted from the offer text, if any (not stored server-side). */
   company_name?: string | null
+  /** What the person could add to strengthen the check. */
+  evidence_hints?: { id: string; title: string; why: string; how: string }[]
+  /** Official look-ups the person can run themselves (e.g. the Udyam number page). */
+  evidence_meta?: { check_name: string; source: string; affects: string; confidence: string; freshness: string; rule_version: string; checked_at: string }[]
+  safety_actions?: { id: string; title: string; steps: string[]; urgent: boolean; helpline?: string; url?: string }[]
+  self_checks?: { id: string; title: string; number: string; url: string; why: string; steps: string[]; caution: string }[]
 }
 
 export interface ReportableIndicator {
@@ -57,7 +63,7 @@ export interface ReportableIndicator {
 export interface ReportRequest {
   report_token: string
   consent: true
-  consent_version: 3
+  consent_version: 4
   selected_indicators: string[]
 }
 
@@ -69,13 +75,13 @@ export interface DisputeRequest {
   indicator_type: DisputeIndicatorType
   value: string
   contact_email: string
-  reason: string
+  reason_code: "our_business_detail" | "reported_in_error" | "someone_else_misused_it" | "other"
 }
 export interface DisputeResponse { status: 'under_review'; message: string }
 
 export type RiskBand = 'likely legitimate' | 'insufficient evidence, verify manually' | 'high risk'
 export type ScamCategory = 'registration_fee' | 'security_deposit' | 'training_or_kit_fee' |
-  'fake_government_scheme' | 'free_mailbox_impersonation' | 'lookalike_domain' |
+  'fake_government_scheme' | 'task_or_chat_scam' | 'free_mailbox_impersonation' | 'lookalike_domain' |
   'sender_spoofing' | 'no_red_flags' | 'other'
 export type DashboardCount = number | '<5'
 export interface WeekBandCount { week: string; band: RiskBand; count: DashboardCount }
@@ -105,4 +111,11 @@ export interface InstitutionDashboard {
   weeks: string[]
   by_week_band: WeekBandCount[]
   by_week_category: WeekCategoryCount[]
+}
+
+export interface DataSources {
+  scoring_model: string
+  sources: { id: string; name: string; updated: string | null; age_days: number | null; status: 'current' | 'stale' | 'demo' | 'unknown'; detail: string }[]
+  optional_lookups: Record<string, boolean>
+  request_budgets: { id: string; used_today: number; daily_limit: number }[]
 }

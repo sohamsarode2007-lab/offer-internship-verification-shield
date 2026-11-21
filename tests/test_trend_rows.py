@@ -1,4 +1,4 @@
-"""Every /analyze call records one anonymous VIT Pune trend row (ISO week, band, category only)."""
+"""Every /analyze call records one anonymous public trend row (ISO week, band, category only)."""
 import re
 import uuid
 from datetime import date, timedelta
@@ -41,7 +41,7 @@ def test_real_check_adds_exactly_one_anonymous_row(api_client, monkeypatch):
         assert row.band == response.json()["risk_band"]
         assert row.scam_category == "registration_fee"
         assert row.report_id is None and row.is_demo is False
-        assert row.institution.name == "VIT Pune"
+        assert row.institution.name == "Public"
         # The table has only these fields: no text, identifiers, file name, IP or timestamps.
         assert {c.name for c in InstitutionObservation.__table__.columns} == {
             "id", "institution_id", "report_id", "iso_week", "band", "scam_category", "is_demo", "is_simulated"}

@@ -23,7 +23,8 @@ ALIASES = {
     "cin": {"cin", "corporateidentificationnumber"},
     "company_name": {"companyname", "nameofcompany"},
     "company_status": {"companystatus", "status"},
-    "date_of_registration": {"dateofregistration", "incorporationdate"},
+    # "companyregistrationdatedate" is the data.gov.in column (CompanyRegistrationdate_date).
+    "date_of_registration": {"dateofregistration", "incorporationdate", "companyregistrationdatedate"},
     "synthetic": {"synthetic"},
 }
 

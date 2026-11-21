@@ -1,7 +1,7 @@
-"""Seed the simulated VIT Pune reports (fictional senders) and simulated checks (DEMO_MODE=1 only).
+"""Seed the simulated reports (fictional senders) and simulated checks (DEMO_MODE=1 only).
 
 Requires DEMO_MODE=1 and an operator-provided INDICATOR_PEPPER. Idempotent: running it
-again adds nothing. See app/services/demo_seed.py and fixtures/demo/vit_simulated_senders.csv.
+again adds nothing. See app/services/demo_seed.py and fixtures/demo/simulated_senders.csv.
 """
 import os
 import sys
@@ -27,7 +27,7 @@ def main():
         checks = seed_vit_checks(db)
     finally:
         db.close()
-    print(f"Added {added} simulated VIT Pune report(s) and {checks} simulated check(s).")
+    print(f"Added {added} simulated report(s) and {checks} simulated check(s).")
 
 
 if __name__ == "__main__":

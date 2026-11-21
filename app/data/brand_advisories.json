@@ -1,0 +1,49 @@
+{
+  "_comment": "Employer-published recruitment-fraud statements. Add an entry only after opening the employer's own page; keep wording to what the page states. Used by app/services/brand_advisories.py.",
+  "advisories": [
+    {
+      "brand": "TCS",
+      "aliases": [
+        "tcs",
+        "tata consultancy services"
+      ],
+      "official_domains": [
+        "tcs.com"
+      ],
+      "statement": "recruits only from @tcs.com addresses, never from free email services, and never asks for payment or a security deposit",
+      "source": "TCS recruitment fraud alert",
+      "source_url": "https://www.tcs.com/careers/india/recruitment-fraud-alert",
+      "retrieved": "2026-11-15"
+    },
+    {
+      "brand": "Infosys",
+      "aliases": [
+        "infosys limited",
+        "infosys ltd"
+      ],
+      "official_domains": [
+        "infosys.com"
+      ],
+      "statement": "says its recruitment team writes from @infosys.com addresses and that it never asks for fees or a security deposit",
+      "source": "Infosys recruitment fraud alert",
+      "source_url": "https://www.infosys.com/careers/apply/recruitment-fraud-alert.html",
+      "retrieved": "2026-11-17"
+    },
+    {
+      "brand": "HCLTech",
+      "aliases": [
+        "hcltech",
+        "hcl technologies",
+        "hcl technologies limited"
+      ],
+      "official_domains": [
+        "hcl.com",
+        "hcltech.com"
+      ],
+      "statement": "says its recruitment team writes from @hcl.com or @hcltech.com addresses, that offers come from an HCLTech email ID or its preferred recruitment partners only, and that it never charges or accepts any fee or deposit from job seekers",
+      "source": "HCLTech genuine job offers page",
+      "source_url": "https://www.hcltech.com/careers/genuine-job-offers",
+      "retrieved": "2026-11-17"
+    }
+  ]
+}

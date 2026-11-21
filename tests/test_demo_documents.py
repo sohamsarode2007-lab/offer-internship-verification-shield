@@ -89,10 +89,13 @@ def test_govt_scheme_urgency(demo_client, path):
 
 
 @pytest.mark.parametrize("path", ["text", "pdf"])
-def test_govt_scheme_payment_details_include_upi(demo_client, path):
+def test_govt_scheme_payment_details_mention_upi_without_the_handle(demo_client, path):
+    # docs/PRIVACY_DESIGN.md: raw UPI IDs are never stored. The check text says a UPI instruction was
+    # found but never repeats the handle (the masked form is offered only in the consented report flow).
     body = analyze(demo_client, "scam_fake_govt_scheme_fee", path)
     payment = next(c for c in body["checks"] if c["check_name"] == "payment_detection")
-    assert "rky.verification@ybl" in payment["details"]
+    assert "UPI payment instruction" in payment["details"]
+    assert "rky.verification" not in payment["details"]
 
 
 def test_stipend_vpa_is_not_a_payment_demand():

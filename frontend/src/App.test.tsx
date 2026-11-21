@@ -12,7 +12,7 @@ import styles from './App.module.css'
 
 vi.mock('./api/client', async importOriginal => {
   const actual = await importOriginal<typeof import('./api/client')>()
-  return { ...actual, analyze: vi.fn(), submitReport: vi.fn(), withdrawReport: vi.fn(), submitDispute: vi.fn(), loadDashboard: vi.fn() }
+  return { ...actual, analyze: vi.fn(), submitReport: vi.fn(), withdrawReport: vi.fn(), submitDispute: vi.fn(), loadDashboard: vi.fn(), loadConfig: vi.fn(), loadSources: vi.fn() }
 })
 
 const indicators: ReportableIndicator[] = [
@@ -35,7 +35,57 @@ async function showResult(data: AnalyzeResponse) {
   return user
 }
 afterEach(cleanup)
-beforeEach(() => { vi.clearAllMocks(); window.history.replaceState({}, '', '/') })
+beforeEach(() => { vi.clearAllMocks(); vi.mocked(api.loadConfig).mockResolvedValue({ link_lookups: false }); window.history.replaceState({}, '', '/') })
+
+describe('data sources panel', () => {
+  const data = { scoring_model: 'rule_based_v2', optional_lookups: { link_lookups: false, careers_page: true },
+    sources: [{ id: 'company_registry', name: 'Company registry snapshot (local copy)', updated: '2026-08-01', age_days: 112, status: 'stale' as const, detail: 'Source label MCA_CSV.' },
+              { id: 'employer_advisories', name: 'Employer fraud advisories (read by hand)', updated: null, age_days: null, status: 'unknown' as const, detail: '0 employers.' }],
+    request_budgets: [{ id: 'web_risk', used_today: 3, daily_limit: 3000 }] }
+  it('shows each source with its age and status, never calling an undated one fresh', async () => {
+    window.history.replaceState({}, '', '/how-it-works')
+    vi.mocked(api.loadSources).mockResolvedValueOnce(data)
+    render(<App />)
+    expect(await screen.findByText(/Out of date, refreshed 2026-08-01 \(112 days ago\)/)).toBeTruthy()
+    expect(screen.getByText(/Date unknown/)).toBeTruthy()
+    expect(screen.getByText(/1 optional online lookup is switched on/)).toBeTruthy()
+    expect(screen.getByText(/3 of 3000 used today/)).toBeTruthy()
+  })
+  it('says so when the details cannot be loaded', async () => {
+    window.history.replaceState({}, '', '/how-it-works')
+    vi.mocked(api.loadSources).mockRejectedValueOnce(new Error('x'))
+    render(<App />)
+    expect(await screen.findByText(/could not be loaded right now/)).toBeTruthy()
+  })
+})
+
+describe('link lookup consent', () => {
+  async function home(enabled: boolean) {
+    vi.mocked(api.loadConfig).mockResolvedValue({ link_lookups: enabled })
+    vi.mocked(api.analyze).mockResolvedValue(payload())
+    const user = userEvent.setup()
+    render(<App />)
+    await user.type(screen.getByLabelText('Paste offer text'), 'Offer https://x.example/a')
+    return user
+  }
+  it('shows no consent box when the server has the feature off', async () => {
+    await home(false)
+    expect(screen.queryByRole('checkbox')).toBeNull()
+  })
+  it('is unchecked by default and sends nothing extra when left unchecked', async () => {
+    const user = await home(true)
+    const box = await screen.findByRole('checkbox')
+    expect((box as HTMLInputElement).checked).toBe(false)
+    await user.click(screen.getByRole('button', { name: 'Check offer' }))
+    expect(vi.mocked(api.analyze)).toHaveBeenCalledWith('Offer https://x.example/a', null)
+  })
+  it('sends the flag only after the person ticks the box', async () => {
+    const user = await home(true)
+    await user.click(await screen.findByRole('checkbox'))
+    await user.click(screen.getByRole('button', { name: 'Check offer' }))
+    expect(vi.mocked(api.analyze)).toHaveBeenCalledWith('Offer https://x.example/a', null, true)
+  })
+})
 
 describe('analysis result', () => {
   it.each([
@@ -122,6 +172,32 @@ describe('analysis result', () => {
     expect(screen.queryByText(/^Checked:/)).not.toBeInTheDocument()
   })
 
+  it.each(['high risk', 'insufficient evidence, verify manually'])('links to the national cyber crime portal for %s', async band => {
+    await showResult(payload({ risk_band: band, next_steps: ['Do not pay.'] }))
+    const link = screen.getByRole('link', { name: 'National Cyber Crime Reporting Portal' })
+    expect(link).toHaveAttribute('href', 'https://cybercrime.gov.in/')
+    expect(link).toHaveAttribute('rel', 'noopener noreferrer')
+  })
+
+  it('does not show the portal link for a likely legitimate result', async () => {
+    await showResult(payload({ risk_band: 'likely legitimate', next_steps: ['Confirm the sender independently.'] }))
+    expect(screen.queryByRole('link', { name: 'National Cyber Crime Reporting Portal' })).not.toBeInTheDocument()
+  })
+
+  it('renders matched safety actions with urgent styling and recovery links', async () => {
+    await showResult(payload({ safety_actions: [
+      { id: 'payment', title: 'Do not pay', urgent: true, steps: ['Do not pay a fee.'] },
+      { id: 'report', title: 'If you have lost money or shared details', urgent: true,
+        steps: ['Contact your bank or payment app immediately.'], helpline: '1930', url: 'https://cybercrime.gov.in/' },
+    ] }))
+    const section = screen.getByRole('region', { name: 'Safety steps' })
+    expect(within(section).getByText('Important: Do not pay')).toBeInTheDocument()
+    expect(within(section).getByRole('link', { name: 'Call 1930' })).toHaveAttribute('href', 'tel:1930')
+    expect(within(section).getByRole('link', { name: 'National Cyber Crime Reporting Portal' })).toHaveAttribute('href', 'https://cybercrime.gov.in/')
+    expect(within(section).getByText('Contact your bank or payment app immediately.')).toBeInTheDocument()
+    expect(section.querySelector('ul')).toHaveClass(styles.safetyCards)
+  })
+
   it('labels demo fixture evidence', async () => {
     await showResult(payload({ checks: [{ check_name: 'domain_verification', status: 'pass', details: '[DEMO FIXTURE — not a live DNS result] emberlakeanalytics.example.' }] }))
     expect(screen.getByText('Demo fixture, not a live check')).toBeInTheDocument()
@@ -152,9 +228,9 @@ describe('interface errors', () => {
   })
 })
 
-describe('VIT Pune placement cell page', () => {
+describe('Scam trends page', () => {
   const dashboardData = {
-    institution: 'VIT Pune', sender_threshold: 3, weeks: ['2026-W46'], by_week_band: [], by_week_category: [],
+    institution: 'Public', sender_threshold: 3, weeks: ['2026-W46'], by_week_band: [], by_week_category: [],
     category_summary: [
       { category: 'registration_fee', total: 61, last_4_weeks: 28, previous_8_weeks: 33, trend: 'Rising' },
       { category: 'sender_spoofing', total: '<5', last_4_weeks: '<5', previous_8_weeks: '<5', trend: null },
@@ -168,17 +244,17 @@ describe('VIT Pune placement cell page', () => {
     vi.mocked(api.loadDashboard).mockResolvedValueOnce(structuredClone(dashboardData) as never)
     window.history.replaceState({}, '', '/dashboard')
     render(<App />)
-    expect(await screen.findByRole('heading', { name: 'VIT Pune placement cell' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Scam trends' })).toBeInTheDocument()
     expect(screen.queryByLabelText(/API key/i)).not.toBeInTheDocument()
-    const senders = await screen.findByRole('heading', { name: 'Senders targeting VIT students' })
+    const senders = await screen.findByRole('heading', { name: 'Reported senders' })
     const chart = screen.getByRole('heading', { name: 'Results by week' })
     expect(senders.compareDocumentPosition(chart) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    expect(screen.getByText('Shown only after 3 or more students report the same sender.')).toBeInTheDocument()
-    const table = screen.getByRole('table', { name: 'Senders targeting VIT students' })
+    expect(screen.getByText('Shown only after 3 or more people report the same sender.')).toBeInTheDocument()
+    const table = screen.getByRole('table', { name: 'Reported senders' })
     expect(within(table).getByText('pl•••@gmail.com')).toBeInTheDocument()
     expect(within(table).getByText('12')).toBeInTheDocument()
     expect(within(table).getByText('Disputed by the company, under review')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Export warning list' })).toHaveAttribute('href', expect.stringContaining('/placement-cell/senders.csv'))
+    expect(screen.getByRole('link', { name: 'Export warning list' })).toHaveAttribute('href', expect.stringContaining('/trends/senders.csv'))
     expect(vi.mocked(api.loadDashboard)).toHaveBeenCalledWith()
   })
   it('shows one row per category with totals and a trend word instead of a week grid', async () => {
@@ -194,25 +270,38 @@ describe('VIT Pune placement cell page', () => {
     expect(within(spoof).getAllByText('<5')).toHaveLength(3)
     expect(within(spoof).getByText('—')).toBeInTheDocument()
     expect(screen.queryByRole('table', { name: 'Scam categories by week' })).not.toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Export weekly data' })).toHaveAttribute('href', expect.stringContaining('/placement-cell/weekly.csv'))
+    expect(screen.getByRole('link', { name: 'Export weekly data' })).toHaveAttribute('href', expect.stringContaining('/trends/weekly.csv'))
   })
   it('names the page in the navigation and has no college-code field', () => {
     render(<App />)
-    expect(screen.getByRole('link', { name: 'VIT Pune placement cell' })).toHaveAttribute('href', '/dashboard')
+    expect(screen.getByRole('link', { name: 'Scam trends' })).toHaveAttribute('href', '/dashboard')
     expect(screen.queryByLabelText(/college/i)).not.toBeInTheDocument()
   })
 })
 
 describe('community report consent', () => {
-  it('matches the version 3 text in the privacy design', () => {
+  it('matches the version 4 text in the privacy design', () => {
     const path = [resolve(process.cwd(), '../docs/PRIVACY_DESIGN.md'), resolve(process.cwd(), 'docs/PRIVACY_DESIGN.md')].find(existsSync)!
     const doc = readFileSync(path, 'utf8')
-    const quote = doc.match(/> Share these details[\s\S]*?so it can warn other students\./)?.[0]
+    const quote = doc.match(/> Share these details[\s\S]*?so it can warn other job seekers\./)?.[0]
     expect(quote).toBeTruthy()
     expect(quote!.split('\n').map(line => line.replace(/^>\s?/, '').trim()).join(' ').replace(/\s+/g, ' ')).toBe(CONSENT_TEXT)
-    expect(CONSENT_VERSION).toBe(3)
-    expect(doc).toContain('version `3`')
-    expect(CONSENT_TEXT.endsWith("VIT's placement cell will see these details in masked form so it can warn other students.")).toBe(true)
+    expect(CONSENT_VERSION).toBe(4)
+    expect(doc).toContain('version `4`')
+    expect(CONSENT_TEXT.endsWith("The public scam-trends page will show these details in masked form so it can warn other job seekers.")).toBe(true)
+  })
+
+  it('allows a wording-only report when every detail is unticked', async () => {
+    vi.mocked(api.submitReport).mockResolvedValueOnce({ status: 'reported', withdrawal_code: 'wording-only-code-1234567890' })
+    const user = await showResult(payload({ report_token: 'signed-report-token-is-long-enough', reportable_indicators: indicators }))
+    await user.click(screen.getByRole('button', { name: 'Report this scam' }))
+    for (const box of screen.getAllByRole('checkbox')) await user.click(box)
+    await user.click(screen.getByRole('button', { name: 'Continue' }))
+    expect(screen.getByRole('button', { name: 'Report scam' })).toBeDisabled()
+    await user.click(screen.getByLabelText(CONSENT_TEXT))
+    await user.click(screen.getByRole('button', { name: 'Report scam' }))
+    expect(await screen.findByText('wording-only-code-1234567890')).toBeInTheDocument()
+    expect(vi.mocked(api.submitReport)).toHaveBeenCalledWith(expect.objectContaining({ selected_indicators: [] }))
   })
 
   it('allows deselection, requires consent and does not store the withdrawal code', async () => {
@@ -227,8 +316,103 @@ describe('community report consent', () => {
     expect(screen.getByRole('button', { name: 'Report scam' })).toBeEnabled()
     await user.click(screen.getByRole('button', { name: 'Report scam' }))
     expect(await screen.findByText('once-only-secret-code-123456')).toBeInTheDocument()
-    expect(vi.mocked(api.submitReport)).toHaveBeenCalledWith(expect.objectContaining({ consent: true, consent_version: 3, selected_indicators: ['phone:two'] }))
+    expect(vi.mocked(api.submitReport)).toHaveBeenCalledWith(expect.objectContaining({ consent: true, consent_version: 4, selected_indicators: ['phone:two'] }))
     expect(localStorage.length).toBe(0)
     expect(sessionStorage.length).toBe(0)
   })
 })
+
+describe('add evidence and check again', () => {
+  const hints = [{ id: 'company_identifiers', title: 'Add the company\'s registration details', why: 'A CIN can be compared.', how: 'Look in the footer.' }]
+
+  it('shows hint cards only when the server returned hints', async () => {
+    await showResult(payload({ evidence_hints: [] }))
+    expect(screen.queryByText('Make this check stronger')).toBeNull()
+    cleanup()
+    await showResult(payload({ evidence_hints: hints }))
+    expect(await screen.findByText('Make this check stronger')).toBeTruthy()
+    expect(screen.getByText(/registration details/)).toBeTruthy()
+  })
+
+  it('sends the earlier text together with the new text, then shows the new result', async () => {
+    const user = await showResult(payload({ evidence_hints: hints, overall_risk_score: 40 }))
+    vi.mocked(api.analyze).mockResolvedValueOnce(payload({ evidence_hints: [], overall_risk_score: 5, risk_band: 'likely legitimate' }))
+    await user.type(await screen.findByLabelText('More details to add'), 'CIN: U74999DL2016PTC298345')
+    await user.click(screen.getByRole('button', { name: 'Check again with this' }))
+    const [text, file] = vi.mocked(api.analyze).mock.calls[1]
+    expect(text).toBe('Test offer text\n\nCIN: U74999DL2016PTC298345')
+    expect(file).toBeNull()
+    expect(await screen.findByText('Likely legitimate')).toBeTruthy()
+  })
+
+  it('asks for something to add instead of sending an empty re-check', async () => {
+    const user = await showResult(payload({ evidence_hints: hints }))
+    await user.click(await screen.findByRole('button', { name: 'Check again with this' }))
+    expect((await screen.findByRole('alert')).textContent).toMatch(/Add some text or choose a file/)
+    expect(vi.mocked(api.analyze)).toHaveBeenCalledTimes(1)
+  })
+
+  describe('self checks', () => {
+    const check = { id: 'udyam', title: 'Check this Udyam number yourself', number: 'UDYAM-MH-12-1234567',
+      url: 'https://udyamregistration.gov.in/Udyam_Verify.aspx', why: 'We have not verified it.', steps: ['Open the page.', 'Type the captcha.'], caution: 'A match shows the number exists.' }
+    it('shows nothing when there are no self checks', async () => {
+      await showResult(payload({ self_checks: [] }))
+      expect(screen.queryByRole('heading', { name: 'Check it yourself' })).toBeNull()
+    })
+    it('shows the number, the steps and a safe link to the official page', async () => {
+      await showResult(payload({ self_checks: [check] }))
+      expect(screen.getByText('UDYAM-MH-12-1234567')).toBeTruthy()
+      const link = screen.getByRole('link', { name: 'Open the Udyam verification page' })
+      expect(link.getAttribute('href')).toBe(check.url)
+      expect(link.getAttribute('rel')).toContain('noopener')
+      expect(screen.getByText('Type the captcha.')).toBeTruthy()
+    })
+  })
+
+  describe('safety actions', () => {
+    const report = { id: 'report', title: 'If you have lost money or shared details', steps: ['Call 1930 straight away.'], urgent: true, helpline: '1930', url: 'https://cybercrime.gov.in/' }
+    it('shows nothing when there are no safety actions', async () => {
+      await showResult(payload({ safety_actions: [] }))
+      expect(screen.queryByRole('heading', { name: 'Protect yourself now' })).toBeNull()
+    })
+    it('shows the steps, a call link and the portal link', async () => {
+      await showResult(payload({ safety_actions: [report] }))
+      expect(screen.getByText('Call 1930 straight away.')).toBeTruthy()
+      expect(screen.getByRole('link', { name: 'Call 1930' }).getAttribute('href')).toBe('tel:1930')
+      const portal = screen.getAllByRole('link', { name: 'National Cyber Crime Reporting Portal' }).find(l => l.closest('[aria-label="Safety steps"]'))
+      expect(portal?.getAttribute('href')).toBe('https://cybercrime.gov.in/')
+      expect(portal?.getAttribute('rel')).toContain('noopener')
+    })
+  })
+
+  describe('full report download', () => {
+    it('offers a download button and builds the file in the browser', async () => {
+      const create = vi.fn(() => 'blob:x'); const revoke = vi.fn()
+      Object.assign(URL, { createObjectURL: create, revokeObjectURL: revoke })
+      const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+      const user = await showResult(payload({}))
+      await user.click(screen.getByRole('button', { name: 'Download full report' }))
+      expect(create).toHaveBeenCalledTimes(1)
+      expect(click).toHaveBeenCalled()
+      click.mockRestore()
+    })
+  })
+
+  describe('evidence source line', () => {
+    it('shows source, score effect and confidence for a check', async () => {
+      await showResult(payload({
+        checks: [{ check_name: 'domain_verification', status: 'fail', score: 100, details: 'bad' }],
+        evidence_meta: [{ check_name: 'domain_verification', source: 'dns_lookup', affects: 'score', confidence: 'medium', freshness: 'live at check time', rule_version: 'rule_based_v2', checked_at: '2026-11-19T09:00:00Z' }],
+      }))
+      expect(screen.getByText(/Source: DNS lookup · affects the score · confidence: medium/)).toBeInTheDocument()
+    })
+    it('says "not enough to tell" for an unknown check', async () => {
+      await showResult(payload({
+        checks: [{ check_name: 'gstin_verification', status: 'insufficient_information', score: null, details: 'none' }],
+        evidence_meta: [{ check_name: 'gstin_verification', source: 'offer_text_and_local_registry_snapshot', affects: 'context', confidence: 'none', freshness: 'x', rule_version: 'rule_based_v2', checked_at: 'x' }],
+      }))
+      expect(screen.getByText(/no score effect · confidence: not enough to tell/)).toBeInTheDocument()
+    })
+  })
+})
+

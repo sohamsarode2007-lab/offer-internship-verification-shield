@@ -60,6 +60,34 @@ or updates expected bands from predictions.
 | EC20 | Synthetic registry: active, name-matched CIN gives a registry pass; 0 points; the -10 offsets have nothing to offset; the registry match satisfies the low-risk guard | likely legitimate |
 | EC21 | Synthetic registry: CIN belongs to a Struck Off company, registration fail +25; passing demo domain -10; subtotal 15; guard raises to 31 because the registration failed | insufficient evidence, verify manually |
 | EC22 | Synthetic registry: CIN is registered to a different company (Ashcombe Data Labs), registration fail +25; passing demo domain -10; subtotal 15; guard raises to 31 | insufficient evidence, verify manually |
+| EC23 | Inbound stipend and negated fee add 0; domain pass and registry match have nothing to offset; registry match meets the guard: 0 | likely legitimate |
+| EC24 | "daily tasks include" is not a paid-task pattern: 0; registry match meets the guard | likely legitimate |
+| EC25 | Negated Telegram and negated fee wording add 0; registry match meets the guard: 0 | likely legitimate |
+| EC26 | Moderate chat wording +15; domain pass -10 leaves 5; registry -10 but only 5 remain: 0. The moderate tier does not block the legitimate band | likely legitimate |
+| EC27 | High-pay note is informational: 0; registry match meets the guard | likely legitimate |
+| EC28 | Odd-phone note is informational: 0; registry match meets the guard | likely legitimate |
+| EC29 | Moderate chat wording +15; unverified GSTIN +10; domain pass -10: 15; no external signal raises it to 31 | insufficient evidence, verify manually |
+| EC30 | Udyam format valid but unverified +10; domain pass -10: 0; no external signal raises it to 31 | insufficient evidence, verify manually |
+| EC31 | Strong tier +30 and chat wording +10 extra; missing registration +20; no usable domain and no registration +20: 80 | high risk |
+| EC32 | Strong tier +30 (or payment +65 if it also fires); +20; +20: at least 70 | high risk |
+| EC33 | Moderate tier +15; +20; +20: 55 | insufficient evidence, verify manually |
+| EC34 | Moderate tier +15 (one family counts once); +20; +20: 55 | insufficient evidence, verify manually |
+| EC35 | UPI link is a payment demand +65; +20; +20: 105, capped at 100 | high risk |
+| EC36 | Payment +65 is never offset; unverified GSTIN +10 and domain pass -10 cancel: 65 | high risk |
+| EC37 | Disposable mailbox +30; unverified GSTIN +10; no offset: 40 | insufficient evidence, verify manually |
+| EC38 | Labelled PAN fails format +25; domain pass -10: 15; registration failed, so the guard raises it to 31 | insufficient evidence, verify manually |
+| EC39 | Strong tier +30; domain -10; registry -10: 10; strong task-scam wording blocks the legitimate band, raising it to 31 | insufficient evidence, verify manually |
+| EC40 | Hinglish paid_tasks strong +30 and chat_only extra +10 (+40); missing registration +20; no usable domain and no registration +20: 80 | high risk |
+| EC42 | Hindi negation after the phrase cancels it: 0; registry match meets the guard | likely legitimate |
+| EC43 | "deposit and withdraw cash" is not a pay-to-withdraw pattern: 0; registry match meets the guard | likely legitimate |
+| EC44 | Devanagari paid_tasks +30 and chat extra +10; +20; +20: 80 | high risk |
+| EC46 | fake_cheque strong +30; missing registration +20; no usable domain and no registration +20: 70 | high risk |
+| EC47 | otp_sharing strong +30; +20; +20: 70 | high risk |
+| EC48 | reshipping strong +30; +20; +20: 70 | high risk |
+| EC49 | Negated OTP wording adds 0; registry match meets the guard: 0 | likely legitimate |
+| EC50 | Receiving a gift card is not a scam pattern: 0; registry match meets the guard | likely legitimate |
+| EC45 | pay_to_withdraw strong +30; +20; +20: 70 | high risk |
+| EC41 | Copied real CIN and a passing domain: 0; registry match meets the guard | likely legitimate |
 
 EC20–EC22 (`registry_fixture=true`, `input_type=text_file`) read the demo offers in
 `fixtures/demo/` and run with the synthetic company master
@@ -124,3 +152,25 @@ No real test set is included. If a separately sourced real evaluation set is
 created later, freeze it before model or rule tuning, group duplicate or
 near-duplicate records together, and hold out entire source groups so the same
 publisher cannot appear in both development and evaluation data.
+
+## EC23-EC41: added with the scam-chat, UPI, advisory-adjacent and format rules
+
+These 19 cases were added after the scam-chat wording, UPI/QR, disposable-mailbox and PAN/Udyam rules.
+Each expected band was derived by hand from the scoring docstring before the evaluator was run; all 19
+matched on the first run and no earlier expectation changed. They are still hand-written regression
+cases (`synthetic=true`), not a held-out accuracy set.
+
+- **False-alarm guards (EC23-EC28):** genuine-looking offers that mention UPI stipends, "daily tasks",
+  negated Telegram/fee wording, WhatsApp scheduling, a high package, or an odd phone number must stay
+  "likely legitimate". They fail loudly if a new rule starts flagging ordinary wording.
+- **New rules firing (EC31-EC39):** task scams, pay-to-withdraw, chat-only, no-interview, UPI links,
+  disposable mailbox and a bad PAN.
+
+### Known gaps, recorded on purpose
+
+- **EC41 is a dangerous miss and is expected to be.** A scam that copies a real registered company's
+  CIN and uses a domain that passes every check looks identical to a genuine offer to everything this tool
+  can see. The summary line "1 dangerous miss(es)" is that case; do not "fix" it by loosening the guard.
+- **Hinglish/Hindi coverage is narrow.** Only the phrasings in EC40-EC45 and tests/test_scam_text.py are covered; other spellings, slang and Hindi in other scripts or word orders still abstain. A native speaker has not reviewed the rules.
+- **EC33, EC34 (and EC21, EC22 earlier):** scams with only moderate evidence land in manual review rather
+  than "high risk"; that is the intended behaviour, not a miss.

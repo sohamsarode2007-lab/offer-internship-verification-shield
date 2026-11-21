@@ -24,7 +24,7 @@ test('demo analysis, reporting, dashboard, and public screens', async ({ page },
     { button: 'Quillmere internship', key: 'registry_name_match_quillmere.txt', band: 'Likely legitimate', shot: 'sample-quillmere-result' },
     { button: 'Tarnwick internship', key: 'registry_struck_off_tarnwick.txt', band: 'Insufficient evidence', shot: 'sample-tarnwick-result' },
     { button: 'Halvorn internship', key: 'registry_cin_mismatch_halvorn.txt', band: 'Insufficient evidence', shot: 'sample-halvorn-result' },
-    // Shares a simulated VIT sender (careerdesk.fees@ybl); reported below, then seen on the placement-cell page.
+    // Shares a simulated sender (careerdesk.fees@ybl); reported below, then seen on the scam-trends page.
     { button: 'Corvane internship', key: 'scam_shared_upi_corvane.txt', band: 'High risk', shot: 'sample-corvane-result' },
   ]
   for (const [index, sample] of samples.entries()) {
@@ -35,7 +35,7 @@ test('demo analysis, reporting, dashboard, and public screens', async ({ page },
     await page.getByRole('button', { name: 'Check offer' }).click()
     await expect(page.getByRole('heading', { name: sample.band, exact: true })).toBeVisible()
     if (sample.band === 'Likely legitimate') await expect(page.getByRole('button', { name: 'Report this scam' })).toHaveCount(0)
-    if (sample.button === 'Corvane internship') await expect(page.getByRole('table', { name: 'Why' }).getByText('Reported by 3+ students')).toBeVisible()
+    if (sample.button === 'Corvane internship') await expect(page.getByRole('table', { name: 'Why' }).getByText('Reported by 3+ people')).toBeVisible()
     await capture(page, testInfo, sample.shot)
   }
 
@@ -49,7 +49,7 @@ test('demo analysis, reporting, dashboard, and public screens', async ({ page },
   await dialog.getByRole('button', { name: 'Continue' }).click()
   await expect(dialog.getByRole('heading', { name: 'Review and consent' })).toBeVisible()
   await capture(page, testInfo, 'report-consent')
-  const consent = dialog.getByRole('checkbox', { name: /Share these details to warn other students/ })
+  const consent = dialog.getByRole('checkbox', { name: /Share these details to warn other job seekers/ })
   await consent.check()
   await dialog.getByRole('button', { name: 'Report scam' }).click()
   await expect(dialog.getByRole('heading', { name: 'Reported' })).toBeVisible()
@@ -71,17 +71,17 @@ test('demo analysis, reporting, dashboard, and public screens', async ({ page },
   await expect(page.getByRole('heading', { name: 'Dispute an indicator' })).toBeVisible()
   await page.getByLabel('Indicator value').fill('suspect.example')
   await page.getByLabel('Contact email').fill('legal@suspect.example')
-  await page.getByLabel('Reason').fill('This indicator is controlled by our company.')
+  await page.getByLabel('Reason').selectOption('our_business_detail')
   await capture(page, testInfo, 'dispute')
   await page.getByRole('button', { name: 'Submit dispute' }).click()
   await expect(page.getByRole('status')).toContainText('Dispute recorded; scoring continues while it is under review.')
   await capture(page, testInfo, 'dispute-success')
 
   await page.goto('/dashboard')
-  await expect(page.getByRole('heading', { name: 'VIT Pune placement cell' })).toBeVisible()
-  const senders = page.getByRole('table', { name: 'Senders targeting VIT students' })
+  await expect(page.getByRole('heading', { name: 'Scam trends' })).toBeVisible()
+  const senders = page.getByRole('table', { name: 'Reported senders' })
   await expect(senders).toBeVisible()
-  await expect(page.getByText('Shown only after 3 or more students report the same sender.')).toBeVisible()
+  await expect(page.getByText('Shown only after 3 or more people report the same sender.')).toBeVisible()
   // The sender the student just checked (Corvane letter) is on the warning list, masked.
   await expect(senders.getByRole('rowheader', { name: 'careerd•••@ybl' })).toBeVisible()
   await expect(senders.getByText('Disputed by the company, under review')).toBeVisible()
@@ -93,7 +93,7 @@ test('demo analysis, reporting, dashboard, and public screens', async ({ page },
   const downloadPromise = page.waitForEvent('download')
   await page.getByRole('link', { name: 'Export warning list' }).click()
   const download = await downloadPromise
-  expect(download.suggestedFilename()).toBe('vit-pune-warning-list.csv')
+  expect(download.suggestedFilename()).toBe('scam-warning-list.csv')
 
   await page.goto('/how-it-works')
   await expect(page.getByRole('heading', { name: 'What this checks' })).toBeVisible()

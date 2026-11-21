@@ -38,7 +38,7 @@ class OfferSchema(BaseModel):
     created_at: Optional[datetime.datetime] = None
 
 class Reason(BaseModel):
-    """One plain-language 'Why' row: text for students and its score impact ('+65', '−10' or None)."""
+    """One plain-language 'Why' row: text for people and its score impact ('+65', '−10' or None)."""
     text: str
     impact: Optional[str] = None
 
@@ -66,3 +66,11 @@ class AnalyzeResponse(BaseModel):
     # Company name extracted from the offer text, shown under the verdict. Returned in
     # the response only; it is never stored.
     company_name: Optional[str] = None
+    # What the person could add to strengthen the check: [{id, title, why, how}].
+    evidence_hints: List[dict] = Field(default_factory=list)
+    # Official look-ups the person can run themselves: [{id, title, number, url, why, steps, caution}].
+    self_checks: List[dict] = Field(default_factory=list)
+    # Matched what-to-do-now steps (helpline 1930, cybercrime.gov.in): see app/services/safety_playbook.py.
+    safety_actions: List[dict] = Field(default_factory=list)
+    # Per-check source, score effect, confidence and freshness (no values): see app/services/evidence_meta.py.
+    evidence_meta: List[dict] = Field(default_factory=list)

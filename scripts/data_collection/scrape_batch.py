@@ -16,12 +16,9 @@ Schema:
 
 import csv
 import datetime
-import hashlib
 import logging
-import os
 import random
 import re
-import sys
 import time
 import urllib.parse
 from pathlib import Path

@@ -1,4 +1,4 @@
-"""VIT Pune placement-cell senders table and CSV export (consented v3 reports only)."""
+"""public scam-trends senders table and CSV export (consented v3 reports only)."""
 import csv
 import io
 import uuid
@@ -133,13 +133,13 @@ def test_dashboard_api_and_csv_export(api_client, db):
     item = _indicator("email", f"{local}@scam.example")
     for _ in range(3):
         _report(db, [item], category="registration_fee")
-    body = api_client.get("/placement-cell/dashboard").json()
+    body = api_client.get("/trends/dashboard").json()
     assert body["sender_threshold"] == 3
     counts = [s["reports"] for s in body["top_senders"]]
     assert counts == sorted(counts, reverse=True)
     assert all(s["reports"] >= 3 for s in body["top_senders"])
 
-    response = api_client.get("/placement-cell/senders.csv")
+    response = api_client.get("/trends/senders.csv")
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/csv")
     assert "attachment" in response.headers["content-disposition"]
@@ -147,4 +147,4 @@ def test_dashboard_api_and_csv_export(api_client, db):
     assert rows[0] == list(dash.SENDER_CSV_COLUMNS)
     row = next(r for r in rows[1:] if r[0] == "'" + item["masked"])     # formula injection neutralised
     assert row[1:3] == ["email", "3"] and row[5] == "registration_fee" and row[6] == "not disputed"
-    assert local not in response.text and local not in api_client.get("/placement-cell/dashboard").text
+    assert local not in response.text and local not in api_client.get("/trends/dashboard").text

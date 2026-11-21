@@ -7,8 +7,8 @@ machine-learning model, no training data and no learned weights.
 Risk points (added):
   +65  Upfront payment demand            (HARD OVERRIDE: final score >= 61 -> high risk)
   +20  Urgency language within 250 chars of the payment demand
-  +30  Contact domain failed (free mailbox, no MX/NXDOMAIN, lookalike, < 30 days old)
-  +25  Registration number failed structural checks
+  +30  Contact domain failed (free mailbox, disposable mailbox, not the named employer's published recruitment domain, no MX/NXDOMAIN, lookalike, < 30 days old)
+  +25  Registration number failed structural checks (GSTIN, CIN, LLPIN, labelled PAN, Udyam format)
   +10  Registration number structurally valid but NOT verified against any registry
   +10  GSTIN PAN name-initial character conflicts with the claimed company name
   +15  MCA incorporation date contradicts a founding-year/age claim by >1 year
@@ -16,6 +16,12 @@ Risk points (added):
   +25  Corporate From with free-mailbox or unrelated Reply-To
   +25  Protected-brand display name from a non-official domain
   +15  Body-claimed domain differs from the .eml From domain
+  +30  Scam-chat wording, strong tier (paid tasks for likes/reviews, pay-to-withdraw, fake cheque, re-shipping,
+          gift-card purchase or codes, crypto to a wallet, sharing an OTP/CVV/PIN, sending an overpayment back); also
+       blocks 'likely legitimate' (raised to 31)
+  +15  Scam-chat wording, moderate tier only (recruiter reachable only via WhatsApp/Telegram,
+       no-interview or easy-money claims)
+  +10  extra when both tiers match (strong + moderate = +40 in total)
   +25  Community indicator reported by 3-9 reports; +40 at 10+ reports
   +25  Community template MinHash similarity >= 0.8
   Community evidence is correlated: highest indicator bucket + template points,
@@ -32,7 +38,7 @@ Community indicators are risk evidence only; they never satisfy the external
 verification guard. Details use threshold buckets and never expose exact counts.
 Community evidence alone cannot produce a high-risk result: if it is the only
 factor pushing a score above 60 (no payment demand or failed domain, registration,
-or sender check), cap at 60 and add: "Reported by other students; not enough
+or sender check), cap at 60 and add: "Reported by other job seekers; not enough
 independent evidence to call this high risk."
 
 Low-risk guard: "likely legitimate" requires ALL of:
@@ -64,6 +70,9 @@ W_URGENCY = 20.0
 W_DOMAIN_FAIL = 30.0
 W_REG_FAIL = 25.0
 W_REG_UNVERIFIED = 10.0
+W_SCAM_STRONG = 30.0
+W_SCAM_MODERATE = 15.0
+W_SCAM_BOTH_EXTRA = 10.0
 W_REG_MISSING = 20.0
 W_NO_IDENTIFIERS = 20.0
 G_DOMAIN_PASS = 10.0
@@ -99,6 +108,10 @@ def _domain_reason(details: str) -> str:
     d = details.casefold()
     if "free mailbox" in d:
         return "The contact email is a free personal mailbox (like Gmail), not a company address"
+    if "official recruitment domain" in d:
+        return "The sender's email domain is not the one this employer says it recruits from"
+    if "disposable" in d:
+        return "The contact email comes from a temporary throwaway mailbox service"
     if "lookalike" in d:
         return "The email domain imitates another company's name"
     if "registered only" in d or "newly registered" in d:
@@ -120,14 +133,14 @@ def _registration_fail_reason(details: str) -> str:
 
 def _community_reason(details: str) -> str:
     parts = []
-    if "10+ students" in details:
-        parts.append("Reported by 10+ students")
-    elif "3+ students" in details:
-        parts.append("Reported by 3+ students")
+    if "10+ people" in details:
+        parts.append("Reported by 10+ people")
+    elif "3+ people" in details:
+        parts.append("Reported by 3+ people")
     if "similar to a reported scam template" in details:
-        parts.append("the wording matches a scam letter other students reported" if parts
-                     else "The wording matches a scam letter other students reported")
-    return "; ".join(parts) or "Other students reported details from this letter"
+        parts.append("the wording matches a scam letter other job seekers reported" if parts
+                     else "The wording matches a scam letter other job seekers reported")
+    return "; ".join(parts) or "Other job seekers reported details from this letter"
 
 
 def calculate_risk_score(
@@ -168,7 +181,7 @@ def calculate_risk_score(
     has_external_signal = registry_verified or sender_authenticated or synthetic_registry
 
     factors: List[str] = []
-    # Plain-language 'Why' rows for students: (text, score impact). No engine wording.
+    # Plain-language Why rows for people: (text, score impact). No engine wording.
     reasons: List[Dict[str, Optional[str]]] = []
 
     def reason(text: str, points: float = 0.0):
@@ -233,6 +246,17 @@ def calculate_risk_score(
         other_points += auth_points
         factors.append(f"Sender authentication risk (+{auth_points:g}): {auth.get('details', '')}")
         reason("The email's sender checks failed or point to a different sender", auth_points)
+    scam_text = by_name.get("scam_text_patterns", {})
+    scam_strong = scam_text.get("status") == "fail" and scam_text.get("tier") == "strong"
+    if scam_text.get("status") == "fail":
+        families = scam_text.get("families") or []
+        has_moderate = any(f in ("chat_only", "easy_money") for f in families)
+        scam_points = W_SCAM_STRONG if scam_strong else W_SCAM_MODERATE
+        if scam_strong and has_moderate:
+            scam_points += W_SCAM_BOTH_EXTRA
+        other_points += scam_points
+        factors.append(f"Scam-chat wording found (+{scam_points:g}): {scam_text.get('details', '')}")
+        reason("The wording matches common WhatsApp/Telegram job-scam patterns", scam_points)
     community = by_name.get("community_reports", {})
     community_points = min(40.0, max(0.0, float(community.get("risk_points", community.get("score", 0)) or 0)))
     if community_points:
@@ -290,9 +314,9 @@ def calculate_risk_score(
         and auth.get("status") != "fail"
     )
     if community_alone_crossed_high:
-        reason("Reports from other students alone aren't enough to call this high risk", min(score, 60.0) - score)
+        reason("Reports from other job seekers alone aren't enough to call this high risk", min(score, 60.0) - score)
         score = min(score, 60.0)
-        factors.append("Reported by other students; not enough independent evidence to call this high risk.")
+        factors.append("Reported by other job seekers; not enough independent evidence to call this high risk.")
 
     # Guard: no structural-only or demo-less checks can establish legitimacy.
     if score <= 30:
@@ -303,12 +327,17 @@ def calculate_risk_score(
             missing.append("no registration number was given")
         elif reg_status == "fail":
             missing.append("the registration number failed checks")
+        if scam_strong:
+            missing.append("the text matches a known task-scam pattern")
         if not has_external_signal:
             missing.append("no externally verified registry match or authenticated sender was found")
         if missing:
             registration_gap = (not reg_present or reg_status == "fail" or not has_external_signal)
+            scam_gap = scam_strong and not registration_gap
             reason("We couldn't verify this company's registration, so we can't call it legitimate yet."
                    if registration_gap else
+                   "The wording matches a known task-scam pattern, so we can't call it legitimate."
+                   if scam_gap else
                    "We couldn't verify the company's email domain, so we can't call it legitimate yet.",
                    GUARD_SCORE - score)
             score = GUARD_SCORE

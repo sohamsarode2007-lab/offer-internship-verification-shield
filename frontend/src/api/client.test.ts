@@ -12,7 +12,7 @@ const response = (status: number, detail: string) => ({
 describe('backend error translation', () => {
   it.each([
     [413, 'text too large', 'This file is over 10 MB. Upload a smaller file or paste the text instead.'],
-    [415, 'unsupported type', "This file type isn't supported. Use PDF, PNG, JPG or .eml."],
+    [415, 'unsupported type', "This file type isn't supported. Use PDF, PNG, JPG, BMP, TIFF, .eml or .txt."],
     [422, 'no extracted text', "We couldn't read any text in this file. Try a clearer image or paste the text."],
     [429, 'rate limited', 'Too many checks in a minute. Wait a moment and try again.'],
   ])('shows the specified message for HTTP %i', async (status, detail, message) => {
@@ -27,7 +27,7 @@ describe('backend error translation', () => {
   ])('explains what to do for %s errors', async (path, detail, message) => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response(400, detail)))
     const request = path === '/report'
-      ? submitReport({ report_token: 'report-token-that-is-long-enough', consent: true, consent_version: 3, selected_indicators: [] })
+      ? submitReport({ report_token: 'report-token-that-is-long-enough', consent: true, consent_version: 4, selected_indicators: [] })
       : withdrawReport({ code: 'withdrawal-code-that-is-long-enough' })
     await expect(request).rejects.toThrow(message)
   })
@@ -36,5 +36,22 @@ describe('backend error translation', () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('connection refused')))
     await expect(analyze('offer', null)).rejects.toThrow("The server can't be reached. Check your connection and try again.")
     expect(new ApiError(0, 'example')).toBeInstanceOf(Error)
+  })
+})
+
+describe('analyze file packing', () => {
+  const sent = async (file: File | File[] | null) => {
+    const spy = vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) })
+    vi.stubGlobal('fetch', spy)
+    await analyze('', file)
+    return spy.mock.calls[0][1].body as FormData
+  }
+  it('sends one file as "file"', async () => {
+    const body = await sent(new File(['a'], 'a.txt'))
+    expect(body.getAll('file')).toHaveLength(1); expect(body.getAll('files')).toHaveLength(0)
+  })
+  it('sends several files as repeated "files" fields', async () => {
+    const body = await sent([new File(['a'], 'a.txt'), new File(['b'], 'b.pdf')])
+    expect(body.getAll('files')).toHaveLength(2); expect(body.getAll('file')).toHaveLength(0)
   })
 })

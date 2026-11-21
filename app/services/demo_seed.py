@@ -1,9 +1,9 @@
-"""Simulated VIT Pune community reports for the demo (DEMO_MODE=1 only).
+"""Simulated community reports for the demo (DEMO_MODE=1 only).
 
-Reads fixtures/demo/vit_simulated_senders.csv: 8 FICTIONAL senders (.example domains and
+Reads fixtures/demo/simulated_senders.csv: 8 FICTIONAL senders (.example domains and
 made-up local parts, plus one made-up gmail.com address, two UPI IDs and one phone
 number). Each simulated report is a consented-report row exactly like a real one
-(HMAC digest, masked display form, ISO week, scam category, VIT Pune observation),
+(HMAC digest, masked display form, ISO week, scam category, trend observation),
 flagged is_demo so it counts only in DEMO_MODE. Raw values are hashed and masked in
 memory; they are never stored.
 
@@ -24,7 +24,7 @@ from app.models.models import CommunityDispute, CommunityIndicator, CommunityRep
 from app.services import community_reports as cr
 from app.services.institution_dashboard import record_check_observation
 
-SENDERS_CSV = Path(__file__).resolve().parents[2] / "fixtures" / "demo" / "vit_simulated_senders.csv"
+SENDERS_CSV = Path(__file__).resolve().parents[2] / "fixtures" / "demo" / "simulated_senders.csv"
 SEED_NAMESPACE = uuid.UUID("6f1d2b4e-9a57-4c1e-8f0b-5a3e2d7c9b10")
 # Reports per ISO week, oldest first (12 weeks; total must equal the CSV report total).
 # Scam campaigns arrive in waves, so a few weeks are busy. The dashboard still
@@ -68,7 +68,7 @@ def _schedule(senders: list[dict]) -> list[tuple[dict, int, int]]:
 def seed_vit_simulation(db: Session, today: date | None = None) -> int:
     """Insert the simulated reports that are missing. Returns how many reports were added."""
     if os.getenv("DEMO_MODE") != "1":
-        raise RuntimeError("Simulated VIT reports can only be seeded with DEMO_MODE=1.")
+        raise RuntimeError("Simulated reports can only be seeded with DEMO_MODE=1.")
     current, _ = cr._pepper_config()
     if not current:
         raise RuntimeError("Set INDICATOR_PEPPER; no default pepper is used.")
@@ -120,7 +120,7 @@ def seed_vit_simulation(db: Session, today: date | None = None) -> int:
 
 
 # ── Simulated CHECKS (demo only) ─────────────────────────────────────────────
-# In production the VIT Pune chart counts consented reports only. In DEMO_MODE these
+# In production the scam-trends chart counts consented reports only. In DEMO_MODE these
 # simulated checks (week, band, category; no report, no text, no indicators) fill the
 # 12-week chart and category table. They are deterministic, flagged is_demo and
 # is_simulated (report_id NULL); is_simulated is how they are recognised for idempotency
@@ -134,12 +134,13 @@ DELIBERATE_SMALL = {(0, BAND_LEGIT): 3, (1, BAND_HIGH): 4}
 def _weekly_check_plan(week_index: int) -> dict[str, dict[str, int]]:
     """Checks for one week (0 = oldest of 12) as {band: {category: count}}."""
     wobble = (0, 2, -1, 1, 3, -2, 0, 2, 1, -1, 2, 0)[week_index]
-    legit = DELIBERATE_SMALL.get((week_index, BAND_LEGIT), 12 + wobble)
-    manual = 18 + (wobble // 2)
+    legit = DELIBERATE_SMALL.get((week_index, BAND_LEGIT), 8 + wobble)
+    manual = 23 + (wobble // 2)
     high = DELIBERATE_SMALL.get((week_index, BAND_HIGH), round(6 + week_index * 0.85))   # rises 6 -> 15
     plan = {BAND_LEGIT: {"no_red_flags": legit}}
     spoof = week_index % 3 == 0 and 2 or 1
-    plan[BAND_MANUAL] = {"sender_spoofing": spoof, "lookalike_domain": 5, "free_mailbox_impersonation": 5}
+    plan[BAND_MANUAL] = {"sender_spoofing": spoof, "lookalike_domain": 5, "free_mailbox_impersonation": 5,
+                       "task_or_chat_scam": 5}
     plan[BAND_MANUAL]["other"] = manual - sum(plan[BAND_MANUAL].values())
     reg = max(1, round(high * 0.40))
     dep = max(1, round(high * 0.35))
@@ -150,12 +151,12 @@ def _weekly_check_plan(week_index: int) -> dict[str, dict[str, int]]:
 
 
 def seed_vit_checks(db: Session, today: date | None = None) -> int:
-    """Insert the simulated VIT Pune checks once. Returns how many were added (0 if already seeded)."""
+    """Insert the simulated checks once. Returns how many were added (0 if already seeded)."""
     from app.models.models import InstitutionObservation
     from app.services.institution_dashboard import get_institution
 
     if os.getenv("DEMO_MODE") != "1":
-        raise RuntimeError("Simulated VIT checks can only be seeded with DEMO_MODE=1.")
+        raise RuntimeError("Simulated checks can only be seeded with DEMO_MODE=1.")
     already = db.query(InstitutionObservation).filter(InstitutionObservation.is_simulated.is_(True),
                                                       InstitutionObservation.report_id.is_(None)).first()
     if already:

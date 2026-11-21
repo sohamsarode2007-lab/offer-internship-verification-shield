@@ -60,7 +60,7 @@ def local_band(case):
     # Synthetic .example domains are configured as demo fixtures to keep this path
     # offline and deterministic. No external DNS or registry calls are made.
     from app.services import domain_verification, fact_extraction, gstin_verification
-    from app.services import payment_detection, risk_scoring
+    from app.services import payment_detection, risk_scoring, scam_text
 
     from app.services import email_auth, ingestion, community_reports
     if case.get("community_fixture"):
@@ -96,7 +96,8 @@ def local_band(case):
     community_check = community_reports.lookup_community(
         _seed_eval_community(case, community_reports) if case.get("community_fixture") else _empty_eval_db(),
         indicators, signature)
-    checks = [domain_check, gstin_verification.verify_gstin(facts), payment_check, auth_check, community_check]
+    checks = [domain_check, gstin_verification.verify_gstin(facts), payment_check, auth_check,
+              scam_text.detect_scam_text(facts), community_check]
     return risk_scoring.calculate_risk_score(checks, facts=facts)["risk_band"]
 
 

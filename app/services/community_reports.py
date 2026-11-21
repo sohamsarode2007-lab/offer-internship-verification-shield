@@ -8,7 +8,6 @@ import re
 import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Any
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -16,9 +15,10 @@ from sqlalchemy.orm import Session
 from app.models.models import (CommunityDispute, CommunityIndicator, CommunityReport,
     CommunityTemplateBand, CommunityToken)
 from app.services import payment_detection
+from app.services import upi_payment
 from app.utils.email_domains import is_free_mailbox, is_upi_handle
 
-CONSENT_VERSION = 3  # v3 adds: the VIT placement cell sees the details in masked form
+CONSENT_VERSION = 4  # v4: details appear in masked form on the public scam-trends page (v3 named one college)
 MINHASH_SIZE = 128
 BAND_SIZE = 8
 PHONE_RE = re.compile(r"(?<!\w)(?:\+?91[\s().-]?)?[6-9]\d{9}(?!\w)")
@@ -76,7 +76,7 @@ def _visible_prefix(local: str, cap: int) -> str:
 
 
 def masked(kind: str, value: str) -> str:
-    """Display form shown in the report flow and on the placement-cell page.
+    """Display form shown in the report flow and on the scam-trends page.
 
     Never the full value, except a sender domain: domain indicators are only
     extracted for non-free-mail domains, and those are shown in full.
@@ -139,6 +139,9 @@ def extract_indicators(text: str, parsed_email: dict | None, payment_check: dict
                 continue
             if any(max(d["start"] - match.end(), match.start() - d["end"], 0) <= 200 for d in demand_spans):
                 add("upi", match.group(0))
+        for request in upi_payment.find_upi_requests(text):
+            if request["vpa"]:  # a upi:// payload is a payment destination whatever the handle
+                found[("upi", normalize("upi", request["vpa"]))] = request["vpa"]
         for line in text.splitlines():
             if not PAYMENT_CONTEXT_RE.search(line):
                 continue
@@ -167,6 +170,7 @@ def extract_indicators(text: str, parsed_email: dict | None, payment_check: dict
 def redact_text(text: str) -> str:
     text = re.sub(r"(?im)(\b(?:candidate|applicant|student)?\s*name\s*[:=-]\s*)[^\n,;]+", r"\1<NAME>", text)
     text = re.sub(r"(?im)^\s*dear\s+[^,\n]+", "Dear <NAME>", text)
+    text = upi_payment.UPI_URI_RE.sub("<UPI_LINK>", text)
     text = EMAIL_RE.sub("<EMAIL>", text)
     text = VPA_RE.sub("<UPI>", text)
     text = IFSC_RE.sub("<IFSC>", text)
@@ -221,7 +225,7 @@ def _decode_token(token: str, pepper: str) -> dict:
 def issue_report_token(db: Session, indicators: list[dict], signature: list[int],
                        band: str | None = None, scam_category: str | None = None):
     """Signed, single-use token. band/scam_category (rule outputs, no text) let a consented
-    report be counted on the VIT Pune dashboard."""
+    report be counted on the scam-trends dashboard."""
     current, _ = _pepper_config()
     if not current or not signature:
         return None, []
@@ -256,7 +260,6 @@ def accept_report(db: Session, token: str, selected: list[str], consent: bool, c
     by_id = {x["indicator_type"] + ":" + x["digest"]: x for x in payload["indicators"]}
     if not set(selected).issubset(by_id):
         raise ValueError("selected indicators were not offered by this analysis")
-    jti = payload["jti"]
     code = secrets.token_urlsafe(24)
     report_id = str(uuid.uuid4())
     signature = payload["signature"]
@@ -324,10 +327,10 @@ def lookup_community(db: Session, indicators: list[dict], signature: list[int]):
         count = len(reports)
         if count >= 10:
             indicator_bucket_points = max(indicator_bucket_points, 40)
-            notes.append(f"This {item['indicator_type']} was reported by 10+ students.")
+            notes.append(f"This {item['indicator_type']} was reported by 10+ people.")
         elif count >= 3:
             indicator_bucket_points = max(indicator_bucket_points, 25)
-            notes.append(f"This {item['indicator_type']} was reported by 3+ students.")
+            notes.append(f"This {item['indicator_type']} was reported by 3+ people.")
         for report_id in reports:
             db.query(CommunityReport).filter_by(id=report_id).update({"last_seen_at": now})
             db.query(CommunityIndicator).filter_by(report_id=report_id, digest=item["digest"]).update({"last_seen_at": now})

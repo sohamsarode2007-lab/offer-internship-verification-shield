@@ -6,6 +6,8 @@ import smtplib
 from datetime import timedelta
 from email.message import EmailMessage
 
+from typing import Literal
+
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
@@ -29,11 +31,15 @@ class WithdrawRequest(BaseModel):
     code: str = Field(min_length=20, max_length=200)
 
 
+DisputeReason = Literal["our_business_detail", "reported_in_error", "someone_else_misused_it", "other"]
+
+
 class DisputeRequest(BaseModel):
     indicator_type: str
     value: str = Field(min_length=3, max_length=320)
     contact_email: str = Field(min_length=5, max_length=320)
-    reason: str = Field(min_length=5, max_length=2000)
+    # A fixed code, never free text: free text invited offer letters, names and bank details into the database.
+    reason_code: DisputeReason
 
 
 def _send_verification(email: str, token: str, domain: str):
@@ -90,13 +96,16 @@ def dispute(request: Request, payload: DisputeRequest, db: Session = Depends(get
     if not current:
         raise HTTPException(503, "dispute intake is temporarily unavailable")
     version, pepper = current
-    normalized = cr.normalize(kind, payload.value)
+    try:
+        normalized = cr.normalize(kind, payload.value)
+    except ValueError:
+        raise HTTPException(400, "value does not match the indicator type (a bank value looks like account|IFSC)")
     digest = cr._digest(kind, normalized, pepper)
     same_domain = (kind == "domain" and
                    payload.contact_email.rsplit("@", 1)[1].casefold().rstrip(".") == normalized)
     raw_token = secrets.token_urlsafe(32) if same_domain else None
     dispute_row = CommunityDispute(indicator_type=kind, digest=digest, key_version=version,
-        contact_email=payload.contact_email, reason=payload.reason, domain_verified=False,
+        contact_email=payload.contact_email, reason=payload.reason_code, domain_verified=False,
         verification_token_hash=hashlib.sha256(raw_token.encode()).hexdigest() if raw_token else None,
         verification_expires_at=cr._utcnow() + timedelta(hours=24) if raw_token else None)
     db.add(dispute_row)

@@ -7,3 +7,7 @@ httpx2
 # Demo fixtures / OCR robustness tests
 reportlab>=4.0
 pypdfium2>=4.0
+
+# Quality gates (CI)
+ruff==0.17.5
+pip-audit==2.10.1

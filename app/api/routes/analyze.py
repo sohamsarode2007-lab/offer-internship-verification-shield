@@ -1,6 +1,6 @@
 import logging
 import os
-from typing import Optional
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, File, Form, Request, UploadFile, HTTPException, status
 from sqlalchemy.orm import Session
@@ -16,7 +16,15 @@ from app.services import (
     domain_verification,
     gstin_verification,
     payment_detection,
+    scam_text,
     email_auth,
+    evidence_hints,
+    self_checks,
+    safety_playbook,
+    link_lookup,
+    multi_file,
+    evidence_meta,
+    plausibility,
     risk_scoring,
     community_reports,
     institution_dashboard,
@@ -43,11 +51,12 @@ def build_user_guidance(risk_band: str, checks: list[dict], reasons: list[dict])
             "Do not send money or share OTPs, passwords, or banking credentials.",
             "Save the offer, messages, payment instructions, and transaction receipts.",
             "If you've already paid, call the National Cyber Crime Helpline 1930 immediately and report at cybercrime.gov.in.",
+            "Also contact your bank or payment app immediately and ask what hold or reversal options are available.",
         ]
     elif risk_band == "likely legitimate":
         next_steps = [
             "Confirm the role and sender through contact details found independently from the offer.",
-            "Do not pay recruitment or training fees; legitimate employers should explain any terms in writing.",
+            "Do not pay a recruitment or training fee; a legitimate employer should not require payment as a condition of getting the job or internship.",
         ]
     else:
         next_steps = [
@@ -75,6 +84,8 @@ def analyze_offer(
     request: Request,
     text: Optional[str] = Form(None),
     file: Optional[UploadFile] = File(None),
+    files: List[UploadFile] = File(default=[]),
+    link_lookups: bool = Form(False),
     db: Session = Depends(get_db)
 ):
     """
@@ -85,7 +96,8 @@ def analyze_offer(
     Privacy (DPDP): the offer text and file name are NOT stored; only the verdict
     and per-check results are persisted.
     """
-    if not text and not file:
+    uploads = [u for u in ([file] if file is not None else []) + list(files or []) if u.filename]
+    if not text and not uploads:
         raise HTTPException(status.HTTP_400_BAD_REQUEST,
                             "Either 'text' form field or 'file' upload must be provided.")
 
@@ -95,18 +107,25 @@ def analyze_offer(
         raise HTTPException(status.HTTP_413_CONTENT_TOO_LARGE,
                             f"Text is longer than {MAX_TEXT_CHARS:,} characters.")
 
-    file_bytes = None
-    filename = None
-    if file is not None and file.filename:
-        filename = file.filename
-        ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+    if len(uploads) > multi_file.MAX_FILES:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Send at most {multi_file.MAX_FILES} files at a time.")
+    loaded = []  # (file name, bytes): names are used only to pick the reader and are never logged or stored
+    for upload in uploads:
+        name = upload.filename
+        ext = name.rsplit(".", 1)[-1].lower() if "." in name else ""
         if ext not in ALLOWED_EXTENSIONS:
             raise HTTPException(status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
                                 f"Unsupported file type. Allowed: {', '.join(sorted(ALLOWED_EXTENSIONS))}.")
-        file_bytes = file.file.read(MAX_FILE_BYTES + 1)
-        if len(file_bytes) > MAX_FILE_BYTES:
+        data = upload.file.read(MAX_FILE_BYTES + 1)
+        if len(data) > MAX_FILE_BYTES:
             raise HTTPException(status.HTTP_413_CONTENT_TOO_LARGE,
                                 f"File is larger than {MAX_FILE_BYTES // (1024 * 1024)} MB.")
+        loaded.append((name, data))
+    if len(loaded) > 1 and any(n.lower().endswith(".eml") for n, _ in loaded):
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT,
+                            "Send an .eml on its own so its sender checks can run; other files can be checked separately.")
+    file_bytes, filename = (loaded[0][1], loaded[0][0]) if loaded else (None, None)
+    file_texts: List[str] = []
 
     # Step 1: Ingestion. Parse .eml headers only in memory; only extracted body and
     # supported PDF/image attachments enter the existing check pipeline.
@@ -129,6 +148,14 @@ def analyze_offer(
                 raise HTTPException(status.HTTP_413_CONTENT_TOO_LARGE,
                                     f"Extracted email text is longer than {MAX_TEXT_CHARS:,} characters.")
             email_result = parsed_email
+        elif len(loaded) > 1:
+            parts = [text] if text else []
+            for name, data in loaded:
+                extracted, _ = ingestion.ingest_offer(file_bytes=data, filename=name)
+                if extracted:
+                    parts.append(extracted)
+                    file_texts.append(extracted)
+            raw_text = "\n".join(parts).strip()
         else:
             raw_text, _ = ingestion.ingest_offer(text=text, file_bytes=file_bytes, filename=filename)
     except ValueError as e:
@@ -136,6 +163,10 @@ def analyze_offer(
     if not raw_text or not raw_text.strip():
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT,
                             "No text could be extracted from the submission.")
+    # One limit for every path: pasted text, extracted PDF/image/.txt text, and all parts combined.
+    if len(raw_text) > MAX_TEXT_CHARS:
+        raise HTTPException(status.HTTP_413_CONTENT_TOO_LARGE,
+                            f"The text in your submission is longer than {MAX_TEXT_CHARS:,} characters.")
 
     # Steps 2-5: extraction and checks
     facts = fact_extraction.extract_facts(raw_text)
@@ -154,16 +185,29 @@ def analyze_offer(
         auth_check = email_auth.not_applicable()
     gstin_check = gstin_verification.verify_gstin(facts)
     payment_check = payment_detection.detect_payment_demand(facts)
+    scam_text_check = scam_text.detect_scam_text(facts)
     report_indicators = community_reports.extract_indicators(raw_text, email_result, payment_check)
     signature = community_reports.minhash_signature(raw_text) if os.getenv("INDICATOR_PEPPER") else []
     community_check = community_reports.lookup_community(db, report_indicators, signature)
-    check_dicts = [domain_check, gstin_check, payment_check, auth_check, community_check]
+    check_dicts = [domain_check, gstin_check, payment_check, auth_check, scam_text_check, community_check]
 
     # Step 6: scoring
     scoring_res = risk_scoring.calculate_risk_score(check_dicts, facts=facts)
     overall_risk_score = scoring_res["overall_risk_score"]
     completeness_percentage = scoring_res["completeness_percentage"]
     risk_band = scoring_res["risk_band"]
+    # Informational notes (no score impact); never include submitted values.
+    notes = plausibility.collect_notes(raw_text, None)
+    for name, data in loaded:
+        if name.lower().endswith(".pdf"):
+            notes += plausibility.collect_notes("", data)  # file-level notes for each PDF
+    link_result = link_lookup.build_link_checks(raw_text, link_lookups)
+    notes += link_result["notes"]
+    duplicate = multi_file.duplicate_note(file_texts)
+    if duplicate:
+        notes.append(duplicate)
+    scoring_res["reasons"] = list(scoring_res["reasons"]) + [
+        {"text": note, "impact": None} for note in dict.fromkeys(notes)]
 
     check_schemas = [
         CheckResultSchema(
@@ -200,7 +244,7 @@ def analyze_offer(
                 score=c_schema.score,
                 details=c_schema.details,
             ))
-        # One anonymous VIT Pune trend row per check: ISO week, band, category only
+        # One anonymous public trend row per check: ISO week, band, category only
         # (no text, identifiers, file name, IP or link to this analysis). See PRIVACY_DESIGN.md.
         institution_dashboard.record_check_observation(
             db, risk_band, scam_category, institution_dashboard.current_iso_week(),
@@ -222,7 +266,7 @@ def analyze_offer(
 
     # Reporting is offered only for high risk and insufficient evidence, never for a
     # likely-legitimate result. The token carries only the band and rule-based category,
-    # so a consented report can be counted on the VIT Pune page; nothing is recorded without consent.
+    # so a consented report can be counted on the scam-trends page; nothing is recorded without consent.
     report_token, reportable_indicators = None, []
     if risk_band in REPORTABLE_BANDS:
         report_token, reportable_indicators = community_reports.issue_report_token(
@@ -253,4 +297,10 @@ def analyze_offer(
         registry_source=gstin_check.get("registry_source"),
         # Returned for display only; never persisted (Offer.company_name stays NULL).
         company_name=get_field_value(facts, "company_name", "company_name_legacy"),
+        self_checks=self_checks.build_self_checks(facts, check_dicts),
+        safety_actions=safety_playbook.build_safety_actions(check_dicts, raw_text, risk_band, link_result["threat_listed"]),
+        evidence_meta=evidence_meta.build_evidence_meta(check_dicts),
+        evidence_hints=evidence_hints.build_evidence_hints(
+            check_dicts, had_file=bool(email_result),
+            had_image=bool(filename and filename.lower().rsplit(".", 1)[-1] in {"png", "jpg", "jpeg", "bmp", "tiff"})),
     )

@@ -2,7 +2,6 @@
 import re
 import uuid
 
-import pytest
 
 from app.services import gstin_verification as gv, risk_scoring as rs
 

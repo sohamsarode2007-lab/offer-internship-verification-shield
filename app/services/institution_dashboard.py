@@ -1,6 +1,6 @@
-"""VIT Pune placement-cell dashboard: category rules and weekly k-anonymous queries.
+"""Public scam-trends dashboard: category rules and weekly k-anonymous queries.
 
-Single-college simulation. There is exactly one institution, "VIT Pune", created
+One aggregate record, "Public", created
 automatically. Every /analyze call adds one anonymous trend row (ISO week, band,
 scam category; see docs/PRIVACY_DESIGN.md). The senders table comes from consented
 community reports. Multiple colleges and a staff login are future scope.
@@ -10,31 +10,37 @@ import re
 from datetime import date, datetime, timedelta, timezone
 
 from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models.models import Institution, InstitutionObservation
 
-INSTITUTION_NAME = "VIT Pune"
+INSTITUTION_NAME = "Public"
 BANDS = ("likely legitimate", "insufficient evidence, verify manually", "high risk")
 CATEGORIES = (
     "registration_fee", "security_deposit", "training_or_kit_fee", "fake_government_scheme",
-    "free_mailbox_impersonation", "lookalike_domain", "sender_spoofing", "no_red_flags", "other",
+    "task_or_chat_scam", "free_mailbox_impersonation", "lookalike_domain", "sender_spoofing", "no_red_flags", "other",
 )
 
 
 def get_institution(db: Session) -> Institution:
-    """Return the single VIT Pune record, creating it on first use."""
+    """Return the single public record, creating it on first use."""
     institution = db.query(Institution).order_by(Institution.id).first()
     if institution is None:
-        institution = Institution(name=INSTITUTION_NAME)
-        db.add(institution)
-        db.flush()
+        # Two first requests can both see "none". The unique name makes the loser fail; it re-reads the winner's row.
+        try:
+            with db.begin_nested():
+                institution = Institution(name=INSTITUTION_NAME)
+                db.add(institution)
+                db.flush()
+        except IntegrityError:
+            institution = db.query(Institution).order_by(Institution.id).first()
     return institution
 
 
 def record_check_observation(db: Session, band: str, scam_category: str, iso_week: str,
                              is_demo: bool, report_id: str | None = None, is_simulated: bool = False) -> None:
-    """One anonymous VIT Pune trend row: ISO week, band and category only.
+    """One anonymous public trend row: ISO week, band and category only.
 
     Every /analyze call records one (report_id stays NULL: not linked to anything).
     report_id is set only for the simulated demo reports in app/services/demo_seed.py.
@@ -86,10 +92,13 @@ def classify_scam(checks: list[dict], text: str) -> str:
         if re.search(r"\b(?:government|govt|ministry|department)\b.{0,50}\bscheme\b|\bscheme\b.{0,50}\b(?:government|govt|ministry)\b", content):
             return "fake_government_scheme"
 
+    if _check(checks, "scam_text_patterns").get("status") == "fail":
+        return "task_or_chat_scam"
+
     domain_details = (domain.get("details") or "").casefold()
-    if domain.get("status") == "fail" and "free mailbox" in domain_details:
+    if domain.get("status") == "fail" and ("free mailbox" in domain_details or "disposable" in domain_details):
         return "free_mailbox_impersonation"
-    if domain.get("status") == "fail" and any(word in domain_details for word in ("lookalike", "look-alike", "imitates", "brand")):
+    if domain.get("status") == "fail" and any(word in domain_details for word in ("lookalike", "look-alike", "imitates", "brand", "official recruitment domain")):
         return "lookalike_domain"
     if sender.get("status") == "fail" or float(sender.get("risk_points", 0) or 0) > 0:
         return "sender_spoofing"
@@ -261,7 +270,7 @@ def dashboard(db: Session, today: date | None = None) -> dict:
         "weeks": weeks,
         "by_week_band": [{"week": week, "band": band, "count": _shown(band_counts.get((week, band), 0))}
                          for week in weeks for band in BANDS],
-        # Full weekly category data stays in the API and in GET /placement-cell/weekly.csv.
+        # Full weekly category data stays in the API and in GET /trends/weekly.csv.
         "by_week_category": [{"week": week, "category": category,
                               "count": _shown(category_counts.get((week, category), 0))}
                              for week in weeks for category in CATEGORIES],
