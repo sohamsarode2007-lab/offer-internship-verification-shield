@@ -46,9 +46,9 @@ def test_old_snapshot_is_stale_at_91_days_not_90(monkeypatch, tmp_path):
     assert registry(monkeypatch, tmp_path, "2026-08-22T00:00:00+00:00")["status"] == "stale"    # 91 days
 
 
-def test_synthetic_snapshot_is_labelled_demo(monkeypatch, tmp_path):
+def test_made_up_snapshot_is_flagged_and_ignored(monkeypatch, tmp_path):
     r = registry(monkeypatch, tmp_path, "2026-11-20T00:00:00+00:00", "SYNTHETIC")
-    assert r["status"] == "demo" and "not real company records" in r["detail"]
+    assert r["status"] == "unknown" and "ignored" in r["detail"]
 
 
 def test_snapshot_without_metadata_is_unknown(monkeypatch, tmp_path):

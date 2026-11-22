@@ -247,8 +247,7 @@ def analyze_offer(
         # One anonymous public trend row per check: ISO week, band, category only
         # (no text, identifiers, file name, IP or link to this analysis). See PRIVACY_DESIGN.md.
         institution_dashboard.record_check_observation(
-            db, risk_band, scam_category, institution_dashboard.current_iso_week(),
-            is_demo=os.getenv("DEMO_MODE") == "1")
+            db, risk_band, scam_category, institution_dashboard.current_iso_week())
         db.commit()
         offer_id = db_offer.id
     except Exception as e:

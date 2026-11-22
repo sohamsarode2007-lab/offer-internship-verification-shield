@@ -2,7 +2,7 @@
 GSTIN / CIN / LLPIN Structural Check (offline structure checks; optional CIN registry lookup)
 
 Network use: only lookup_registry() may call data.gov.in (ogd_registry), and only when
-DATA_GOV_IN_API_KEY is set and DEMO_MODE is off. Everything else here is offline.
+DATA_GOV_IN_API_KEY is set. Everything else here is offline.
 registry_source "ogd" means a data.gov.in company-master snapshot answered.
 
 What this module DOES (offline):
@@ -19,20 +19,19 @@ What this module does NOT do:
     company, or be cancelled. Without a registry record, a valid structure is
     reported as "insufficient_information", never "pass".
 
-Registry wording (same for real MCA_CSV data and a SYNTHETIC snapshot, which is
-consulted only when DEMO_MODE=1):
+Registry wording (local MCA_CSV snapshot or live data.gov.in record; a snapshot
+labelled SYNTHETIC is never consulted):
   - active, name-matched: "Company registry match: <name>; Active; incorporated <date>."
   - inactive status:      "Company is <Status> in company registry records: <name>; incorporated <date>."
   - different company:    "CIN belongs to a different company in company registry records: ..."
 The wording never calls the data official, live or MCA data; registry_source
-("mca_csv" | "synthetic") records which snapshot answered.
+("mca_csv" | "ogd") records which snapshot answered.
 
 Status contract:
   - no identifier found            -> insufficient_information, identifier_present=False
   - any structural/consistency problem -> fail, identifier_present=True
   - structurally valid             -> insufficient_information, identifier_present=True
   - pass                           -> active, name-matched record in a loaded company master
-                                      (a SYNTHETIC snapshot only in DEMO_MODE)
 """
 import os
 import re
@@ -114,14 +113,14 @@ def _snapshot_source(db) -> str:
 def lookup_registry(identifier: str, id_type: str) -> Dict[str, Any]:
     """
     Look up a CIN: the local company-master SQLite database first, then (only when
-    DATA_GOV_IN_API_KEY is set and DEMO_MODE is off) one live data.gov.in lookup by CIN.
+    DATA_GOV_IN_API_KEY is set) one live data.gov.in lookup by CIN.
 
     If the live lookup is unavailable (timeout, blocked, bad payload) the local result is
     returned unchanged, so an outage is never reported as "company not found".
     """
     local = _lookup_local(identifier, id_type)
     if (id_type != "CIN" or local["lookup_status"] == "found"
-            or os.getenv("DEMO_MODE") == "1" or not ogd_registry.is_enabled()):
+            or not ogd_registry.is_enabled()):
         return local
     status, record = ogd_registry.fetch_company_by_cin(identifier)
     if status == ogd_registry.FOUND and record:
@@ -136,7 +135,7 @@ def lookup_registry(identifier: str, id_type: str) -> Dict[str, Any]:
 def _lookup_local(identifier: str, id_type: str) -> Dict[str, Any]:
     """Look up a CIN in the loaded local company-master SQLite database (never network).
 
-    A SYNTHETIC snapshot is used only when DEMO_MODE=1; otherwise the lookup
+    A snapshot labelled SYNTHETIC (made-up companies) is always ignored: the lookup
     behaves exactly as if no registry database were loaded.
     """
     if id_type != "CIN":
@@ -150,7 +149,7 @@ def _lookup_local(identifier: str, id_type: str) -> Dict[str, Any]:
     try:
         with sqlite3.connect(f"file:{db_path.as_posix()}?mode=ro", uri=True, timeout=2) as db:
             source = _snapshot_source(db)
-            if source == SOURCE_SYNTHETIC and os.getenv("DEMO_MODE") != "1":
+            if source == SOURCE_SYNTHETIC:
                 return {"lookup_status": "db_missing", "db_path": str(db_path)}
             row = db.execute(
                 "SELECT cin, company_name, company_status, date_of_registration "
@@ -158,7 +157,7 @@ def _lookup_local(identifier: str, id_type: str) -> Dict[str, Any]:
             ).fetchone()
     except sqlite3.Error:
         return {"lookup_status": "db_missing", "db_path": str(db_path)}
-    registry_source = "synthetic" if source == SOURCE_SYNTHETIC else "mca_csv"
+    registry_source = "mca_csv"
     if not row:
         return {"lookup_status": "not_found", "cin": identifier.upper(), "registry_source": registry_source}
     return {"lookup_status": "found", "cin": row[0], "company_name": row[1],
@@ -323,8 +322,8 @@ def _registry_result(record: Dict[str, Any], claimed_company: Optional[str], raw
                      identifiers: List[Dict[str, str]], consistency_points: int,
                      prior_notes: List[str]) -> Dict[str, Any]:
     """
-    Result for a CIN found in the loaded company master (real MCA_CSV data, or a
-    SYNTHETIC snapshot in DEMO_MODE). Same wording for both sources:
+    Result for a CIN found in the loaded company master (MCA_CSV data or a live
+    data.gov.in answer). Same wording for both sources:
 
       pass : "Company registry match: <name>; Active; incorporated <date>."
       fail : "Company is <Status> in company registry records: <name>; incorporated <date>."
@@ -341,10 +340,9 @@ def _registry_result(record: Dict[str, Any], claimed_company: Optional[str], raw
     status = (record.get("company_status") or "").strip()
     parsed = _parse_registry_date(record.get("date_of_registration"))
     incorporated = parsed.isoformat() if parsed else (record.get("date_of_registration") or "unknown")
-    synthetic = record.get("registry_source") == "synthetic"
-    source_key = "synthetic" if synthetic else ("ogd" if record.get("registry_source") == "ogd" else "mca_csv")
+    source_key = "ogd" if record.get("registry_source") == "ogd" else "mca_csv"
     metadata = dict(registry_checked=True,
-                    verification_source="company_registry" if synthetic else "mca_registry",
+                    verification_source="mca_registry",
                     registry_source=source_key,
                     verified_identifier_type="CIN", registry_company_name=registered,
                     incorporation_date=record.get("date_of_registration"))
@@ -450,7 +448,7 @@ def verify_gstin(facts: Dict[str, Any]) -> Dict[str, Any]:
                                     consistency_points, consistency_notes)
         if record["lookup_status"] == "db_missing":
             registry_note = "MCA master database is missing; registry was not checked"
-        elif record.get("registry_source") in ("synthetic", "ogd"):
+        elif record.get("registry_source") == "ogd":
             registry_note = f"CIN '{cin}' was not found in the company registry records"
         else:
             registry_note = f"CIN '{cin}' was not found in the loaded MCA master data"

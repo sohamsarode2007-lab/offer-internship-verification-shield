@@ -39,19 +39,18 @@ def get_institution(db: Session) -> Institution:
 
 
 def record_check_observation(db: Session, band: str, scam_category: str, iso_week: str,
-                             is_demo: bool, report_id: str | None = None, is_simulated: bool = False) -> None:
+                             is_demo: bool = False, report_id: str | None = None) -> None:
     """One anonymous public trend row: ISO week, band and category only.
 
     Every /analyze call records one (report_id stays NULL: not linked to anything).
-    report_id is set only for the simulated demo reports in app/services/demo_seed.py.
     """
     if band not in BANDS:
         return
     if scam_category not in CATEGORIES:
         scam_category = "other"
     db.add(InstitutionObservation(institution_id=get_institution(db).id, report_id=report_id,
-                                  iso_week=iso_week, band=band, scam_category=scam_category, is_demo=is_demo,
-                                  is_simulated=is_simulated))
+                                  iso_week=iso_week, band=band, scam_category=scam_category, is_demo=False,
+                                  is_simulated=False))
 
 
 TREND_RETENTION_WEEKS = 104  # 24 months
@@ -65,7 +64,8 @@ def purge_old_observations(db: Session, today: date | None = None) -> int:
 
 
 def _include_demo() -> bool:
-    return os.getenv("DEMO_MODE") == "1"
+    """Rows marked demo/simulated (left over from older builds) are never shown."""
+    return False
 
 
 def _check(checks: list[dict], name: str) -> dict:
@@ -134,7 +134,7 @@ def top_senders(db: Session) -> list[dict]:
     """Senders (masked indicators) reported by 3+ distinct consented v3 reports, by count.
 
     Only masked display forms leave this function; digests are used for grouping and
-    dispute lookup only. Withdrawn reports never count; demo reports count only in DEMO_MODE.
+    dispute lookup only. Withdrawn reports never count; rows marked demo never count.
     """
     from collections import Counter
     from app.models.models import CommunityDispute, CommunityIndicator, CommunityReport
@@ -268,11 +268,11 @@ def dashboard(db: Session, today: date | None = None) -> dict:
         "sender_threshold": SENDER_THRESHOLD,
         "top_senders": top_senders(db),
         "weeks": weeks,
-        "by_week_band": [{"week": week, "band": band, "count": _shown(band_counts.get((week, band), 0))}
+        "by_week_band": [{\"week\": week, \"band\": band, \"count\": _shown(band_counts.get((week, band), 0))}
                          for week in weeks for band in BANDS],
         # Full weekly category data stays in the API and in GET /trends/weekly.csv.
-        "by_week_category": [{"week": week, "category": category,
-                              "count": _shown(category_counts.get((week, category), 0))}
+        "by_week_category": [{\"week\": week, \"category\": category,
+                              \"count\": _shown(category_counts.get((week, category), 0))}
                              for week in weeks for category in CATEGORIES],
         "category_summary": category_summary(weeks, category_counts),
     }

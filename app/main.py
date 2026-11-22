@@ -59,7 +59,7 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(
     title="Offer & Internship Verification Shield API",
-    description="Rule-based offer checks using local MCA master data when configured (no remote registry queries; labelled demo fixtures are optional).",
+    description="Rule-based offer checks using local MCA master data when configured (no remote registry queries).",
     version="1.0.0",
     lifespan=lifespan,
 )
@@ -123,11 +123,8 @@ frontend_dist = os.path.join(os.path.dirname(os.path.dirname(__file__)), "fronte
 frontend_index = os.path.join(frontend_dist, "index.html")
 if os.path.isfile(frontend_index):
     assets_dir = os.path.join(frontend_dist, "assets")
-    demo_dir = os.path.join(frontend_dist, "demo")
     if os.path.isdir(assets_dir):
         app.mount("/assets", StaticFiles(directory=assets_dir), name="frontend_assets")
-    if os.path.isdir(demo_dir):
-        app.mount("/demo", StaticFiles(directory=demo_dir), name="frontend_demo")
 
     @app.get("/", include_in_schema=False)
     def serve_frontend_root():

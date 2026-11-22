@@ -79,8 +79,7 @@ def masked(kind: str, value: str) -> str:
     """Display form shown in the report flow and on the scam-trends page.
 
     Never the full value, except a sender domain: domain indicators are only
-    extracted for non-free-mail domains, and those are shown in full.
-    """
+    extracted for non-free-mail domains, and those are shown in full."""
     if kind == "upi":
         local, handle = value.split("@", 1)
         return _visible_prefix(local, 7) + "•••@" + handle
@@ -265,7 +264,7 @@ def accept_report(db: Session, token: str, selected: list[str], consent: bool, c
     signature = payload["signature"]
     report = CommunityReport(id=report_id, consent_version=CONSENT_VERSION,
         signature=json.dumps(signature), created_at=now, last_seen_at=now,
-        withdrawal_code_hash=hashlib.sha256(code.encode()).hexdigest(), is_demo=os.getenv("DEMO_MODE") == "1")
+        withdrawal_code_hash=hashlib.sha256(code.encode()).hexdigest(), is_demo=False)
     db.add(report)
     from app.services.institution_dashboard import current_iso_week
     week = current_iso_week(now.date())
@@ -304,13 +303,12 @@ def lookup_community(db: Session, indicators: list[dict], signature: list[int]):
     template_points = 0
     notes = []
     now = _utcnow()
-    demo_only = os.getenv("DEMO_MODE") == "1"
     for item in indicators:
         matches = []
         for version, pepper in peppers.items():
             digest = _digest(item["indicator_type"], item["normalized_value"], pepper)
             matches.extend(db.query(CommunityIndicator).filter_by(indicator_type=item["indicator_type"], digest=digest, key_version=version).all())
-        reports = {m.report_id for m in matches if (demo_only or not m.report.is_demo) and not m.report.withdrawn}
+        reports = {m.report_id for m in matches if not m.report.is_demo and not m.report.withdrawn}
         if not reports:
             continue
         disputes = []
@@ -338,7 +336,7 @@ def lookup_community(db: Session, indicators: list[dict], signature: list[int]):
     candidate_ids = {row.report_id for band, bucket in _signature_bands(signature)
                      for row in db.query(CommunityTemplateBand).filter_by(band=band, bucket=bucket)}
     for report in db.query(CommunityReport).filter(CommunityReport.id.in_(candidate_ids), CommunityReport.withdrawn.is_(False)).all() if candidate_ids else []:
-        if not demo_only and report.is_demo:
+        if report.is_demo:
             continue
         old_signature = json.loads(report.signature)
         score = similarity(signature, old_signature)
@@ -371,8 +369,7 @@ def purge_expired(db: Session, now: datetime | None = None):
 def stats(db: Session):
     query = db.query(CommunityIndicator.indicator_type, func.count(func.distinct(CommunityIndicator.report_id))).join(
         CommunityReport).filter(CommunityReport.withdrawn.is_(False))
-    if os.getenv("DEMO_MODE") != "1":
-        query = query.filter(CommunityReport.is_demo.is_(False))
+    query = query.filter(CommunityReport.is_demo.is_(False))
     rows = query.group_by(CommunityIndicator.indicator_type).all()
     return {"indicators": [{"indicator_type": kind, "reports": count if count >= 5 else None,
                              "suppressed": count < 5} for kind, count in rows]}

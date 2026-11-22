@@ -4,7 +4,7 @@ Evidence metadata: where each check's evidence comes from and how it is used (no
 For every check the response carries a small record so a reader can trace a warning to its source:
 
   source      what the evidence is based on (offer text, email headers, DNS lookup, local registry
-              snapshot, community reports, demo fixture)
+              snapshot, community reports)
   affects     "score" (adds or removes points), "safety_floor" (a payment demand forces high risk),
               or "context" (shown, no score effect)
   confidence  "high" / "medium" / "low" / "none" (none = the check could not tell: unknown, not applicable)
@@ -38,8 +38,6 @@ def build_evidence_meta(checks: List[Dict[str, Any]], now: datetime | None = Non
         source, freshness, confidence = _BASE.get(name, ("derived_check", "this offer only", "low"))
         status = check.get("status")
         details = check.get("details") or check.get("explanation") or ""
-        if "[DEMO FIXTURE" in details:
-            source, freshness, confidence = "demo_fixture", "not a live check", "low"
         if status not in ("pass", "fail"):
             confidence = "none"
         affects = "score"

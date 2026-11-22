@@ -47,8 +47,8 @@ def _registry(today: date) -> Dict[str, Any]:
     entry.update(updated=loaded.isoformat() if loaded else None, age_days=_age_days(loaded, today),
                  detail=f"Source label {label}, {meta.get('row_count', '?')} companies.")
     if label == "SYNTHETIC":
-        entry["status"] = "demo"
-        entry["detail"] += " Fictional demo data, not real company records."
+        entry["status"] = "unknown"
+        entry["detail"] += " This file is marked as made-up data, so it is ignored."
     elif loaded:
         entry["status"] = "stale" if entry["age_days"] > REGISTRY_STALE_DAYS else "current"
     return entry
@@ -67,7 +67,7 @@ def _advisories(today: date) -> Dict[str, Any]:
 def build_sources(today: Optional[date] = None) -> Dict[str, Any]:
     today = today or datetime.now(timezone.utc).date()
     sources: List[Dict[str, Any]] = [_registry(today), _advisories(today)]
-    budgets = [{"id": name, "used_today": request_budget.used(name), "daily_limit": request_budget.limit(name)}
+    budgets = [{\"id\": name, \"used_today\": request_budget.used(name), \"daily_limit\": request_budget.limit(name)}
                for name in request_budget.DEFAULTS]
     return {
         "scoring_model": SCORING_MODEL,
@@ -75,7 +75,7 @@ def build_sources(today: Optional[date] = None) -> Dict[str, Any]:
         "optional_lookups": {
             "link_lookups": link_lookup.is_enabled(),
             "web_risk_key_set": bool(os.getenv("WEB_RISK_API_KEY")),
-            "live_registry": os.getenv("DEMO_MODE") != "1" and bool(os.getenv("DATA_GOV_IN_API_KEY")),
+            "live_registry": bool(os.getenv("DATA_GOV_IN_API_KEY")),
             "domain_age_archive": os.getenv("INFRA_AGE_LOOKUPS") == "1",
             "careers_page": os.getenv("CAREERS_PAGE_LOOKUPS") == "1",
         },

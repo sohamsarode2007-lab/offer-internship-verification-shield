@@ -51,13 +51,6 @@ Structural checks alone (including a passing domain and checksum-valid GSTIN)
 do not meet this guard. A score <= 30 without an external signal is raised to 31
 with an explanatory factor.
 
-Synthetic company-master snapshot (DEMO_MODE only): a snapshot loaded with
-`load_mca_master.py --synthetic` is consulted only when DEMO_MODE=1. Its results
-use the same weights as a loaded company master (registry match -10 offset,
-satisfies the low-risk guard; inactive status or CIN/name mismatch +25), are worded
-"Company registry match" without calling the data official, live or MCA data, and
-carry registry_source="synthetic" in the API response for traceability.
-
 Bands: 0-30 likely legitimate | 31-60 insufficient evidence, verify manually | 61-100 high risk
 """
 import os
@@ -169,16 +162,7 @@ def calculate_risk_score(
         and auth.get("dmarc_status") == "pass"
         and auth.get("dkim_aligned") is True
     )
-    # A synthetic snapshot is only ever consulted in DEMO_MODE (see gstin_verification);
-    # there it exercises the same registry-match path as a loaded company master.
-    synthetic_registry = (
-        os.getenv("DEMO_MODE") == "1"
-        and reg_status == "pass"
-        and reg.get("registry_checked") is True
-        and reg.get("registry_source") == "synthetic"
-        and reg.get("verified_identifier_type") == "CIN"
-    )
-    has_external_signal = registry_verified or sender_authenticated or synthetic_registry
+    has_external_signal = registry_verified or sender_authenticated
 
     factors: List[str] = []
     # Plain-language Why rows for people: (text, score impact). No engine wording.
@@ -278,7 +262,7 @@ def calculate_risk_score(
             factors.append(f"Contact domain passed DNS checks ({_fmt(-reduction)}, offsets non-payment points only)")
         reason("The company's email domain exists and can receive email", -reduction)
     if reg_status == "pass":
-        label = "Company registry match" if synthetic_registry else "MCA registry pass"
+        label = "MCA registry pass"
         reduction = min(G_REGISTRY_PASS, other_points)
         if reduction > 0:
             other_points -= reduction

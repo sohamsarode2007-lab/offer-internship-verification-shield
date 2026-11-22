@@ -102,12 +102,19 @@ def test_aligned_authenticated_sender_satisfies_low_risk_verification_gate():
     assert result["risk_band"] == "likely legitimate"
 
 
-def test_synthetic_registry_requires_demo_mode(synthetic_registry_db, monkeypatch):
+def test_registry_labelled_synthetic_is_always_ignored(tmp_path, monkeypatch):
+    import sqlite3
+    from scripts.load_mca_master import load_csv
+    from conftest import DEMO_DIR
+    db = tmp_path / "made-up.sqlite3"
+    load_csv(DEMO_DIR / "company_registry.csv", db)
+    with sqlite3.connect(db) as conn:
+        conn.execute("UPDATE registry_metadata SET value='SYNTHETIC' WHERE key='source'")
     text = ("Emberlake Analytics Pvt. Ltd.\nCIN: U74999DL2016PTC298345\n"
             "GSTIN: 07AAFCE4321L1ZO\nhr@emberlakeanalytics.example")
     facts = fe.extract_facts(text)
-    monkeypatch.setenv("MCA_DB_PATH", str(synthetic_registry_db))
-    monkeypatch.delenv("DEMO_MODE", raising=False)
+    monkeypatch.setenv("MCA_DB_PATH", str(db))
+    monkeypatch.setenv("DEMO_MODE", "1")
     result = gv.verify_gstin(facts)
     assert result["status"] == "insufficient_information"
     assert "registry_source" not in result

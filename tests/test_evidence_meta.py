@@ -27,9 +27,9 @@ def test_unknown_or_not_applicable_is_never_confident_and_has_no_score_effect():
         assert r["confidence"] == "none" and r["affects"] == "context"
 
 
-def test_demo_fixture_is_labelled_as_not_live():
+def test_no_demo_fixture_source_exists():
     r = one("domain_verification", "pass", "[DEMO FIXTURE: synthetic]")
-    assert r["source"] == "demo_fixture" and r["freshness"] == "not a live check"
+    assert r["source"] != "demo_fixture"
 
 
 def test_no_values_or_offer_text_in_the_record():

@@ -295,14 +295,12 @@ def test_aggregate_stats_suppress_cells_below_five(db):
     assert cr.stats(db)["indicators"] == [{"indicator_type": "upi", "reports": 5, "suppressed": False}]
 
 
-def test_demo_rows_count_only_when_demo_mode_is_enabled(monkeypatch, db):
+def test_rows_marked_demo_never_count(monkeypatch, db):
     item = candidate()
-    monkeypatch.setenv("DEMO_MODE", "1")
+    monkeypatch.setenv("DEMO_MODE", "1")  # the removed demo switch has no effect
     for _ in range(3):
         store_report(db, item)
+    db.query(cr.CommunityReport).update({"is_demo": True})
     match_signature = cr.minhash_signature("This unrelated text does not resemble any template.")
-    monkeypatch.setenv("DEMO_MODE", "0")
-    assert cr.lookup_community(db, [item], match_signature)["risk_points"] == 0
-    assert cr.stats(db)["indicators"] == []
-    monkeypatch.setenv("DEMO_MODE", "1")
-    assert cr.lookup_community(db, [item], match_signature)["risk_points"] == 25
+    assert cr.lookup_community(db, [item], match_signature)[\"risk_points\"] == 0
+    assert cr.stats(db)[\"indicators\"] == []

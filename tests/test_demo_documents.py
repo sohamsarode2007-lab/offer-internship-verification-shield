@@ -1,12 +1,12 @@
 """
-End-to-end tests for the three synthetic demo documents, through POST /analyze,
-via both the text path and the PDF upload path. DEMO_MODE fixtures stand in for
-DNS (the .example domains never resolve); all other DNS is mocked as NXDOMAIN.
+End-to-end tests for the made-up example letters (test-only), through POST /analyze,
+via both the text path and the PDF upload path. Mocked DNS answers for the fictional
+.example domains; all other DNS is NXDOMAIN.
 """
 import pytest
 
 from app.services import domain_verification as dv
-from conftest import DEMO_DIR, DEMO_LETTERS
+from conftest import DEMO_DIR, DEMO_LETTERS, make_fixture_dns
 from pathlib import Path
 
 EML_DIR = Path(__file__).parent / "fixtures" / "eml"
@@ -106,19 +106,20 @@ def test_stipend_vpa_is_not_a_payment_demand():
 
 
 @pytest.mark.parametrize("path", ["text", "pdf"])
-def test_demo_fixture_is_labelled(demo_client, path):
+def test_domain_check_runs_real_dns_rules(demo_client, path):
     body = analyze(demo_client, "legit_emberlake", path)
     domain = next(c for c in body["checks"] if c["check_name"] == "domain_verification")
-    assert domain["details"].startswith(dv.DEMO_PREFIX)
+    assert domain["status"] == "pass" and "MX present" in domain["details"]
+    assert "DEMO" not in domain["details"]
 
 
 @pytest.mark.parametrize("path", ["text", "pdf"])
-def test_emberlake_matches_synthetic_registry(demo_client, path):
+def test_emberlake_matches_loaded_registry(demo_client, path):
     body = analyze(demo_client, "legit_emberlake", path)
     registry = next(c for c in body["checks"] if c["check_name"] == "gstin_verification")
     assert registry["status"] == "pass"
     assert registry["details"].startswith("Company registry match: Emberlake Analytics Pvt. Ltd.;")
-    assert body["registry_source"] == "synthetic"
+    assert body["registry_source"] == "mca_csv"
 
 
 def test_synthetic_registry_does_not_match_unrelated_company(demo_client):
@@ -150,7 +151,7 @@ def _upload_eml(client, name):
     ("authenticated_with_pdf.eml", "high risk"),
 ])
 def test_eml_analysis_signals_and_bands(demo_client, monkeypatch, name, expected):
-    monkeypatch.setenv("DEMO_FIXTURE_DOMAINS", "acme.example,attacker.example,imposter.example")
+    monkeypatch.setattr(dv._resolver, "resolve", make_fixture_dns("acme.example,attacker.example,imposter.example"))
     response = _upload_eml(demo_client, name)
     assert response.status_code == 200, response.text
     body = response.json()
@@ -174,13 +175,13 @@ def test_eml_analysis_signals_and_bands(demo_client, monkeypatch, name, expected
 def test_non_eml_sender_auth_check_is_not_applicable(api_client):
     response = api_client.post("/analyze", data={"text": "Offer details, contact hr@acme.example."})
     assert response.status_code == 200
-    auth = next(c for c in response.json()["checks"] if c["check_name"] == "sender_authentication")
+    auth = next(c for c in response.json()[\"checks\"] if c[\"check_name\"] == \"sender_authentication\")
     assert auth["status"] == "not_applicable"
     assert ".eml" in auth["details"]
 
 
 def test_eml_response_does_not_expose_private_headers_or_addresses(demo_client, monkeypatch, caplog):
-    monkeypatch.setenv("DEMO_FIXTURE_DOMAINS", "acme.example")
+    monkeypatch.setattr(dv._resolver, "resolve", make_fixture_dns("acme.example"))
     response = _upload_eml(demo_client, "authenticated_legit.eml")
     assert response.status_code == 200
     assert "candidate@student.example" not in response.text
