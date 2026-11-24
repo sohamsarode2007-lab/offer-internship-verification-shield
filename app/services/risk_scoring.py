@@ -53,7 +53,6 @@ with an explanatory factor.
 
 Bands: 0-30 likely legitimate | 31-60 insufficient evidence, verify manually | 61-100 high risk
 """
-import os
 from typing import List, Dict, Any, Optional
 
 SCORING_MODEL = "rule_based_v2"

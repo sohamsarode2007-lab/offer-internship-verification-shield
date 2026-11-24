@@ -175,7 +175,7 @@ def test_eml_analysis_signals_and_bands(demo_client, monkeypatch, name, expected
 def test_non_eml_sender_auth_check_is_not_applicable(api_client):
     response = api_client.post("/analyze", data={"text": "Offer details, contact hr@acme.example."})
     assert response.status_code == 200
-    auth = next(c for c in response.json()[\"checks\"] if c[\"check_name\"] == \"sender_authentication\")
+    auth = next(c for c in response.json()["checks"] if c["check_name"] == "sender_authentication")
     assert auth["status"] == "not_applicable"
     assert ".eml" in auth["details"]
 

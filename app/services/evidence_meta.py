@@ -37,7 +37,6 @@ def build_evidence_meta(checks: List[Dict[str, Any]], now: datetime | None = Non
         name = check.get("check_name", "")
         source, freshness, confidence = _BASE.get(name, ("derived_check", "this offer only", "low"))
         status = check.get("status")
-        details = check.get("details") or check.get("explanation") or ""
         if status not in ("pass", "fail"):
             confidence = "none"
         affects = "score"

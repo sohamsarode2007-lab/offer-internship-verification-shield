@@ -5,7 +5,6 @@ automatically. Every /analyze call adds one anonymous trend row (ISO week, band,
 scam category; see docs/PRIVACY_DESIGN.md). The senders table comes from consented
 community reports. Multiple colleges and a staff login are future scope.
 """
-import os
 import re
 from datetime import date, datetime, timedelta, timezone
 
@@ -268,11 +267,11 @@ def dashboard(db: Session, today: date | None = None) -> dict:
         "sender_threshold": SENDER_THRESHOLD,
         "top_senders": top_senders(db),
         "weeks": weeks,
-        "by_week_band": [{\"week\": week, \"band\": band, \"count\": _shown(band_counts.get((week, band), 0))}
+        "by_week_band": [{"week": week, "band": band, "count": _shown(band_counts.get((week, band), 0))}
                          for week in weeks for band in BANDS],
         # Full weekly category data stays in the API and in GET /trends/weekly.csv.
-        "by_week_category": [{\"week\": week, \"category\": category,
-                              \"count\": _shown(category_counts.get((week, category), 0))}
+        "by_week_category": [{"week": week, "category": category,
+                              "count": _shown(category_counts.get((week, category), 0))}
                              for week in weeks for category in CATEGORIES],
         "category_summary": category_summary(weeks, category_counts),
     }

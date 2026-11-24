@@ -68,7 +68,7 @@ def test_report_adds_no_second_row_and_withdrawal_keeps_the_anonymous_row(api_cl
     gen, db = _db()
     assert _rows(db).count() == before + 1            # one row for the check, none for the report
     gen.close()
-    assert api_client.post("/report/withdraw", json={"code": reported.json()[\"withdrawal_code\"]}).status_code == 200
+    assert api_client.post("/report/withdraw", json={"code": reported.json()["withdrawal_code"]}).status_code == 200
     gen, db = _db()
     assert _rows(db).count() == before + 1            # unlinked, so withdrawal cannot remove it
     gen.close()

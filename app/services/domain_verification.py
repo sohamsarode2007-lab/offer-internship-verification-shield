@@ -20,7 +20,6 @@ Checks (in order):
 Overall: any hard fail -> 'fail'; DNS unavailable -> 'insufficient_information';
 otherwise 'pass' (warnings listed in details).
 """
-import os
 import re
 import logging
 from datetime import datetime, timezone

@@ -302,5 +302,5 @@ def test_rows_marked_demo_never_count(monkeypatch, db):
         store_report(db, item)
     db.query(cr.CommunityReport).update({"is_demo": True})
     match_signature = cr.minhash_signature("This unrelated text does not resemble any template.")
-    assert cr.lookup_community(db, [item], match_signature)[\"risk_points\"] == 0
-    assert cr.stats(db)[\"indicators\"] == []
+    assert cr.lookup_community(db, [item], match_signature)["risk_points"] == 0
+    assert cr.stats(db)["indicators"] == []
