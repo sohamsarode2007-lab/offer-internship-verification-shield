@@ -148,10 +148,12 @@ been verified in this workspace.
   that a real offer deadline is fraudulent.
 - The low-risk band requires a passing domain, a present non-failing identifier,
   and an externally verified signal. The available live external signal is an
-  active, name-matched CIN from the locally loaded MCA SQLite master data, or a
-  sender authenticated from an original `.eml` by DMARC pass and aligned DKIM.
-  The latter verifies the sender as recorded by the recipient's mail provider;
-  it does not establish who authored the message. Structural domain/GSTIN checks
+  active, name-matched CIN from the locally loaded MCA SQLite master data whose
+  registered company name also matches the contact domain (`app/services/identity_tie.py`),
+  because a company number can be copied onto any offer. Email authentication results in
+  an uploaded `.eml` are shown but never counted as a signal or as a score reduction:
+  every header in an uploaded file is written by whoever made the file. A failed result
+  still counts against the sender, because forging a failure only hurts the forger. Structural domain/GSTIN checks
   alone are capped at manual review. The demo registry fixture is an explicit
   demo-only exception for illustrating that path; it is not external verification.
 - `scripts/load_mca_master.py` imports a company-master CSV into local SQLite and

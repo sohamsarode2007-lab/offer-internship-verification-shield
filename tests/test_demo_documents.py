@@ -142,7 +142,7 @@ def _upload_eml(client, name):
 
 
 @pytest.mark.parametrize(("name", "expected"), [
-    ("authenticated_legit.eml", "likely legitimate"),
+    ("authenticated_legit.eml", "insufficient evidence, verify manually"),
     ("dmarc_fail_spoof.eml", "insufficient evidence, verify manually"),
     ("reply_to_gmail.eml", "insufficient evidence, verify manually"),
     ("brand_display_spoof.eml", "insufficient evidence, verify manually"),
@@ -158,9 +158,10 @@ def test_eml_analysis_signals_and_bands(demo_client, monkeypatch, name, expected
     assert body["risk_band"] == expected
     auth = next(c for c in body["checks"] if c["check_name"] == "sender_authentication")
     if name == "authenticated_legit.eml":
-        assert auth["status"] == "pass"
+        # The file says DMARC passed, but a file's headers prove nothing, so it is reported, not counted.
+        assert auth["status"] == "insufficient_information"
         assert "acme.example" in auth["details"]
-        assert "likely legitimate" == body["risk_band"]
+        assert "not counted as proof" in auth["details"]
     elif name == "no_authentication_results.eml":
         assert auth["status"] == "insufficient_information"
         assert "forwarded or exported without headers" in auth["details"]

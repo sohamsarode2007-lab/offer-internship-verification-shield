@@ -326,3 +326,20 @@ Status: **open** = not reviewed yet.
       several workers each get their own). Only Web Risk is budgeted; the live registry lookup already has a 0.5 s throttle.
     - **Public endpoint:** `/sources` is unauthenticated and shows which optional lookups are on and the Web Risk
       usage count. It shows no keys. Say if you would rather hide the counts.
+
+39. **Trust fixes after the external review (2026-11-24) (open).**
+    - **Uploaded email headers are never proof.** A reported DMARC/DKIM pass is shown, never counted, and no longer
+      lowers the score or supplies the external signal. Failures still count. Cost: a genuinely authenticated
+      `.eml` (EC11) now lands in manual review instead of "likely legitimate". That is the intended trade: a forger
+      can type a pass, so a pass cannot be evidence. EC11's expected band was re-derived by hand from the updated
+      `risk_scoring.py` docstring, not edited to hide a failure; the old expectation is recorded in its basis text.
+    - **A registry match needs a matching domain** (`identity_tie.py`: whole name, first distinctive word of 4+
+      letters, or initials of 3+ words). Strict on purpose: real companies on unrelated or abbreviated domains
+      (for example hcltech for "HCL Technologies") now get "verify manually". EC51 covers the caught case.
+    - **EC41 stays a documented dangerous miss.** A scammer who registers a domain equal to the company's name
+      passes this test. Closing that needs something we cannot check from text (who controls the domain).
+    - **Seven existing tests or helpers were edited** because they encoded the old rule or built checks without a
+      domain/company name: three about uploaded headers (test_audit_regressions, test_demo_documents,
+      test_email_auth), one message string (test_community_reports), and three fixtures that now carry a matching
+      domain and company (test_audit_regressions, test_scam_text, test_result_wording). No assertion about payment
+      demands or wording was loosened; the only band changes are the two header cases above.

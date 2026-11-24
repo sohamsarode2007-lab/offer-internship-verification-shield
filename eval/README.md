@@ -48,7 +48,7 @@ or updates expected bands from predictions.
 | EC08 | No payment demand, so urgency adds 0; +10 GSTIN and -10 domain: subtotal 0; no external signal raises score to 31 | insufficient evidence, verify manually |
 | EC09 | Payment +65; missing registration +20; no usable domain and no registration +20; capped at 100 | high risk |
 | EC10 | Missing registration +20; no usable domain and no registration +20: 40 | insufficient evidence, verify manually |
-| EC11 | +10 unverified GSTIN and -10 passing From domain = 0; aligned authenticated sender meets guard | likely legitimate |
+| EC11 | +10 unverified GSTIN and -10 passing From domain = 0; the uploaded file's DMARC pass is not counted, so no external signal and the guard raises it to 31 (was "likely legitimate" before the 2026-11-24 spec change) | insufficient evidence, verify manually |
 | EC12 | DMARC fail +30 and body/From domain mismatch +15; base 0; total 45 | insufficient evidence, verify manually |
 | EC13 | Mismatched Gmail Reply-To +25; failed auth signal does not meet guard; 25 is raised to 31 | insufficient evidence, verify manually |
 | EC14 | Protected-brand display spoof +25; failed auth signal does not meet guard; 25 is raised to 31 | insufficient evidence, verify manually |
@@ -169,8 +169,10 @@ cases (`synthetic=true`), not a held-out accuracy set.
 ### Known gaps, recorded on purpose
 
 - **EC41 is a dangerous miss and is expected to be.** A scam that copies a real registered company's
-  CIN and uses a domain that passes every check looks identical to a genuine offer to everything this tool
-  can see. The summary line "1 dangerous miss(es)" is that case; do not "fix" it by loosening the guard.
+  CIN and uses a domain that is exactly the company's name (here ashcombe.example) and passes every check
+  looks identical to a genuine offer to everything this tool can see. EC51 is the narrower case that IS now
+  caught: the same copied CIN on an unrelated domain (nordvale.example) is raised to manual review, because a
+  registry match only counts when the contact domain is recognisably the registered company's name. The summary line "1 dangerous miss(es)" is that case; do not "fix" it by loosening the guard.
 - **Hinglish/Hindi coverage is narrow.** Only the phrasings in EC40-EC45 and tests/test_scam_text.py are covered; other spellings, slang and Hindi in other scripts or word orders still abstain. A native speaker has not reviewed the rules.
 - **EC33, EC34 (and EC21, EC22 earlier):** scams with only moderate evidence land in manual review rather
   than "high risk"; that is the intended behaviour, not a miss.

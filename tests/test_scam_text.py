@@ -56,9 +56,10 @@ def checks(scam=None, *, domain="pass", reg="insufficient_information", present=
     reg_check = {"check_name": "gstin_verification", "status": "pass" if registry else reg,
                  "identifier_present": present}
     if registry:
-        reg_check.update(registry_checked=True, verification_source="mca_registry", verified_identifier_type="CIN")
+        reg_check.update(registry_checked=True, verification_source="mca_registry", verified_identifier_type="CIN",
+                         registry_company_name="Quillmere Software Private Limited")
     return [
-        {"check_name": "domain_verification", "status": domain},
+        {"check_name": "domain_verification", "status": domain, "domain": "quillmere.example"},
         reg_check,
         {"check_name": "payment_detection", "status": "pass"},
         {"check_name": "scam_text_patterns", **(scam or {"status": "not_applicable", "families": [], "tier": None})},

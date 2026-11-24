@@ -151,7 +151,8 @@ def verify_sender_authentication(parsed: Dict[str, Any], body_facts: Dict[str, A
         signals.append("domain claimed in the letter differs from the authenticated From domain (+15)")
 
     if dmarc_status == "pass" and aligned:
-        signals.append("DMARC passed and DKIM is aligned (−10)")
+        signals.append("the file reports DMARC pass with aligned DKIM, but anyone can type those lines into a file, "
+                       "so it is not counted as proof and does not lower the score")
     lower_disagrees = any(_auth_signature(header) != (spf_status, dkim_status, d_value, dmarc_status)
                           for header in headers[1:])
     if lower_disagrees:
@@ -160,9 +161,9 @@ def verify_sender_authentication(parsed: Dict[str, Any], body_facts: Dict[str, A
         status = "insufficient_information"
     elif hard_auth_fail or points > 0:
         status = "fail"
-    elif dmarc_status == "pass" and aligned:
-        status = "pass"
     else:
+        # A pass is never accepted from an uploaded file: every header in it is controlled by whoever made the
+        # file. Only failures count, because forging a failure can only hurt the forger.
         status = "insufficient_information"
     no_header_note = "No Authentication-Results header (forwarded or exported without headers). " if not has_auth_results else ""
     details = no_header_note + f"Sender domain: {domain or 'unknown'}. " + (

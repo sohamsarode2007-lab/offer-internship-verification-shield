@@ -50,14 +50,14 @@ future scope. For demos, `fixtures/demo/synthetic_mca_master.csv` holds fictiona
 companies; load it with `--synthetic` (stored as `source=SYNTHETIC`, used only when
 `DEMO_MODE=1`). See [fixture notes](fixtures/demo/README.md#synthetic-company-registry).
 
-Sender authentication using DMARC and aligned DKIM is available only for
-original `.eml` uploads, not for pasted text or PDF/image uploads. It checks the
-topmost `Authentication-Results` supplied by the receiving mail provider and the
-actual From domain. For Gmail, open the message, select **⋮ → Download message**,
+Sender-authentication results are read only from original `.eml` uploads, not from pasted
+text or PDF/image uploads. They are shown for information and failures count against the
+sender, but a reported pass is never counted as proof, because the file's headers are
+written by whoever made it. For Gmail, open the message, select **⋮ → Download message**,
 then upload the downloaded `.eml`. Other inputs still verify only the domain
-claimed in the letter. The only available external verification signals are an
-active, name-matched CIN in the local MCA database or an aligned authenticated
-sender from an `.eml`.
+claimed in the letter. The only available external verification signal is an
+active, name-matched CIN in the local MCA database whose company name also matches the
+contact domain.
 `/analyze` also returns `next_steps` and a concise `complaint_summary` based on
 the automated findings; these do not replace an official complaint.
 

@@ -32,7 +32,6 @@ Risk points (added):
 Offsets (subtracted, only from NON-payment points; never below the payment points):
   -10  Domain check passed
   -10  Registry match
-  -10  DMARC pass with aligned DKIM (never offsets payment points)
 
 Community indicators are risk evidence only; they never satisfy the external
 verification guard. Details use threshold buckets and never expose exact counts.
@@ -44,9 +43,11 @@ independent evidence to call this high risk."
 Low-risk guard: "likely legitimate" requires ALL of:
   - contact domain check passed;
   - registration number is present and did not fail; and
-  - at least one externally verified signal: a registry pass marked as checked
-    against MCA data, or an authenticated sender from an original .eml with DMARC
-    pass and aligned DKIM.
+  - an externally verified signal: a registry pass marked as checked against MCA data
+    whose registered company name matches the contact domain (app/services/identity_tie.py),
+    because a company number can be copied onto any offer.
+    Email authentication results in an uploaded .eml are NOT such a signal: the file's
+    headers are written by whoever made it, so a pass is never counted. Failures still count.
 Structural checks alone (including a passing domain and checksum-valid GSTIN)
 do not meet this guard. A score <= 30 without an external signal is raised to 31
 with an explanatory factor.
@@ -54,6 +55,8 @@ with an explanatory factor.
 Bands: 0-30 likely legitimate | 31-60 insufficient evidence, verify manually | 61-100 high risk
 """
 from typing import List, Dict, Any, Optional
+
+from app.services import identity_tie
 
 SCORING_MODEL = "rule_based_v2"
 
@@ -156,12 +159,12 @@ def calculate_risk_score(
         and reg.get("verification_source") == "mca_registry"
         and reg.get("verified_identifier_type") == "CIN"
     )
-    sender_authenticated = (
-        auth.get("status") == "pass"
-        and auth.get("dmarc_status") == "pass"
-        and auth.get("dkim_aligned") is True
-    )
-    has_external_signal = registry_verified or sender_authenticated
+    domain_tied = identity_tie.domain_tied_to_company(
+        by_name.get("domain_verification", {}).get("domain"), reg.get("registry_company_name"))
+    # A registry match proves the company exists, not that this sender works for it (the number can be copied),
+    # so it only counts as the external signal when the contact domain is recognisably that company's name.
+    identity_unproven = registry_verified and not domain_tied
+    has_external_signal = registry_verified and domain_tied
 
     factors: List[str] = []
     # Plain-language Why rows for people: (text, score impact). No engine wording.
@@ -271,13 +274,6 @@ def calculate_risk_score(
         name = reg.get("registry_company_name")
         reason(f"The company is registered and active: {name}" if name else "The company is registered and active",
                -reduction)
-    if auth.get("status") == "pass" and auth.get("dmarc_status") == "pass" and auth.get("dkim_aligned") is True:
-        reduction = min(10.0, other_points)
-        if reduction > 0:
-            other_points -= reduction
-        applied = f"applied {_fmt(-reduction)}" if reduction < 10.0 else _fmt(-reduction)
-        factors.append(f"DMARC pass with aligned DKIM ({_fmt(-10.0)} signal; {applied}, non-payment only)")
-        reason("The email really came from the company's own domain", -reduction)
 
     unbounded_score = payment_points + other_points
     score = unbounded_score
@@ -313,11 +309,15 @@ def calculate_risk_score(
         if scam_strong:
             missing.append("the text matches a known task-scam pattern")
         if not has_external_signal:
-            missing.append("no externally verified registry match or authenticated sender was found")
+            missing.append("the registered company's name does not match the contact domain, so the number may be copied"
+                           if identity_unproven else "no externally verified registry match was found")
         if missing:
             registration_gap = (not reg_present or reg_status == "fail" or not has_external_signal)
             scam_gap = scam_strong and not registration_gap
-            reason("We couldn't verify this company's registration, so we can't call it legitimate yet."
+            reason("The company number is real, but the email domain doesn't match that company's name. "
+                   "Numbers can be copied, so check with the company directly."
+                   if identity_unproven and not (not reg_present or reg_status == "fail") else
+                   "We couldn't verify this company's registration, so we can't call it legitimate yet."
                    if registration_gap else
                    "The wording matches a known task-scam pattern, so we can't call it legitimate."
                    if scam_gap else

@@ -174,7 +174,7 @@ def test_community_match_does_not_satisfy_external_verification_guard():
          "details": "This upi appears in reports from 3+ people."},
     ])
     assert result["risk_band"] == "insufficient evidence, verify manually"
-    assert any("no externally verified registry match or authenticated sender" in x
+    assert any("no externally verified registry match" in x
                for x in result["risk_factors"])
 
 
