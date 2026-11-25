@@ -38,7 +38,7 @@ def get_institution(db: Session) -> Institution:
 
 
 def record_check_observation(db: Session, band: str, scam_category: str, iso_week: str,
-                             is_demo: bool = False, report_id: str | None = None) -> None:
+                             report_id: str | None = None) -> None:
     """One anonymous public trend row: ISO week, band and category only.
 
     Every /analyze call records one (report_id stays NULL: not linked to anything).
@@ -60,11 +60,6 @@ def purge_old_observations(db: Session, today: date | None = None) -> int:
     cutoff = last_weeks(today, TREND_RETENTION_WEEKS + 1)[0]
     return db.query(InstitutionObservation).filter(InstitutionObservation.iso_week < cutoff).delete(
         synchronize_session=False)
-
-
-def _include_demo() -> bool:
-    """Rows marked demo/simulated (left over from older builds) are never shown."""
-    return False
 
 
 def _check(checks: list[dict], name: str) -> dict:
@@ -148,9 +143,8 @@ def top_senders(db: Session) -> list[dict]:
         CommunityReport.withdrawn.is_(False),
         CommunityReport.consent_version >= CONSENT_VERSION,
         CommunityIndicator.masked_display.isnot(None),
+        CommunityReport.is_demo.is_(False),
     )
-    if not _include_demo():
-        query = query.filter(CommunityReport.is_demo.is_(False))
 
     groups: dict[tuple, dict] = {}
     for kind, digest, version, report_id, display, week, category, created in query.all():
@@ -250,9 +244,8 @@ def category_summary(weeks: list[str], category_counts: dict) -> list[dict]:
 
 def _weekly_counts(db: Session, institution: Institution, weeks: list[str]):
     base = [InstitutionObservation.institution_id == institution.id,
-            InstitutionObservation.iso_week.in_(weeks)]
-    if not _include_demo():
-        base.append(InstitutionObservation.is_demo.is_(False))
+            InstitutionObservation.iso_week.in_(weeks),
+            InstitutionObservation.is_demo.is_(False)]
     rows = db.query(InstitutionObservation.iso_week, InstitutionObservation.band,
         func.count(InstitutionObservation.id)).filter(*base).group_by(
             InstitutionObservation.iso_week, InstitutionObservation.band).all()

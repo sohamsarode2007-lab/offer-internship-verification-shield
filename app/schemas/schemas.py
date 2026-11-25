@@ -1,4 +1,3 @@
-import datetime
 from enum import Enum
 from typing import List, Optional
 from pydantic import BaseModel, ConfigDict, Field
@@ -16,26 +15,6 @@ class CheckResultSchema(BaseModel):
     status: CheckStatus
     score: Optional[float] = None
     details: Optional[str] = None
-
-class VerificationResultSchema(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    id: Optional[int] = None
-    offer_id: Optional[int] = None
-    overall_risk_score: float = Field(..., ge=0.0, le=100.0)
-    completeness_percentage: float = Field(..., ge=0.0, le=100.0)
-    created_at: Optional[datetime.datetime] = None
-    check_results: List[CheckResultSchema] = []
-
-class OfferSchema(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    id: Optional[int] = None
-    title: Optional[str] = None
-    company_name: Optional[str] = None
-    raw_text: Optional[str] = None
-    file_path: Optional[str] = None
-    created_at: Optional[datetime.datetime] = None
 
 class Reason(BaseModel):
     """One plain-language 'Why' row: text for people and its score impact ('+65', '−10' or None)."""
