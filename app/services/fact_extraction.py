@@ -1,14 +1,12 @@
 """
 Fact Extraction Service
 
-Parses offer text with regular expressions (plus rapidfuzz for affiliation spelling
-variants) and returns structured fields:
+Parses offer text with regular expressions and returns structured fields:
 - company_name
 - sender_email / sender_domain  (the contact address CLAIMED in the text, not mail headers)
 - gstin, cin, llpin             (LLPIN only when explicitly labelled "LLPIN")
 - monetary_amounts
 - account_numbers (bank accounts, UPI VPAs)
-- institutional_affiliations    (names MENTIONED in the text; nothing is verified)
 
 Each field is {value, confidence, status}. Fields that could not be found are
 returned with value=None and status='failed_extraction' rather than guessed.
@@ -19,17 +17,10 @@ never the offer text or extracted values.
 import re
 import logging
 from typing import Dict, Any, List, Optional, Tuple
-from rapidfuzz import fuzz
 
 from app.utils.email_domains import is_disposable_mailbox, is_free_mailbox, is_upi_handle
 
 logger = logging.getLogger(__name__)
-
-INSTITUTIONAL_KEYWORDS = [
-    "IIT Bombay", "IIT Delhi", "IIT Madras", "IIT Kharagpur", "IIT Kanpur",
-    "IISc", "NIT Trichy", "NIT Surathkal", "Placement Cell", "AICTE",
-    "University Placement Cell", "UGC", "NASSCOM", "Corporate HR Division"
-]
 
 # Company-name patterns: a run of capitalised words ending in a company suffix.
 # Words are separated by spaces/tabs only, so a match never spans lines.
@@ -186,26 +177,6 @@ def extract_account_numbers(text: str) -> Dict[str, Any]:
     return create_field_dict(all_accounts if all_accounts else None, 0.90 if all_accounts else 0.0)
 
 
-def extract_institutional_affiliations(text: str) -> Dict[str, Any]:
-    """Find institution names MENTIONED in the text. A mention is not a verification."""
-    found = []
-    lower = text.lower()
-    for inst in INSTITUTIONAL_KEYWORDS:
-        if inst.lower() in lower:
-            found.append(inst)
-
-    if not found:
-        words = text.split()
-        for i in range(len(words) - 1):
-            chunk = f"{words[i]} {words[i+1]}"
-            for inst in INSTITUTIONAL_KEYWORDS:
-                if fuzz.ratio(chunk.lower(), inst.lower()) > 85:
-                    found.append(inst)
-                    break
-
-    return create_field_dict(sorted(set(found)) if found else None, 0.88 if found else 0.0)
-
-
 def extract_facts(raw_text: str) -> Dict[str, Any]:
     """
     Main fact extraction function.
@@ -220,7 +191,6 @@ def extract_facts(raw_text: str) -> Dict[str, Any]:
     regs = extract_registration_numbers(raw_text)
     monetary = extract_monetary_amounts(raw_text)
     accounts = extract_account_numbers(raw_text)
-    institutional = extract_institutional_affiliations(raw_text)
 
     result = {
         "raw_text": raw_text,
@@ -236,18 +206,17 @@ def extract_facts(raw_text: str) -> Dict[str, Any]:
         "udyam": regs["udyam"],
         "monetary_amounts": monetary,
         "account_numbers": accounts,
-        "institutional_affiliations": institutional,
     }
 
     # Privacy: log only field presence and text length, never content.
     logger.debug(
         "[FACT_EXTRACTION] text_length=%d company=%s email=%s domain=%s gstin=%s cin=%s llpin=%s "
-        "monetary=%s accounts=%s institutional=%s",
+        "monetary=%s accounts=%s",
         len(raw_text),
         company["value"] is not None, email["value"] is not None, domain["value"] is not None,
         regs["gstin"]["value"] is not None, regs["cin"]["value"] is not None,
         regs["llpin"]["value"] is not None, monetary["value"] is not None,
-        accounts["value"] is not None, institutional["value"] is not None,
+        accounts["value"] is not None,
     )
 
     return result
