@@ -419,3 +419,11 @@ Status: **open** = not reviewed yet.
       hash (about 1 run in 100). It now looks for "5000" as a whole word, which still catches any leaked amount.
     - **Not done:** the rest of the "typed evidence" idea (typing every check's extra keys) and dashboard-query tuning;
       not needed for correctness and I did not want to churn the scoring code before you review it.
+
+48. **Rate limits behind a host (open).** Production start-up now requires `FORWARDED_ALLOW_IPS`, and the Docker command
+    passes `--proxy-headers`, so visitors are told apart by their real address. Trusting `*` is only safe where the
+    app cannot be reached except through the host's proxy; otherwise anyone could fake the header and dodge limits.
+    Counters are still per process unless `RATE_LIMIT_STORAGE_URI` points at a shared store (Redis); the link-check
+    allowance and daily budgets in `request_budget.py` stay per process (not moved to the shared store). Not tried against a real proxy.
+    **Azure translation is not built:** it would send offer text to a third party, against the privacy rules, and the
+    Hindi/Hinglish rules are written as native-language patterns instead.

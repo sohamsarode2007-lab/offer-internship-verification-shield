@@ -39,4 +39,4 @@ EXPOSE 8000
 
 # Apply migrations (alembic is the schema source of truth), then serve.
 # --no-access-log: request paths and client addresses are not written to logs.
-CMD ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --no-access-log"]
+CMD ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers --no-access-log"]

@@ -24,7 +24,10 @@ OCR uploads need Tesseract; scanned PDFs also need Poppler. The CI workflow inst
 **Production settings.** Set `ENVIRONMENT=production` and the app refuses to start unless
 `INDICATOR_PEPPER` is 32+ characters, `ALLOWED_ORIGINS` lists the real site (no localhost or `*`),
 `DATABASE_URL` is PostgreSQL, rate limiting is on and `DEMO_MODE` is unset; it also hides `/docs`.
-Responses carry security headers and a Content-Security-Policy; set `HSTS_ENABLED=1` only once the site
+Behind a host's proxy, set `FORWARDED_ALLOW_IPS` (the proxy's address, or `*` on a platform that always sits
+behind its own proxy and cannot be reached directly) so each visitor's real address reaches the app; production
+start-up requires it. Rate-limit counters are in memory per process: keep one worker, or set
+`RATE_LIMIT_STORAGE_URI` (for example a Redis address) to share them. Responses carry security headers and a Content-Security-Policy; set `HSTS_ENABLED=1` only once the site
 is served over https. Server access logs (request paths, client addresses) are off unless `ACCESS_LOG=1`.
 The Docker image builds the web page in a first stage, installs exact hashed versions from
 `requirements.lock` and starts uvicorn with `--no-access-log`. Stored analysis results are deleted after

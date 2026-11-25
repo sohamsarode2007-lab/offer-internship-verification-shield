@@ -6,7 +6,7 @@ import pytest
 from app.services.env_config import production_problems
 
 GOOD = {"ENVIRONMENT": "production", "INDICATOR_PEPPER": "x" * 40, "ALLOWED_ORIGINS": "https://shield.example",
-        "DATABASE_URL": "postgresql://u:p@db/x"}
+        "DATABASE_URL": "postgresql://u:p@db/x", "FORWARDED_ALLOW_IPS": "*"}
 
 
 def test_headers_on_json_and_pages(api_client):
@@ -42,6 +42,7 @@ def test_production_guard_accepts_a_good_config_and_ignores_other_environments()
     ({"DATABASE_URL": "sqlite:///x.db"}, "PostgreSQL"),
     ({"RATE_LIMIT_ENABLED": "0"}, "RATE_LIMIT"),
     ({"DEMO_MODE": "1"}, "DEMO_MODE"),
+    ({"FORWARDED_ALLOW_IPS": ""}, "FORWARDED_ALLOW_IPS"),
 ])
 def test_production_guard_names_each_problem(change, expect):
     problems = production_problems({**GOOD, **change})
@@ -61,3 +62,11 @@ def test_app_refuses_to_start_with_a_bad_production_config(monkeypatch):
 def test_access_log_is_off_by_default():
     import app.main  # noqa: F401
     assert logging.getLogger("uvicorn.access").disabled is True
+
+
+def test_rate_limit_counters_can_be_shared_through_a_storage_uri(monkeypatch):
+    from app.api.limiter import build_limiter
+    monkeypatch.setenv("RATE_LIMIT_STORAGE_URI", "memory://shared-test")
+    assert build_limiter()._storage_uri == "memory://shared-test"
+    monkeypatch.delenv("RATE_LIMIT_STORAGE_URI")
+    assert build_limiter()._storage_uri == "memory://"

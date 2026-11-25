@@ -37,6 +37,9 @@ def production_problems(env=None) -> list:
         problems.append("DATABASE_URL must point at PostgreSQL, not SQLite")
     if env.get("RATE_LIMIT_ENABLED", "1") == "0":
         problems.append("RATE_LIMIT_ENABLED=0 turns rate limiting off")
+    if not env.get("FORWARDED_ALLOW_IPS", "").strip():
+        problems.append("FORWARDED_ALLOW_IPS must name the proxy in front of the app (or '*' on a host that always "
+                        "proxies), otherwise every visitor shares the proxy's address and one rate limit")
     if env.get("DEMO_MODE", "0") not in ("", "0"):
         problems.append("DEMO_MODE must not be set")
     return problems

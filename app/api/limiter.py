@@ -6,7 +6,9 @@ RATE_LIMIT_ENABLED   default "1"; set "0" to disable (tests)
 
 Behind a reverse proxy, request.client.host is the proxy's address: run uvicorn with
 --proxy-headers and --forwarded-allow-ips set to the proxy so the real client IP is used.
-Limits are kept in process memory: with several workers each keeps its own counter.
+RATE_LIMIT_STORAGE_URI  optional shared counter store (e.g. "redis://host:6379") so several workers or
+                        copies of the server share one limit. Unset: counters live in process memory, so run
+                        a single worker (the Docker image does) or each worker keeps its own count.
 """
 import os
 
@@ -20,7 +22,12 @@ def configured_rate_limit() -> str:
 
 RATE_LIMIT = configured_rate_limit()
 
-limiter = Limiter(
-    key_func=get_remote_address,
-    enabled=os.getenv("RATE_LIMIT_ENABLED", "1") != "0",
-)
+def build_limiter() -> Limiter:
+    return Limiter(
+        key_func=get_remote_address,
+        enabled=os.getenv("RATE_LIMIT_ENABLED", "1") != "0",
+        storage_uri=os.getenv("RATE_LIMIT_STORAGE_URI") or "memory://",
+    )
+
+
+limiter = build_limiter()
