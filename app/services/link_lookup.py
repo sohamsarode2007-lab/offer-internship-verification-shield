@@ -128,6 +128,7 @@ def follow(link: str, deadline: Optional[float] = None) -> Dict[str, Any]:
     stopped = {"hops": hops, "landing_host": None, "tls": "unknown", "cert_age_days": None, "stopped": True}
     try:
         for _ in range(MAX_HOPS + 1):
+            tls, cert_age = "unknown", None
             remaining = deadline - time.monotonic()
             if remaining <= 0.2 or not request_budget.try_spend("link_visit"):
                 return {**stopped, "hops": hops}
@@ -136,7 +137,10 @@ def follow(link: str, deadline: Optional[float] = None) -> Dict[str, Any]:
                 status, location, cert = _head(current, min(remaining, float_env("LINK_LOOKUP_TIMEOUT",
                                                                                  TIMEOUT_SECONDS, 0.5, 10.0)))
             except ssl.SSLCertVerificationError:
-                return {"hops": hops, "landing_host": host, "tls": "invalid", "cert_age_days": None, "stopped": False}
+                different = bool(host) and domain_verification.registrable_domain(host)[0] != \
+                    domain_verification.registrable_domain(start_host)[0]
+                return {"hops": hops, "landing_host": host if different else None,
+                        "tls": "invalid", "cert_age_days": None, "stopped": False}
             except safe_fetch.UnsafeTarget:
                 return {**stopped, "hops": hops}
             if current.startswith("https"):
@@ -199,7 +203,7 @@ def build_link_checks(text: str, consent: bool) -> Dict[str, Any]:
         if visit["tls"] == "invalid":
             out["notes"].append(f"The site '{visit['landing_host'] or host}' has a security certificate that does not check out.")
         elif visit["cert_age_days"] is not None and visit["cert_age_days"] < NEW_CERT_DAYS:
-            out["notes"].append(f"The site '{host}' got its security certificate only {visit['cert_age_days']} days ago "
+            out["notes"].append(f"The site '{visit['landing_host'] or host}' got its security certificate only {visit['cert_age_days']} days ago "
                                 "(weak signal: many genuine sites renew often).")
     if out["notes"]:
         out["notes"].append("Link lookups can only find known problems. A link that is not flagged is not proven safe.")

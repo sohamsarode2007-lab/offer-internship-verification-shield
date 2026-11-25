@@ -157,3 +157,36 @@ def test_config_endpoint_reports_switch(api_client, monkeypatch):
     assert api_client.get("/config").json() == {"link_lookups": True}
     monkeypatch.delenv("LINK_LOOKUPS")
     assert api_client.get("/config").json() == {"link_lookups": False}
+
+
+def test_zero_hop_tls_error_does_not_report_redirect(monkeypatch):
+    def bad(u, t=None):
+        raise ssl.SSLCertVerificationError("bad")
+    monkeypatch.setattr(ll, "_head", bad)
+    monkeypatch.setattr(ll, "_get_json", lambda u: {})
+    out = ll.build_link_checks("https://x.example/apply", consent=True)
+    assert not any("redirects to a different site" in n for n in out["notes"])
+    assert any("security certificate that does not check out" in n for n in out["notes"])
+
+
+def test_https_to_http_downgrade_resets_tls_and_cert_age(monkeypatch):
+    import time
+    fresh = time.strftime("%b %d %H:%M:%S %Y GMT", time.gmtime(time.time() - 86400))
+    hops = {"https://short.example/a": (302, "http://plain.example/x", {"notBefore": fresh}),
+            "http://plain.example/x": (200, None, None)}
+    monkeypatch.setattr(ll, "_head", lambda u, t=None: hops[u])
+    result = ll.follow("https://short.example/a")
+    assert result["tls"] == "unknown"
+    assert result["cert_age_days"] is None
+
+
+def test_redirect_cert_age_note_names_landing_host(monkeypatch):
+    import time
+    fresh = time.strftime("%b %d %H:%M:%S %Y GMT", time.gmtime(time.time() - 86400))
+    hops = {"https://short.example/a": (302, "https://landing.example/x", None),
+            "https://landing.example/x": (200, None, {"notBefore": fresh})}
+    monkeypatch.setattr(ll, "_head", lambda u, t=None: hops[u])
+    monkeypatch.setattr(ll, "_get_json", lambda u: {})
+    out = ll.build_link_checks("https://short.example/a", consent=True)
+    assert any("The site 'landing.example' got its security certificate" in n for n in out["notes"])
+
