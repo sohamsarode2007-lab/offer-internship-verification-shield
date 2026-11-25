@@ -189,6 +189,11 @@ been verified in this workspace.
   24 months. Digests/signatures are pseudonymised, not anonymous; legal review
   under the DPDP Act, 2023 and its Rules is required, including third-party
   sender data. Demo rows count only in `DEMO_MODE=1`.
+- Deployment hardening: with `ENVIRONMENT=production` the app refuses to start on an unsafe configuration (short
+  or missing pepper, localhost/`*` origins, SQLite, rate limiting off); responses carry nosniff, frame-deny,
+  no-referrer and a Content-Security-Policy; access logs are off by default; stored analysis results are deleted
+  after 365 days. The Docker build and the CSP were not exercised in a real browser or container from the
+  build environment.
 - The model is `rule_based_v2`; it is a fixed rule table, not a trained ML model.
   GSTIN checks are structural. CIN lookup uses a local company-master SQLite copy;
   it does not contact a live service. An opted-in synthetic CIN fixture is

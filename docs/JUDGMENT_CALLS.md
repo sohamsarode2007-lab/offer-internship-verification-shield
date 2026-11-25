@@ -373,3 +373,18 @@ Status: **open** = not reviewed yet.
       is gone. Links already emailed under the old format stop working (they expire in 24 h anyway).
     - **Test setup changed, assertions did not:** report fixtures now alternate today/yesterday so they meet the
       two-day gate; new tests cover the one-day burst (no points, not shown) and the two-day case.
+
+43. **Privacy operations, deployment and dependencies (open).**
+    - **Not run here:** the multi-stage Dockerfile (no container runtime in my environment), the Vercel headers, and the
+      CSP in a real browser. Build the image once and click through every page before relying on them.
+    - **CSP choices:** `style-src` keeps `'unsafe-inline'` (the page uses inline style attributes); scripts are `'self'`
+      only. The Vercel copy allows `connect-src https:` because the backend address is not known to this repo;
+      tighten it to the backend's address.
+    - **HSTS** is opt-in (`HSTS_ENABLED=1`) on the app and always on in `vercel.json` (Vercel is https-only).
+    - **Retention:** analysis rows 365 days (my choice; `ANALYSIS_RETENTION_DAYS`). Reverse-proxy logs are outside this repo.
+    - **Dependencies:** `requirements.txt` keeps minimums (raised for python-multipart, pillow, pypdf, which I tested at
+      the lock versions and the newest, not at the new floors); `requirements.lock` is exact and hashed for Python 3.11
+      on Linux. Regenerate it with the command in its header; it does not cover Windows.
+    - **CI:** read-only token, timeouts, run cancellation, and a second audit of the lock. I did not pin GitHub Actions
+      to commit hashes.
+    - **Downloads** now revoke the temporary link after 10 seconds instead of immediately.

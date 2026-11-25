@@ -395,6 +395,9 @@ describe('add evidence and check again', () => {
       await user.click(screen.getByRole('button', { name: 'Download full report' }))
       expect(create).toHaveBeenCalledTimes(1)
       expect(click).toHaveBeenCalled()
+      expect(revoke).not.toHaveBeenCalled()      // revoking straight away cancels the download in Safari and Firefox
+      await new Promise(resolve => setTimeout(resolve, 0))
+      expect(revoke).not.toHaveBeenCalled()
       click.mockRestore()
     })
   })

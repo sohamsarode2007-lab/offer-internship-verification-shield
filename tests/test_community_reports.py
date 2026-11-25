@@ -353,3 +353,17 @@ def test_disputes_lapse_after_ninety_days_and_are_deleted_later(db):
     db.commit()
     cr.purge_expired(db)
     assert db.query(CommunityDispute).count() == 0
+
+
+def test_old_analysis_results_and_their_check_rows_are_deleted(db):
+    from app.models.models import CheckResult, Offer, VerificationResult
+    now = cr._utcnow()
+    for age, label in ((cr.ANALYSIS_RETENTION_DAYS + 1, "old"), (5, "recent")):
+        offer = Offer(title=None, created_at=now - timedelta(days=age))
+        offer.verifications.append(VerificationResult(overall_risk_score=10, completeness_percentage=50,
+            check_results=[CheckResult(check_name=label, status="pass")]))
+        db.add(offer)
+    db.commit()
+    cr.purge_expired(db)
+    assert [c.check_name for c in db.query(CheckResult).all()] == ["recent"]
+    assert db.query(Offer).count() == 1 and db.query(VerificationResult).count() == 1

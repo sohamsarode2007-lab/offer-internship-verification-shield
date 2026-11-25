@@ -97,14 +97,14 @@ function EvidenceLedger({ checks, meta = [] }: { checks: CheckResult[]; meta?: N
 
 function downloadReport(result: AnalyzeResponse) {
   const url = URL.createObjectURL(new Blob([buildInvestigationReport(result)], { type: 'text/markdown' }))
-  const link = document.createElement('a'); link.href = url; link.download = 'offer-check-report.md'; link.click(); URL.revokeObjectURL(url)
+  const link = document.createElement('a'); link.href = url; link.download = 'offer-check-report.md'; link.click(); setTimeout(() => URL.revokeObjectURL(url), 10_000)   // revoking at once cancels the download in Safari and Firefox
 }
 
 function Complaint({ summary }: { summary: string }) {
   const copy = async () => { await navigator.clipboard?.writeText(summary) }
   function download() {
     const url = URL.createObjectURL(new Blob([`# Report summary\n\n${summary}\n`], { type: 'text/markdown' }))
-    const link = document.createElement('a'); link.href = url; link.download = 'report-summary.md'; link.click(); URL.revokeObjectURL(url)
+    const link = document.createElement('a'); link.href = url; link.download = 'report-summary.md'; link.click(); setTimeout(() => URL.revokeObjectURL(url), 10_000)
   }
   return <section className={styles.complaint}><h2>Report it to the police</h2><p>{summary}</p><div className={styles.actions}><button type="button" className={styles.secondaryButton} onClick={copy}>Copy summary</button><button type="button" className={styles.secondaryButton} onClick={download}>Download summary</button></div></section>
 }

@@ -19,8 +19,16 @@ OCR uploads need Tesseract; scanned PDFs also need Poppler. The CI workflow inst
 ## Rate limit
 
 `RATE_LIMIT` controls the per-IP API limit in SlowAPI syntax, and defaults to
-`10/minute`. When `DEMO_MODE=1` and `RATE_LIMIT` is unset, the default is
-`100/minute`. Set `RATE_LIMIT` explicitly to override either default.
+`10/minute`. Set `RATE_LIMIT` explicitly to change it.
+
+**Production settings.** Set `ENVIRONMENT=production` and the app refuses to start unless
+`INDICATOR_PEPPER` is 32+ characters, `ALLOWED_ORIGINS` lists the real site (no localhost or `*`),
+`DATABASE_URL` is PostgreSQL, rate limiting is on and `DEMO_MODE` is unset; it also hides `/docs`.
+Responses carry security headers and a Content-Security-Policy; set `HSTS_ENABLED=1` only once the site
+is served over https. Server access logs (request paths, client addresses) are off unless `ACCESS_LOG=1`.
+The Docker image builds the web page in a first stage, installs exact hashed versions from
+`requirements.lock` and starts uvicorn with `--no-access-log`. Stored analysis results are deleted after
+365 days.
 
 ## Demo fixtures
 

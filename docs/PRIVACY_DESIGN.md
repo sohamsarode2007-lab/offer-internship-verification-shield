@@ -184,7 +184,11 @@ automatically. Report-level withdrawal removes that report's contribution
 immediately. Dispute state does not exempt records from the 24-month
 inactivity rule. An application retention worker runs hourly, and requests
 also trigger a purge. Token replay state is purged 48 hours after token expiry.
-Limiter IP state is transient and expires with its rate-limit window, with a
+Stored analysis results (score and per-check outcome rows, never offer text) are deleted 365 days after
+creation by the same hourly worker (up to 1000 per run). Access logs are off by default
+(`--no-access-log`, and the app disables the `uvicorn.access` logger unless `ACCESS_LOG=1`), so request
+paths and client addresses are not written by the application server; a reverse proxy or host in front of it
+keeps its own logs, which this repository cannot control. Limiter IP state is transient and expires with its rate-limit window, with a
 24-hour maximum retention.
 
 ## Threat model

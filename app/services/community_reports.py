@@ -23,6 +23,7 @@ CONSENT_VERSION = 4  # v4: details appear in masked form on the public scam-tren
 MIN_DISTINCT_DAYS = 2
 DISPUTE_ACTIVE_DAYS = 90        # an unresolved dispute affects results for this long, then lapses
 DISPUTE_KEEP_DAYS = 180         # and is deleted (with its contact email) after this long
+ANALYSIS_RETENTION_DAYS = 365   # stored analysis results (and their per-check rows) are deleted after this long
 MAX_ACTIVE_DISPUTES_PER_EMAIL = 3
 MAX_ACTIVE_DISPUTES_PER_INDICATOR = 5
 MINHASH_SIZE = 128
@@ -382,6 +383,11 @@ def purge_expired(db: Session, now: datetime | None = None):
         CommunityDispute.resolved_at < now - timedelta(days=365)).delete(synchronize_session=False)
     db.query(CommunityDispute).filter(CommunityDispute.created_at < now - timedelta(days=DISPUTE_KEEP_DAYS)
         ).delete(synchronize_session=False)
+    # Stored analysis results (score and per-check outcome; never offer text) are not kept forever.
+    from app.models.models import Offer
+    # ORM delete (not a bulk delete) so the per-check rows go too, whether or not the database enforces foreign keys.
+    for old in db.query(Offer).filter(Offer.created_at < now - timedelta(days=ANALYSIS_RETENTION_DAYS)).limit(1000).all():
+        db.delete(old)
     from app.services.institution_dashboard import purge_old_observations
     purge_old_observations(db, now.date())
     db.commit()
