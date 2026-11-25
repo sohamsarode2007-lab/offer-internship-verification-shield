@@ -133,7 +133,6 @@ def _analyze_offer_impl(
     if len(loaded) > 1 and any(n.lower().endswith(".eml") for n, _ in loaded):
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT,
                             "Send an .eml on its own so its sender checks can run; other files can be checked separately.")
-    filename = loaded[0][0] if loaded else None
     try:
         submission = offer_analysis.read_submission(text, loaded)
     except offer_analysis.SubmissionError as e:
