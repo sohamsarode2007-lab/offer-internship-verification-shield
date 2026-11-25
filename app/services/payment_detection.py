@@ -115,6 +115,8 @@ _URGENCY_RE = re.compile("|".join(f"(?:{p})" for p in URGENCY_PATTERNS), re.IGNO
 
 # Abbreviations whose trailing '.' must not end a sentence ("Rs. 5,000", "Pvt. Ltd.").
 _ABBREVIATIONS = {"rs", "no", "pvt", "ltd", "mr", "mrs", "ms", "dr", "inc", "co", "st", "vs", "etc", "e.g", "i.e"}
+# Entity/list suffixes can still end a sentence when followed by a capitalized new sentence.
+_SENTENCE_END_ABBREVS = {"ltd", "inc", "co", "etc", "st"}
 _BOUNDARY_RE = re.compile(r"[.!?।॥]+\s+|\n[ \t]*\n\s*")
 
 UPI_BEFORE_WINDOW = 120
@@ -129,7 +131,8 @@ def sentence_spans(text: str) -> List[Tuple[int, int]]:
     for m in _BOUNDARY_RE.finditer(text):
         if m.group(0)[0] == ".":
             word = re.search(r"([A-Za-z.]+)$", text[start:m.start()])
-            if word and word.group(1).lower().rstrip(".") in _ABBREVIATIONS:
+            abbr = word.group(1).lower().rstrip(".") if word else ""
+            if abbr in _ABBREVIATIONS and not (abbr in _SENTENCE_END_ABBREVS and text[m.end():m.end() + 1].isupper()):
                 continue
         spans.append((start, m.end()))
         start = m.end()

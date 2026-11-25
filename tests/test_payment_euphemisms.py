@@ -34,6 +34,8 @@ DEMANDS = [
     # Hinglish
     "Selection ke liye 500 rupaye bhejiye is number par.",
     "Registration ke liye fees bharna hoga.",
+    # sentence boundary after company suffix
+    "No hidden charges at Acme Pvt. Ltd. Pay 2000 rupees for BGV charges.",
 ]
 
 NOT_DEMANDS = [
