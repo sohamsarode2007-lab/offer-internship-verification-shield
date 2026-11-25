@@ -148,9 +148,13 @@ def _analyze_offer_impl(
     risk_band = scoring_res["risk_band"]
     # Informational notes (no score impact); never include submitted values.
     notes = plausibility.collect_notes(raw_text, None)
-    for name, data in loaded:
-        if name.lower().endswith(".pdf"):
-            notes += plausibility.collect_notes("", data)  # file-level notes for each PDF
+    pdf_sources = [data for name, data in loaded if name.lower().endswith(".pdf")]
+    if email_result:
+        pdf_sources.extend(
+            att["data"] for att in email_result.get("attachments", []) if att["filename"].lower().endswith(".pdf")
+        )
+    for data in pdf_sources:
+        notes += plausibility.collect_notes("", data)  # file-level notes for each PDF
     # Per-client hourly allowance for outbound link checks (the key is held in memory only, never stored or logged).
     client_key = request.client.host if request.client else "unknown"
     allow_links = link_lookups and request_budget.try_spend_keyed("link", client_key, LINK_CHECKS_PER_HOUR)
@@ -216,5 +220,9 @@ def _analyze_offer_impl(
         evidence_meta=evidence_meta.build_evidence_meta(check_dicts),
         evidence_hints=evidence_hints.build_evidence_hints(
             check_dicts, had_file=bool(email_result),
-            had_image=bool(filename and filename.lower().rsplit(".", 1)[-1] in {"png", "jpg", "jpeg", "bmp", "tiff"})),
+            had_image=any(
+                "." in n and n.lower().rsplit(".", 1)[-1] in {"png", "jpg", "jpeg", "bmp", "tiff"}
+                for n in [name for name, _ in loaded]
+                + ([att["filename"] for att in email_result.get("attachments", [])] if email_result else [])
+            )),
     )

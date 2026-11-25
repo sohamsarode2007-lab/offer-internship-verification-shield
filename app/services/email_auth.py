@@ -16,12 +16,23 @@ from app.utils.email_domains import is_free_mailbox
 
 
 class _HTMLText(HTMLParser):
+    _SKIP_TAGS = {"script", "style", "noscript", "svg"}
+
     def __init__(self):
         super().__init__()
         self.parts: List[str] = []
+        self._skip_depth = 0
+
+    def handle_starttag(self, tag, attrs):
+        if tag.lower() in self._SKIP_TAGS:
+            self._skip_depth += 1
+
+    def handle_endtag(self, tag):
+        if tag.lower() in self._SKIP_TAGS and self._skip_depth > 0:
+            self._skip_depth -= 1
 
     def handle_data(self, data):
-        if data.strip():
+        if self._skip_depth == 0 and data.strip():
             self.parts.append(data.strip())
 
 
@@ -161,7 +172,12 @@ def verify_sender_authentication(parsed: Dict[str, Any], body_facts: Dict[str, A
         points += 25
         signals.append("display name uses a protected brand outside its official domain (+25)")
 
-    body_domain_value = body_facts.get("sender_domain")
+    sender_email_field = body_facts.get("sender_email")
+    # URL-fallback sender_domain (where extract_facts sets sender_email.value=None) is a link in the letter, not a claimed sender address.
+    has_claimed_email = True if sender_email_field is None else bool(
+        sender_email_field.get("value") if isinstance(sender_email_field, dict) else sender_email_field
+    )
+    body_domain_value = body_facts.get("sender_domain") if has_claimed_email else None
     body_domain = body_domain_value.get("value") if isinstance(body_domain_value, dict) else body_domain_value
     body_host = str(body_domain).strip().lower().rstrip(".") if body_domain else None
     sender_host = domain.strip().lower().rstrip(".") if domain else None

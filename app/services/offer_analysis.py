@@ -5,6 +5,7 @@ everything else lives here so it can be tested and reused without a web request.
 """
 import logging
 import os
+import time
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -62,6 +63,7 @@ def read_submission(text: Optional[str], loaded: list) -> Submission:
     file_bytes, filename = (loaded[0][1], loaded[0][0]) if loaded else (None, None)
     file_texts: list = []
     email_result = None
+    ocr_deadline = time.monotonic() + ingestion.OCR_TOTAL_BUDGET_SECONDS
     try:
         if filename and filename.lower().endswith(".eml"):
             parsed_email = email_auth.parse_eml(file_bytes or b"")
@@ -69,7 +71,7 @@ def read_submission(text: Optional[str], loaded: list) -> Submission:
             parts = [body_text] if body_text else []
             for attachment in parsed_email["attachments"]:
                 extracted, _ = ingestion.ingest_offer(
-                    file_bytes=attachment["data"], filename=attachment["filename"])
+                    file_bytes=attachment["data"], filename=attachment["filename"], ocr_deadline=ocr_deadline)
                 if extracted:
                     parts.append(extracted)
             if text:
@@ -81,13 +83,14 @@ def read_submission(text: Optional[str], loaded: list) -> Submission:
         elif len(loaded) > 1:
             parts = [text] if text else []
             for name, data in loaded:
-                extracted, _ = ingestion.ingest_offer(file_bytes=data, filename=name)
+                extracted, _ = ingestion.ingest_offer(file_bytes=data, filename=name, ocr_deadline=ocr_deadline)
                 if extracted:
                     parts.append(extracted)
                     file_texts.append(extracted)
             raw_text = "\n".join(parts).strip()
         else:
-            raw_text, _ = ingestion.ingest_offer(text=text, file_bytes=file_bytes, filename=filename)
+            raw_text, _ = ingestion.ingest_offer(
+                text=text, file_bytes=file_bytes, filename=filename, ocr_deadline=ocr_deadline)
     except ValueError as e:
         raise SubmissionError(422, f"Could not read the document: {e}")
     if not raw_text or not raw_text.strip():
@@ -103,7 +106,8 @@ def run_checks(db: Session, submission: Submission) -> Analysis:
     raw_text, email_result = submission.raw_text, submission.email_result
     facts = fact_extraction.extract_facts(raw_text)
     if email_result:
-        body_domain = facts.get("sender_domain", {}).get("value")
+        body_email = facts.get("sender_email", {}).get("value")
+        body_domain = facts.get("sender_domain", {}).get("value") if body_email else None
         auth_facts = dict(facts)
         auth_facts["sender_domain"] = {"value": email_result.get("sender_domain")}
         auth_facts["sender_email"] = {"value": None}

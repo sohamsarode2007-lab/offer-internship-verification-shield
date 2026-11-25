@@ -122,3 +122,24 @@ def test_forged_pass_does_not_hide_other_sender_findings():
                "auth_headers": ["mx.example; dmarc=pass header.from=acme.example; dkim=pass header.d=acme.example"]}
     check = email_auth.verify_sender_authentication(message, {})
     assert check["status"] == "fail" and check["risk_points"] == 25
+
+
+def test_html_body_skips_script_and_style_blocks():
+    raw = (b"From: HR <hr@acme.example>\r\nContent-Type: text/html; charset=utf-8\r\n\r\n"
+           b"<html><head><style>.hidden{display:none}</style></head>"
+           b"<body><script>var secret='pay 9999';</script><p>Offer for Acme</p></body></html>")
+    message = email_auth.parse_eml(raw)
+    assert "Offer for Acme" in message["body_text"]
+    assert "display:none" not in message["body_text"]
+    assert "pay 9999" not in message["body_text"]
+
+
+def test_body_url_without_claimed_email_does_not_trigger_domain_mismatch():
+    body_facts = extract_facts("Join the interview on https://zoom.example/j/12345 today.")
+    check = email_auth.verify_sender_authentication(
+        {"sender_domain": "acme.example", "auth_headers": []},
+        body_facts,
+    )
+    assert check["risk_points"] == 0
+    assert "differs from the authenticated From domain" not in check["details"]
+
