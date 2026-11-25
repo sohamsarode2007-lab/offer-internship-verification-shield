@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup } from '@testing-library/react'
@@ -111,9 +111,9 @@ describe('analysis result', () => {
     { band: 'high risk', shown: true },
     { band: 'insufficient evidence, verify manually', shown: true },
     { band: 'likely legitimate', shown: false },
-  ])('offers "Report this scam" only for high risk or insufficient evidence ($band)', async ({ band, shown }) => {
+  ])('offers "Share a suspected scam" only for high risk or insufficient evidence ($band)', async ({ band, shown }) => {
     await showResult(payload({ risk_band: band, report_token: 'signed-report-token-is-long-enough', reportable_indicators: indicators }))
-    expect(Boolean(screen.queryByRole('button', { name: 'Report this scam' }))).toBe(shown)
+    expect(Boolean(screen.queryByRole('button', { name: 'Share a suspected scam' }))).toBe(shown)
   })
 
   it('lists plain-language reasons with the score impact in a right-aligned column', async () => {
@@ -209,7 +209,7 @@ describe('analysis result', () => {
     expect(screen.queryByRole('heading', { name: 'Why' })).not.toBeInTheDocument()
     expect(screen.queryByText('/ 100')).not.toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: 'Report it to the police' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Report this scam' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Share a suspected scam' })).not.toBeInTheDocument()
   })
 })
 
@@ -295,7 +295,7 @@ describe('community report consent', () => {
   it('allows a wording-only report when every detail is unticked', async () => {
     vi.mocked(api.submitReport).mockResolvedValueOnce({ status: 'reported', withdrawal_code: 'wording-only-code-1234567890' })
     const user = await showResult(payload({ report_token: 'signed-report-token-is-long-enough', reportable_indicators: indicators }))
-    await user.click(screen.getByRole('button', { name: 'Report this scam' }))
+    await user.click(screen.getByRole('button', { name: 'Share a suspected scam' }))
     for (const box of screen.getAllByRole('checkbox')) await user.click(box)
     await user.click(screen.getByRole('button', { name: 'Continue' }))
     expect(screen.getByRole('button', { name: 'Report scam' })).toBeDisabled()
@@ -308,7 +308,7 @@ describe('community report consent', () => {
   it('allows deselection, requires consent and does not store the withdrawal code', async () => {
     vi.mocked(api.submitReport).mockResolvedValueOnce({ status: 'reported', withdrawal_code: 'once-only-secret-code-123456' })
     const user = await showResult(payload({ report_token: 'signed-report-token-is-long-enough', reportable_indicators: indicators }))
-    await user.click(screen.getByRole('button', { name: 'Report this scam' }))
+    await user.click(screen.getByRole('button', { name: 'Share a suspected scam' }))
     const firstIndicator = screen.getByRole('checkbox', { name: /Payment UPI ID/ })
     await user.click(firstIndicator)
     await user.click(screen.getByRole('button', { name: 'Continue' }))
@@ -437,5 +437,41 @@ describe('dispute verification page', () => {
     render(<App />)
     expect(screen.getByText(/needs the link from the verification email/)).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Confirm domain' })).toBeNull()
+  })
+})
+
+describe('upload and copy feedback', () => {
+  it('states the .eml rule up front and warns when .eml is mixed with other files', async () => {
+    const user = userEvent.setup(); render(<App />)
+    expect(screen.getByText(/Choose up to 5 files \(PDF, image or .txt\), or one .eml/)).toBeInTheDocument()
+    expect(screen.getByText(/a pass is never counted as proof/)).toBeInTheDocument()
+    expect(screen.queryByText(/who actually sent it/)).toBeNull()
+    await user.upload(screen.getByLabelText(/Choose up to 5 files/), [new File(['a'], 'a.eml'), new File(['b'], 'b.txt')])
+    expect(await screen.findByText(/must be uploaded on its own/)).toBeInTheDocument()
+  })
+  it('says when more than 5 files were picked', async () => {
+    const user = userEvent.setup(); render(<App />)
+    await user.upload(screen.getByLabelText(/Choose up to 5 files/), Array.from({ length: 7 }, (_, i) => new File(['x'], `f${i}.txt`)))
+    expect(await screen.findByText('Only the first 5 of 7 files were kept.')).toBeInTheDocument()
+  })
+  it('confirms a copy, and says so when copying is blocked', async () => {
+    const user = userEvent.setup()
+    await showResult(payload({ risk_band: 'High', complaint_summary: 'Summary text' }))
+    const write = vi.fn().mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('blocked'))
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText: write }, configurable: true })
+    await user.click(screen.getByRole('button', { name: 'Copy summary' }))
+    expect(await screen.findByRole('button', { name: 'Copied' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Copied' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Could not copy automatically')
+  })
+  it('lets the dashboard be retried after a failed load', async () => {
+    vi.mocked(api.loadDashboard).mockRejectedValueOnce(new Error('The dashboard could not be loaded.'))
+      .mockResolvedValueOnce({ institution: 'Public', sender_threshold: 3, weeks: [], by_week_band: [], by_week_category: [], category_summary: [], top_senders: [] } as never)
+    window.history.replaceState({}, '', '/dashboard')
+    const user = userEvent.setup(); render(<App />)
+    expect(await screen.findByRole('alert')).toHaveTextContent('could not be loaded')
+    await user.click(screen.getByRole('button', { name: 'Try again' }))
+    await waitFor(() => expect(screen.queryByRole('alert')).toBeNull())
+    expect(vi.mocked(api.loadDashboard)).toHaveBeenCalledTimes(2)
   })
 })

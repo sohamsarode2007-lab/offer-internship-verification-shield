@@ -34,12 +34,12 @@ test('demo analysis, reporting, dashboard, and public screens', async ({ page },
     await expect(page.getByText(`Sample loaded: ${sample.key.replace('.txt', '')}`)).toBeVisible()
     await page.getByRole('button', { name: 'Check offer' }).click()
     await expect(page.getByRole('heading', { name: sample.band, exact: true })).toBeVisible()
-    if (sample.band === 'Likely legitimate') await expect(page.getByRole('button', { name: 'Report this scam' })).toHaveCount(0)
+    if (sample.band === 'Likely legitimate') await expect(page.getByRole('button', { name: 'Share a suspected scam' })).toHaveCount(0)
     if (sample.button === 'Corvane internship') await expect(page.getByRole('table', { name: 'Why' }).getByText('Reported in 3+ separate reports')).toBeVisible()
     await capture(page, testInfo, sample.shot)
   }
 
-  await page.getByRole('button', { name: 'Report this scam' }).click()
+  await page.getByRole('button', { name: 'Share a suspected scam' }).click()
   const dialog = page.getByRole('dialog')
   await expect(dialog.getByRole('heading', { name: 'Choose details to share' })).toBeVisible()
   await capture(page, testInfo, 'report-details')

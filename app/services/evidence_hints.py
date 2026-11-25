@@ -19,7 +19,7 @@ def build_evidence_hints(checks: List[dict], *, had_file: bool = False, had_imag
     if _status(checks, "sender_authentication").get("status") == "not_applicable" and not had_file:
         hints.append({
             "id": "original_email", "title": "Add the original email (.eml)",
-            "why": "It lets us check who really sent it (SPF, DKIM and DMARC), which a pasted copy cannot show.",
+            "why": "It lets us read its sender-check results (SPF, DKIM, DMARC), which a pasted copy cannot show. The file can be edited, so a failure counts against the offer but a pass is not counted as proof.",
             "how": "Gmail: open the message, choose the three dots, then Download message. Upload it as the file."})
     if _status(checks, "domain_verification").get("status") in {"not_applicable", "insufficient_information"}:
         hints.append({

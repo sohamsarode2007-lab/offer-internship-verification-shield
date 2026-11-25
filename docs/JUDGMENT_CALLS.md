@@ -388,3 +388,11 @@ Status: **open** = not reviewed yet.
     - **CI:** read-only token, timeouts, run cancellation, and a second audit of the lock. I did not pin GitHub Actions
       to commit hashes.
     - **Downloads** now revoke the temporary link after 10 seconds instead of immediately.
+
+44. **Copy and wording fixes (open).**
+    - "Report this scam" is now "Share a suspected scam"; the .eml help no longer says we "verify who actually sent it"
+      (a pass in an uploaded file is never counted). The mixed-.eml error now shows the server's own wording.
+    - The upload label says "up to 5 files (PDF, image or .txt), or one .eml"; picking more than 5, or an .eml with other
+      files, shows a note instead of silently dropping files.
+    - **Left alone:** the `VITE_DEMO` sample buttons and "demo fixture" labels are off by default and point at files
+      that no longer exist; I did not remove them because the frontend redesign will replace that screen.

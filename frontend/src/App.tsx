@@ -43,6 +43,7 @@ function Home({ onResult }: { onResult: (result: AnalyzeResponse, input: Submitt
   useEffect(() => { let live = true; loadConfig().then(c => { if (live) setLinkOffer(c.link_lookups) }); return () => { live = false } }, [])
   const fileInputId = useId()
   const demo = import.meta.env.VITE_DEMO === '1'
+  const [pickNote, setPickNote] = useState('')
   async function run(event: FormEvent) {
     event.preventDefault(); setError('')
     if (!text.trim() && !file) { setError('Paste offer text or choose a file to check.'); return }
@@ -64,9 +65,9 @@ function Home({ onResult }: { onResult: (result: AnalyzeResponse, input: Submitt
     <form onSubmit={run} className={styles.intake}>
       <div className={styles.intakeGrid}>
         <label className={styles.textWell}><span>Paste offer text</span><textarea value={text} onChange={e => { setText(e.target.value); setDemoText('') }} disabled={busy} placeholder="Paste the message or offer letter here" rows={12}/></label>
-        <div className={styles.uploadWell}><label htmlFor={fileInputId} className={styles.uploadLabel}>Choose up to 5 files (PDF, image, .eml or .txt)</label><input id={fileInputId} type="file" multiple accept=".pdf,.png,.jpg,.jpeg,.bmp,.tiff,.eml,.txt" disabled={busy} onChange={e => { setFiles(Array.from(e.target.files ?? []).slice(0, 5)); setDemoText('') }}/>
-          <p className={styles.help}>Uploading the original email lets us verify who actually sent it. Send an .eml on its own; other files can be checked together as one offer.</p><p className={styles.help}>Gmail: open the message → ⋮ → “Download message”.</p>
-          {files.length > 0 && <p className={styles.selectedFile}>Selected: {files.map(f => f.name).join(', ')}</p>}{demoText && <p className={styles.selectedFile}>Sample loaded: {demoText.replace('.txt', '')}</p>}
+        <div className={styles.uploadWell}><label htmlFor={fileInputId} className={styles.uploadLabel}>Choose up to 5 files (PDF, image or .txt), or one .eml</label><input id={fileInputId} type="file" multiple accept=".pdf,.png,.jpg,.jpeg,.bmp,.tiff,.eml,.txt" disabled={busy} onChange={e => { const picked = Array.from(e.target.files ?? []); setFiles(picked.slice(0, 5)); setDemoText(''); setPickNote(picked.length > 5 ? `Only the first 5 of ${picked.length} files were kept.` : picked.length > 1 && picked.some(f => f.name.toLowerCase().endsWith('.eml')) ? 'An .eml must be uploaded on its own. Choose either the .eml or the other files.' : '') }}/>
+          <p className={styles.help}>Uploading the original email lets us read its sender-check results (SPF, DKIM, DMARC). Anyone can edit those lines in a file, so a failure counts against the offer but a pass is never counted as proof. Upload one .eml on its own; PDFs, images and .txt files can go together (up to 5).</p><p className={styles.help}>Gmail: open the message → ⋮ → “Download message”.</p>
+          {pickNote && <p className={styles.help} role="status">{pickNote}</p>}{files.length > 0 && <p className={styles.selectedFile}>Selected: {files.map(f => f.name).join(', ')}</p>}{demoText && <p className={styles.selectedFile}>Sample loaded: {demoText.replace('.txt', '')}</p>}
         </div>
       </div>
       {linkOffer && <label className={styles.consent}><input type="checkbox" checked={linkConsent} onChange={e => setLinkConsent(e.target.checked)} disabled={busy}/><span>{LINK_CONSENT_TEXT}</span></label>}
@@ -101,12 +102,13 @@ function downloadReport(result: AnalyzeResponse) {
 }
 
 function Complaint({ summary }: { summary: string }) {
-  const copy = async () => { await navigator.clipboard?.writeText(summary) }
+  const [copyState, setCopyState] = useState<'' | 'copied' | 'failed'>('')
+  const copy = async () => { try { await navigator.clipboard.writeText(summary); setCopyState('copied') } catch { setCopyState('failed') } }
   function download() {
     const url = URL.createObjectURL(new Blob([`# Report summary\n\n${summary}\n`], { type: 'text/markdown' }))
     const link = document.createElement('a'); link.href = url; link.download = 'report-summary.md'; link.click(); setTimeout(() => URL.revokeObjectURL(url), 10_000)
   }
-  return <section className={styles.complaint}><h2>Report it to the police</h2><p>{summary}</p><div className={styles.actions}><button type="button" className={styles.secondaryButton} onClick={copy}>Copy summary</button><button type="button" className={styles.secondaryButton} onClick={download}>Download summary</button></div></section>
+  return <section className={styles.complaint}><h2>Report it to the police</h2><p>{summary}</p><div className={styles.actions}><button type="button" className={styles.secondaryButton} onClick={copy}>{copyState === 'copied' ? 'Copied' : 'Copy summary'}</button><button type="button" className={styles.secondaryButton} onClick={download}>Download summary</button></div>{copyState === 'failed' && <p role="alert" className={styles.error}>Could not copy automatically. Select the summary text above and copy it yourself.</p>}</section>
 }
 
 function ReportDialog({ token, indicators, onClose }: { token: string; indicators: ReportableIndicator[]; onClose: () => void }) {
@@ -240,7 +242,7 @@ function Result({ result, input, onResult, onClear }: { result: AnalyzeResponse;
     <div className={styles.resultSide}>{band && verdict && <div className={`${styles.verdict} ${bandClass(band)}`}><h1>{verdict.title}</h1>{verdict.subline && <p className={styles.verdictSubline}>{verdict.subline}</p>}<p className={styles.score}><span>{Number.isInteger(result.overall_risk_score) ? result.overall_risk_score : result.overall_risk_score.toFixed(1)}</span> / 100</p><p className={styles.completeness}>{result.completeness_percentage}% information completeness</p></div>}
       {result.company_name?.trim() && <p className={styles.checkedCompany}>Checked: {result.company_name.trim()}</p>}
       {result.next_steps?.length > 0 && <section className={styles.guidance}><h2>What to do next</h2><ul>{result.next_steps.map((step, i) => <li key={i}>{step}</li>)}</ul>{(band === 'high risk' || band === 'insufficient evidence, verify manually') && <p className={styles.portalNote}>You can report this sender on the government's <a href="https://cybercrime.gov.in/" target="_blank" rel="noopener noreferrer">National Cyber Crime Reporting Portal</a>. If you have already paid, call 1930 first.</p>}</section>}
-      <div className={styles.actions}>{canReport && <button onClick={() => setReportOpen(true)}>Report this scam</button>}<button type="button" className={styles.secondaryButton} onClick={() => downloadReport(result)}>Download full report</button><button className={styles.secondaryButton} onClick={onClear}>Check another offer</button></div>
+      <div className={styles.actions}>{canReport && <button onClick={() => setReportOpen(true)}>Share a suspected scam</button>}<button type="button" className={styles.secondaryButton} onClick={() => downloadReport(result)}>Download full report</button><button className={styles.secondaryButton} onClick={onClear}>Check another offer</button></div>
       {result.complaint_summary?.trim() && <Complaint summary={result.complaint_summary}/>}
     </div>
     <div className={styles.evidenceSide}><SafetyActions actions={result.safety_actions ?? []}/><WhyList result={result}/><EvidenceLedger checks={result.checks ?? []} meta={result.evidence_meta ?? []}/><SelfChecks checks={result.self_checks ?? []}/><AddEvidence result={result} input={input} onResult={onResult}/></div>
@@ -304,14 +306,15 @@ function CategorySummary({ dashboard }: { dashboard: InstitutionDashboard }) {
 }
 
 function DashboardPage() {
-  const [dashboard, setDashboard] = useState<InstitutionDashboard | null>(null); const [error, setError] = useState('')
+  const [dashboard, setDashboard] = useState<InstitutionDashboard | null>(null); const [error, setError] = useState(''); const [attempt, setAttempt] = useState(0)
   useEffect(() => {
     let active = true
+    setError('')
     loadDashboard().then(data => { if (active) setDashboard(data) })
       .catch(err => { if (active) setError(err instanceof Error ? err.message : 'The dashboard could not be loaded.') })
     return () => { active = false }
-  }, [])
-  return <section className={styles.dashboardPage}><h1>Scam trends</h1><p>Weekly results, scam categories and reported senders from checks on this site. Counts are checks, not verified unique people.</p>{!dashboard && !error && <p className={styles.help} role="status">Loading…</p>}{error && <p role="alert" className={styles.error}>{error}</p>}{dashboard && <div className={styles.dashboardResults}><SendersTable dashboard={dashboard}/><h2>Results by week</h2><TrendChart dashboard={dashboard}/><CategorySummary dashboard={dashboard}/></div>}</section>
+  }, [attempt])
+  return <section className={styles.dashboardPage}><h1>Scam trends</h1><p>Weekly results, scam categories and reported senders from checks on this site. Counts are checks, not verified unique people.</p>{!dashboard && !error && <p className={styles.help} role="status">Loading…</p>}{error && <><p role="alert" className={styles.error}>{error}</p><button type="button" className={styles.secondaryButton} onClick={() => setAttempt(n => n + 1)}>Try again</button></>}{dashboard && <div className={styles.dashboardResults}><SendersTable dashboard={dashboard}/><h2>Results by week</h2><TrendChart dashboard={dashboard}/><CategorySummary dashboard={dashboard}/></div>}</section>
 }
 
 const sourceStatusText: Record<string, string> = { current: 'Up to date', stale: 'Out of date', demo: 'Demo data', unknown: 'Date unknown' }

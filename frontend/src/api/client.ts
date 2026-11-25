@@ -28,6 +28,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     let message = messages[response.status] ?? (detail || 'The request failed. Try again.')
     // 413 covers both "file too big" and "text too long"; keep the server's wording for the text case.
     if (response.status === 413 && /characters/i.test(detail)) message = detail
+    // 422 is also the server's answer to an .eml sent together with other files; its own wording is the useful one.
+    if (response.status === 422 && /\.eml/i.test(detail)) message = detail
     if (response.status === 400 && detail) {
       const lower = detail.toLowerCase()
       if (path === '/report' && (lower.includes('expired') || lower.includes('already used') || lower.includes('invalid report token'))) {
