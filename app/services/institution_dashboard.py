@@ -130,10 +130,13 @@ SENDER_CSV_COLUMNS = ("indicator", "type", "reports", "first_week", "last_week",
 
 
 def top_senders(db: Session) -> list[dict]:
-    """Senders (masked indicators) reported by 3+ distinct consented v3 reports, by count.
+    """Senders (masked indicators) reported by 3+ distinct consented reports, by count.
 
-    Only masked display forms leave this function; digests are used for grouping and
-    dispute lookup only. Withdrawn reports never count; rows marked demo never count.
+    Requires consent_version >= CONSENT_VERSION (currently 4). Only masked display
+    forms leave this function; digests are used for grouping and dispute lookup only.
+    Because digests are keyed with INDICATOR_KEY_VERSION, rotating the pepper splits
+    counts across key versions (reports before and after rotation do not merge here).
+    Withdrawn reports and rows marked demo never count.
     """
     from collections import Counter
     from app.models.models import CommunityDispute, CommunityIndicator, CommunityReport
