@@ -72,3 +72,12 @@ def test_email_keeps_at_most_five_attachments():
 def test_oversized_attachment_is_refused():
     with pytest.raises(ValueError, match="larger than 10 MB"):
         email_auth.parse_eml(_eml(attach=1, size=11 * 1024 * 1024))
+
+
+def test_shared_ocr_budget_stops_when_deadline_is_spent():
+    from app.services import ingestion, offer_analysis
+    with ingestion.shared_ocr_budget(seconds=-1):
+        with pytest.raises(offer_analysis.SubmissionError, match="took too long") as exc:
+            offer_analysis.read_submission(None, [("scan.png", b"fake")])
+    assert exc.value.status_code == 422
+

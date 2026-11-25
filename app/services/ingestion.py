@@ -5,6 +5,8 @@ Applies OpenCV preprocessing (deskewing, contrast normalization/CLAHE) for image
 OCR text extraction (EasyOCR/pytesseract/PaddleOCR), and character normalization pass
 to resolve digit/letter confusion (0/O, 1/I/l).
 """
+import contextlib
+import contextvars
 import re
 import io
 import time
@@ -304,6 +306,20 @@ EXTRACT_CHAR_BUDGET = 60_000       # stop collecting text once this many charact
 POPPLER_TIMEOUT = 30               # seconds per rendered page (pdf2image/pdftoppm)
 TESSERACT_TIMEOUT = 20             # seconds per OCR call
 OCR_TOTAL_BUDGET_SECONDS = 90      # whole-document OCR deadline, checked between pages
+_OCR_DEADLINE: contextvars.ContextVar[Optional[float]] = contextvars.ContextVar("ocr_deadline", default=None)
+
+
+@contextlib.contextmanager
+def shared_ocr_budget(seconds: float = OCR_TOTAL_BUDGET_SECONDS):
+    """Share one OCR deadline across multiple files/attachments in a single submission."""
+    if _OCR_DEADLINE.get() is not None:
+        yield
+        return
+    token = _OCR_DEADLINE.set(time.monotonic() + seconds)
+    try:
+        yield
+    finally:
+        _OCR_DEADLINE.reset(token)
 
 
 class PdfTooLong(ValueError):
@@ -322,7 +338,7 @@ def _collect_page_text(pages) -> str:
     return "\n".join(parts).strip()
 
 
-def _extract_pdf_text(file_bytes: bytes, doc: str, ocr_deadline: Optional[float] = None) -> str:
+def _extract_pdf_text(file_bytes: bytes, doc: str) -> str:
     """Text-layer PDF first (pdfplumber, then pypdf); OCR only for scanned PDFs, within limits."""
     try:
         import pdfplumber
@@ -356,7 +372,9 @@ def _extract_pdf_text(file_bytes: bytes, doc: str, ocr_deadline: Optional[float]
     # stays at one page and the whole job stays inside a deadline.
     page_count = check_pdf_ocr_limits(file_bytes)
     import pdf2image
-    deadline = ocr_deadline if ocr_deadline is not None else time.monotonic() + OCR_TOTAL_BUDGET_SECONDS
+    deadline = _OCR_DEADLINE.get()
+    if deadline is None:
+        deadline = time.monotonic() + OCR_TOTAL_BUDGET_SECONDS
     ocr_pages = []
     for idx in range(1, page_count + 1):
         if time.monotonic() > deadline:
@@ -384,7 +402,6 @@ def ingest_offer(
     text: Optional[str] = None,
     file_bytes: Optional[bytes] = None,
     filename: Optional[str] = None,
-    ocr_deadline: Optional[float] = None,
 ) -> Tuple[str, Optional[str]]:
     """
     Accepts PDF, image, or raw text input and returns (normalized_text, filename).
@@ -402,6 +419,7 @@ def ingest_offer(
         if ext in ('png', 'jpg', 'jpeg', 'bmp', 'tiff'):
             # Any failure here (too large, undecodable, no OCR engine, empty OCR output)
             # surfaces as ValueError, which the /analyze route turns into HTTP 422.
+            ocr_deadline = _OCR_DEADLINE.get()
             if ocr_deadline is not None and time.monotonic() > ocr_deadline:
                 raise ValueError("reading uploaded documents took too long; try fewer or clearer images")
             check_image_pixels(file_bytes)
@@ -422,7 +440,7 @@ def ingest_offer(
             raw_text = f"{raw_text}\n{extracted_str}" if raw_text else extracted_str
 
         elif ext == 'pdf':
-            extracted_pdf = _extract_pdf_text(file_bytes, doc, ocr_deadline=ocr_deadline)
+            extracted_pdf = _extract_pdf_text(file_bytes, doc)
             qr_lines = _pdf_upi_qr_lines(file_bytes, doc)
             if qr_lines:
                 extracted_pdf = f"{extracted_pdf}\n{qr_lines}".strip()

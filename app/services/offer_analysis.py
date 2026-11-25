@@ -5,7 +5,6 @@ everything else lives here so it can be tested and reused without a web request.
 """
 import logging
 import os
-import time
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -63,34 +62,33 @@ def read_submission(text: Optional[str], loaded: list) -> Submission:
     file_bytes, filename = (loaded[0][1], loaded[0][0]) if loaded else (None, None)
     file_texts: list = []
     email_result = None
-    ocr_deadline = time.monotonic() + ingestion.OCR_TOTAL_BUDGET_SECONDS
     try:
-        if filename and filename.lower().endswith(".eml"):
-            parsed_email = email_auth.parse_eml(file_bytes or b"")
-            body_text, _ = ingestion.ingest_offer(text=parsed_email["body_text"])
-            parts = [body_text] if body_text else []
-            for attachment in parsed_email["attachments"]:
-                extracted, _ = ingestion.ingest_offer(
-                    file_bytes=attachment["data"], filename=attachment["filename"], ocr_deadline=ocr_deadline)
-                if extracted:
-                    parts.append(extracted)
-            if text:
-                parts.insert(0, text)
-            raw_text = "\n".join(parts).strip()
-            if len(raw_text) > MAX_TEXT_CHARS:
-                raise SubmissionError(413, f"Extracted email text is longer than {MAX_TEXT_CHARS:,} characters.")
-            email_result = parsed_email
-        elif len(loaded) > 1:
-            parts = [text] if text else []
-            for name, data in loaded:
-                extracted, _ = ingestion.ingest_offer(file_bytes=data, filename=name, ocr_deadline=ocr_deadline)
-                if extracted:
-                    parts.append(extracted)
-                    file_texts.append(extracted)
-            raw_text = "\n".join(parts).strip()
-        else:
-            raw_text, _ = ingestion.ingest_offer(
-                text=text, file_bytes=file_bytes, filename=filename, ocr_deadline=ocr_deadline)
+        with ingestion.shared_ocr_budget():
+            if filename and filename.lower().endswith(".eml"):
+                parsed_email = email_auth.parse_eml(file_bytes or b"")
+                body_text, _ = ingestion.ingest_offer(text=parsed_email["body_text"])
+                parts = [body_text] if body_text else []
+                for attachment in parsed_email["attachments"]:
+                    extracted, _ = ingestion.ingest_offer(
+                        file_bytes=attachment["data"], filename=attachment["filename"])
+                    if extracted:
+                        parts.append(extracted)
+                if text:
+                    parts.insert(0, text)
+                raw_text = "\n".join(parts).strip()
+                if len(raw_text) > MAX_TEXT_CHARS:
+                    raise SubmissionError(413, f"Extracted email text is longer than {MAX_TEXT_CHARS:,} characters.")
+                email_result = parsed_email
+            elif len(loaded) > 1:
+                parts = [text] if text else []
+                for name, data in loaded:
+                    extracted, _ = ingestion.ingest_offer(file_bytes=data, filename=name)
+                    if extracted:
+                        parts.append(extracted)
+                        file_texts.append(extracted)
+                raw_text = "\n".join(parts).strip()
+            else:
+                raw_text, _ = ingestion.ingest_offer(text=text, file_bytes=file_bytes, filename=filename)
     except ValueError as e:
         raise SubmissionError(422, f"Could not read the document: {e}")
     if not raw_text or not raw_text.strip():
