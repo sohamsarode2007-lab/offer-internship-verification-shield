@@ -129,36 +129,44 @@ def local_band(case):
 _EVAL_DB = None
 
 
+def _new_eval_db():
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+    from sqlalchemy.pool import StaticPool
+    from app.db.database import Base
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    return sessionmaker(bind=engine)()
+
+
 def _empty_eval_db():
     global _EVAL_DB
     if _EVAL_DB is None:
-        from sqlalchemy import create_engine
-        from sqlalchemy.orm import sessionmaker
-        from sqlalchemy.pool import StaticPool
-        from app.db.database import Base
-        engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
-        Base.metadata.create_all(engine)
-        _EVAL_DB = sessionmaker(bind=engine)()
+        _EVAL_DB = _new_eval_db()
     return _EVAL_DB
 
 
 def _seed_eval_community(case, community_reports):
+    from datetime import timedelta
     from app.services.fact_extraction import extract_facts
     from app.services.payment_detection import detect_payment_demand
-    db = _empty_eval_db()
-    if not db.query(community_reports.CommunityReport).count():
-        fixture = ("No registration number is shown. Contact HR at hr@fraud.example or WhatsApp +91 9123456001. "
-                   "This remote role requires a processing fee of Rs 500 to rky.verma@ybl. "
-                   "We are pleased to offer the analyst internship. Please confirm your joining date and reply "
-                   "to the recruitment team. The role includes training, weekly meetings, and project work with "
-                   "our engineering group.")
-        for _ in range(3):
-            facts = extract_facts(fixture)
-            indicators = community_reports.extract_indicators(fixture, None, detect_payment_demand(facts))
-            signature = community_reports.minhash_signature(fixture)
-            token, _ = community_reports.issue_report_token(db, indicators, signature)
-            selected = [x["indicator_type"] + ":" + x["digest"] for x in indicators]
-            community_reports.accept_report(db, token, selected, True, community_reports.CONSENT_VERSION)
+    db = _new_eval_db()
+    fixture = ("No registration number is shown. Contact HR at hr@fraud.example or WhatsApp +91 9123456001. "
+               "This remote role requires a processing fee of Rs 500 to rky.verma@ybl. "
+               "We are pleased to offer the analyst internship. Please confirm your joining date and reply "
+               "to the recruitment team. The role includes training, weekly meetings, and project work with "
+               "our engineering group.")
+    for idx in range(3):
+        facts = extract_facts(fixture)
+        indicators = community_reports.extract_indicators(fixture, None, detect_payment_demand(facts))
+        signature = community_reports.minhash_signature(fixture)
+        token, _ = community_reports.issue_report_token(db, indicators, signature)
+        selected = [x["indicator_type"] + ":" + x["digest"] for x in indicators]
+        community_reports.accept_report(db, token, selected, True, community_reports.CONSENT_VERSION)
+        if idx == 0:
+            for row in db.query(community_reports.CommunityReport).all():
+                row.created_at = row.created_at - timedelta(days=1)
+            db.commit()
     return db
 
 
