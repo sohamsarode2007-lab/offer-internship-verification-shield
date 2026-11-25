@@ -1,3 +1,4 @@
+import contextlib
 import logging
 import os
 from typing import List, Optional
@@ -74,8 +75,7 @@ ALLOWED_EXTENSIONS = {"pdf", "png", "jpg", "jpeg", "bmp", "tiff", "txt", "eml"}
 
 # Plain `def`: DNS, WHOIS and OCR are blocking calls, so FastAPI runs this in its
 # threadpool instead of blocking the event loop.
-@router.post("/analyze", response_model=AnalyzeResponse, status_code=status.HTTP_200_OK,
-             dependencies=[Depends(analyze_slot)])
+@router.post("/analyze", response_model=AnalyzeResponse, status_code=status.HTTP_200_OK)
 @limiter.limit(RATE_LIMIT)
 def analyze_offer(
     request: Request,
@@ -93,6 +93,18 @@ def analyze_offer(
     Privacy (DPDP): the offer text and file name are NOT stored; only the verdict
     and per-check results are persisted.
     """
+    with contextlib.contextmanager(analyze_slot)():
+        return _analyze_offer_impl(request, text, file, files, link_lookups, db)
+
+
+def _analyze_offer_impl(
+    request: Request,
+    text: Optional[str],
+    file: Optional[UploadFile],
+    files: List[UploadFile],
+    link_lookups: bool,
+    db: Session,
+):
     uploads = [u for u in ([file] if file is not None else []) + list(files or []) if u.filename]
     if not text and not uploads:
         raise HTTPException(status.HTTP_400_BAD_REQUEST,
