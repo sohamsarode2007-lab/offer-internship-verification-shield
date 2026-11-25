@@ -351,3 +351,12 @@ Status: **open** = not reviewed yet.
     - **In-process limits are not isolation:** a worker process or container with a memory limit is still the
       right defence against a crafted file; these limits reduce the damage a single file can do.
     - **Concurrency is per process:** with N workers the real limit is N x 4.
+
+41. **Outbound hardening (open).**
+    - **My choices:** 8 s overall deadline for link checks, 5 link-checked analyses per connection per hour, a shared
+      daily visit budget of 6000 (`LINK_VISIT_DAILY_BUDGET`). Change `LINK_CHECKS_PER_HOUR` if your users share an address
+      (campus or office NAT would share one allowance).
+    - **Per-process again:** budgets and allowances reset on restart and are per worker.
+    - **Behind a proxy** the connection address seen by the app may be the proxy's; configure the host so the real
+      client address reaches the app, or this cap applies to everyone together.
+    - **Not run against real sites:** the pinned client is tested with mocked DNS and sockets only.

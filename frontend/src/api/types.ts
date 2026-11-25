@@ -117,5 +117,5 @@ export interface DataSources {
   scoring_model: string
   sources: { id: string; name: string; updated: string | null; age_days: number | null; status: 'current' | 'stale' | 'demo' | 'unknown'; detail: string }[]
   optional_lookups: Record<string, boolean>
-  request_budgets: { id: string; used_today: number; daily_limit: number }[]
+  request_budgets: { id: string; status: 'available' | 'paused' }[]
 }

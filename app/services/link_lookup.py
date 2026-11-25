@@ -15,18 +15,18 @@ login part, or a path that looks like it holds a name, email or number). The per
 involved. Links are never logged or stored, and notes show only the host, never the full link. Visiting a link
 tells its owner that some server opened it; that is why this needs consent.
 """
-import http.client
 import json
 import logging
 import os
 import re
 import ssl
+import concurrent.futures
 import time
 import urllib.parse
 import urllib.request
 from typing import Any, Dict, List, Optional
 
-from app.services import careers_page, domain_verification, request_budget, url_evidence
+from app.services import domain_verification, request_budget, safe_fetch, url_evidence
 from app.services.env_config import float_env
 
 logger = logging.getLogger(__name__)
@@ -35,6 +35,7 @@ MAX_LINKS = 3
 MAX_HOPS = 4
 MAX_PATH_CHARS = 60
 TIMEOUT_SECONDS = 4.0
+OVERALL_DEADLINE_SECONDS = 8.0      # whole link-check job, all links in parallel
 WEB_RISK_URL = "https://webrisk.googleapis.com/v1/uris:search"
 THREAT_TYPES = ("MALWARE", "SOCIAL_ENGINEERING", "UNWANTED_SOFTWARE")
 NEW_CERT_DAYS = 14
@@ -100,23 +101,16 @@ def web_risk(link: str) -> Dict[str, Any]:
     return {"status": "unknown", "threat_types": []}
 
 
-def _head(link: str):
-    """One HEAD request, no redirect following. Returns (status, location, cert_info or None). Replaceable in tests."""
+def _head(link: str, timeout: Optional[float] = None):
+    """One HEAD request through the pinned-address client (no redirect following). Replaceable in tests.
+
+    Returns (status, Location header, certificate or None).
+    """
     parts = urllib.parse.urlsplit(link)
-    timeout = float_env("LINK_LOOKUP_TIMEOUT", TIMEOUT_SECONDS, 0.5, 10.0)
-    path = (parts.path or "/")
-    if parts.scheme == "https":
-        conn = http.client.HTTPSConnection(parts.hostname, parts.port or 443, timeout=timeout,
-                                           context=ssl.create_default_context())
-    else:
-        conn = http.client.HTTPConnection(parts.hostname, parts.port or 80, timeout=timeout)
-    try:
-        conn.request("HEAD", path, headers={"User-Agent": "offer-verification-shield (link check)"})
-        cert = conn.sock.getpeercert() if parts.scheme == "https" else None
-        response = conn.getresponse()
-        return response.status, response.getheader("Location"), cert
-    finally:
-        conn.close()
+    timeout = timeout or float_env("LINK_LOOKUP_TIMEOUT", TIMEOUT_SECONDS, 0.5, 10.0)
+    status, location, cert, _ = safe_fetch.request("HEAD", parts.scheme, parts.hostname, parts.path or "/",
+                                                   timeout=timeout)
+    return status, location, cert
 
 
 def _cert_age_days(cert: Optional[dict]) -> Optional[int]:
@@ -126,19 +120,25 @@ def _cert_age_days(cert: Optional[dict]) -> Optional[int]:
         return None
 
 
-def follow(link: str) -> Dict[str, Any]:
-    """Follow redirects with limits. Result holds only host-level facts."""
+def follow(link: str, deadline: Optional[float] = None) -> Dict[str, Any]:
+    """Follow redirects, hop by hop, within a deadline. Result holds only host-level facts."""
+    deadline = deadline or time.monotonic() + OVERALL_DEADLINE_SECONDS
     current, hops, tls, cert_age = link, 0, "unknown", None
     start_host = urllib.parse.urlsplit(link).hostname or ""
+    stopped = {"hops": hops, "landing_host": None, "tls": "unknown", "cert_age_days": None, "stopped": True}
     try:
         for _ in range(MAX_HOPS + 1):
+            remaining = deadline - time.monotonic()
+            if remaining <= 0.2 or not request_budget.try_spend("link_visit"):
+                return {**stopped, "hops": hops}
             host = urllib.parse.urlsplit(current).hostname or ""
-            if not careers_page._all_public(host):
-                return {"hops": hops, "landing_host": None, "tls": "unknown", "cert_age_days": None, "stopped": True}
             try:
-                status, location, cert = _head(current)
+                status, location, cert = _head(current, min(remaining, float_env("LINK_LOOKUP_TIMEOUT",
+                                                                                 TIMEOUT_SECONDS, 0.5, 10.0)))
             except ssl.SSLCertVerificationError:
                 return {"hops": hops, "landing_host": host, "tls": "invalid", "cert_age_days": None, "stopped": False}
+            except safe_fetch.UnsafeTarget:
+                return {**stopped, "hops": hops}
             if current.startswith("https"):
                 tls, cert_age = "valid", _cert_age_days(cert)
             if status in (301, 302, 303, 307, 308) and location and hops < MAX_HOPS:
@@ -150,7 +150,7 @@ def follow(link: str) -> Dict[str, Any]:
             break
     except Exception as exc:
         logger.info("[LINK_LOOKUP] visit unavailable: %s", type(exc).__name__)
-        return {"hops": hops, "landing_host": None, "tls": "unknown", "cert_age_days": None, "stopped": True}
+        return {**stopped, "hops": hops}
     landing = urllib.parse.urlsplit(current).hostname
     different = bool(landing) and domain_verification.registrable_domain(landing)[0] != \
         domain_verification.registrable_domain(start_host)[0]
@@ -158,19 +158,40 @@ def follow(link: str) -> Dict[str, Any]:
             "cert_age_days": cert_age, "stopped": False}
 
 
+def _check_one(link: str, deadline: float) -> Dict[str, Any]:
+    return {"link": link, "risk": web_risk(link), "visit": follow(link, deadline)}
+
+
 def build_link_checks(text: str, consent: bool) -> Dict[str, Any]:
-    """{'notes': [...], 'threat_listed': bool}. Empty unless enabled by the operator and consented to."""
+    """{'notes': [...], 'threat_listed': bool}. Empty unless enabled by the operator and consented to.
+
+    All links are checked in parallel under one overall deadline, so one request can never hold a worker for
+    more than OVERALL_DEADLINE_SECONDS however many hops or slow servers there are.
+    """
     out: Dict[str, Any] = {"notes": [], "threat_listed": False}
     if not (is_enabled() and consent):
         return out
-    for link in extract_links(text):
-        host = urllib.parse.urlsplit(link).hostname
-        risk = web_risk(link)
+    links = extract_links(text)
+    if not links:
+        return out
+    deadline = time.monotonic() + OVERALL_DEADLINE_SECONDS
+    pool = concurrent.futures.ThreadPoolExecutor(max_workers=len(links))
+    futures = [pool.submit(_check_one, link, deadline) for link in links]
+    results = []
+    for link, future in zip(links, futures):
+        try:
+            results.append(future.result(timeout=max(0.1, deadline - time.monotonic() + 1)))
+        except Exception:   # deadline passed or the check failed: report nothing for this link
+            results.append({"link": link, "risk": {"status": "unknown", "threat_types": []},
+                            "visit": {"hops": 0, "landing_host": None, "tls": "unknown", "cert_age_days": None}})
+    pool.shutdown(wait=False, cancel_futures=True)
+    for item in results:
+        host = urllib.parse.urlsplit(item["link"]).hostname
+        risk, visit = item["risk"], item["visit"]
         if risk["status"] == "threat-listed":
             out["threat_listed"] = True
             kinds = ", ".join(t.replace("_", " ").lower() for t in risk["threat_types"]) or "a threat"
             out["notes"].append(f"Google Web Risk lists '{host}' as dangerous ({kinds}). Do not open it.")
-        visit = follow(link)
         if visit["landing_host"]:
             out["notes"].append(f"The link to '{host}' redirects to a different site, '{visit['landing_host']}'.")
         elif visit["hops"] >= 3:

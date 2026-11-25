@@ -123,7 +123,8 @@ consent covers that one check and is not remembered or stored.
   goes to Google Web Risk with the operator's API key. Raw IP addresses are dropped. Nothing else from the offer is sent.
 - **What the server does:** it makes a HEAD request to each link (public addresses only, at most 4 redirects, no
   body read) and reads the TLS certificate. The site's owner can see that a server opened the link; the person's own
-  address is never involved.
+  address is never involved. Each connection's hourly allowance is counted in memory under a one-way hash of its
+  address and is never written to disk or logs.
 - **What is kept:** nothing. Links and results are not stored or logged (log lines carry only an error type).
   Results appear as informational notes with no score effect, naming hosts only.
 - **Honest limits:** the only outcomes are "threat-listed" or "unknown". "Not listed" is never shown as safe. DNS can

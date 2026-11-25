@@ -287,6 +287,12 @@ been verified in this workspace.
 - Possible findings, all informational with no score effect: "threat-listed" by Web Risk, a redirect to a different
   site, 3+ redirects, a certificate that does not verify, or one issued under 14 days ago. Everything else is
   "unknown": a link that is not flagged is never described as safe, and an unreachable service adds nothing.
+- Outbound safety: the server resolves a link's name once, refuses the link unless every address is public, and
+  connects to that same checked address (so a name that changes its answer cannot redirect the request to an internal
+  address). Redirects are followed one hop at a time with each hop checked the same way. All link checks for one
+  analysis share an 8 second deadline and run in parallel. Each connection gets 5 link-checked analyses per hour
+  (`LINK_CHECKS_PER_HOUR`); beyond that the result says link checks were skipped. The same pinned client is used for
+  the optional careers-page lookup. `/sources` shows each lookup only as available or paused, not exact usage.
 - Only a minimised address is sent (no query, fragment or login part); nothing is stored or logged. See
   docs/PRIVACY_DESIGN.md. Tests use mocked responses: the Web Risk request shape follows Google's published
   Lookup API documentation but was not run against the live service from the build environment.

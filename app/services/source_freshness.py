@@ -67,7 +67,8 @@ def _advisories(today: date) -> Dict[str, Any]:
 def build_sources(today: Optional[date] = None) -> Dict[str, Any]:
     today = today or datetime.now(timezone.utc).date()
     sources: List[Dict[str, Any]] = [_registry(today), _advisories(today)]
-    budgets = [{"id": name, "used_today": request_budget.used(name), "daily_limit": request_budget.limit(name)}
+    # Only available/paused is shown: exact usage would tell outsiders how close the free quota is to running out.
+    budgets = [{"id": name, "status": "available" if request_budget.used(name) < request_budget.limit(name) else "paused"}
                for name in request_budget.DEFAULTS]
     return {
         "scoring_model": SCORING_MODEL,

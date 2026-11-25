@@ -94,3 +94,5 @@ def test_sources_endpoint(api_client):
     assert body["scoring_model"] == "rule_based_v2"
     assert {s["id"] for s in body["sources"]} == {"company_registry", "employer_advisories"}
     assert body["request_budgets"][0]["id"] == "web_risk"
+    assert body["request_budgets"][0]["status"] == "available"
+    assert "used_today" not in body["request_budgets"][0] and "daily_limit" not in body["request_budgets"][0]

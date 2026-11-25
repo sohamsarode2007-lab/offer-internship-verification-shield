@@ -23,6 +23,7 @@ from app.services import (
     self_checks,
     safety_playbook,
     link_lookup,
+    request_budget,
     multi_file,
     evidence_meta,
     plausibility,
@@ -34,6 +35,8 @@ from app.services import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="", tags=["analyze"])
+
+LINK_CHECKS_PER_HOUR = int(os.getenv("LINK_CHECKS_PER_HOUR", "5"))
 
 
 BAND_LABELS = {
@@ -203,7 +206,12 @@ def analyze_offer(
     for name, data in loaded:
         if name.lower().endswith(".pdf"):
             notes += plausibility.collect_notes("", data)  # file-level notes for each PDF
-    link_result = link_lookup.build_link_checks(raw_text, link_lookups)
+    # Per-client hourly allowance for outbound link checks (the key is held in memory only, never stored or logged).
+    client_key = request.client.host if request.client else "unknown"
+    allow_links = link_lookups and request_budget.try_spend_keyed("link", client_key, LINK_CHECKS_PER_HOUR)
+    link_result = link_lookup.build_link_checks(raw_text, allow_links)
+    if link_lookups and not allow_links:
+        link_result["notes"].append("Link checks were skipped because this connection has used its hourly allowance. The rest of the check is unaffected.")
     notes += link_result["notes"]
     duplicate = multi_file.duplicate_note(file_texts)
     if duplicate:

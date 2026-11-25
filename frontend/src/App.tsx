@@ -319,7 +319,7 @@ function SourcesPanel() {
     <p>Rules version {data.scoring_model}. Dates show when each source was last refreshed; an old source can miss recent changes.</p>
     <ul>{data.sources.map(s => <li key={s.id}><strong>{s.name}:</strong> {sourceStatusText[s.status] ?? s.status}{s.updated ? `, refreshed ${s.updated} (${s.age_days} days ago)` : ''}. {s.detail}</li>)}</ul>
     <p>{on} optional online lookup{on === 1 ? ' is' : 's are'} switched on for this service.</p>
-    {data.request_budgets.map(b => <p key={b.id}>Daily limit for the {b.id.replace('_', ' ')} lookup: {b.used_today} of {b.daily_limit} used today.</p>)}
+    {data.request_budgets.map(b => <p key={b.id}>The {b.id.replace('_', ' ')} lookup is {b.status === 'paused' ? 'paused for today (daily allowance used up)' : 'available'}.</p>)}
   </section>
 }
 
