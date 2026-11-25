@@ -80,3 +80,32 @@ def test_https_uses_the_name_for_sni_while_connecting_to_the_checked_address(mon
 def test_only_http_and_https_are_allowed():
     with pytest.raises(sf.UnsafeTarget):
         sf.request("GET", "file", "x.example", "/", timeout=1)
+
+
+def test_ipv6_zone_id_is_refused_as_unsafe_target(monkeypatch):
+    monkeypatch.setattr(sf.socket, "getaddrinfo", lambda *a, **k: [addr("fe80::1%eth0", socket.AF_INET6)])
+    with pytest.raises(sf.UnsafeTarget):
+        sf.public_addresses("x.example")
+
+
+def test_wrap_socket_failure_closes_raw_socket(monkeypatch):
+    closed = []
+
+    class RawSock:
+        def close(self):
+            closed.append(True)
+
+    class Ctx:
+        verify_mode = ssl.CERT_REQUIRED
+        check_hostname = True
+
+        def wrap_socket(self, raw, server_hostname=None):
+            raise ssl.SSLCertVerificationError("bad cert")
+
+    monkeypatch.setattr(sf.socket, "getaddrinfo", lambda *a, **k: [addr("93.184.216.34")])
+    monkeypatch.setattr(sf, "_connect", lambda a, p, t: RawSock())
+    monkeypatch.setattr(sf.ssl, "create_default_context", lambda: Ctx())
+    with pytest.raises(ssl.SSLCertVerificationError):
+        sf.request("HEAD", "https", "bad.example", "/", timeout=1)
+    assert closed == [True]
+

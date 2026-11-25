@@ -27,7 +27,11 @@ def public_addresses(host: str, port: int = 443) -> List[str]:
         raise UnsafeTarget("name does not resolve") from exc
     addresses: List[str] = []
     for info in infos:
-        ip = ipaddress.ip_address(info[4][0])
+        raw_ip = str(info[4][0]).split("%", 1)[0]
+        try:
+            ip = ipaddress.ip_address(raw_ip)
+        except ValueError as exc:
+            raise UnsafeTarget("name resolved to an invalid address") from exc
         mapped = getattr(ip, "ipv4_mapped", None)
         ip = mapped or ip
         if not ip.is_global or ip.is_multicast:
@@ -59,7 +63,12 @@ class _PinnedHTTPSConnection(http.client.HTTPSConnection):
 
     def connect(self):
         raw = _connect(self._address, self.port, self.timeout)
-        self.sock = self._context.wrap_socket(raw, server_hostname=self.host)   # SNI and verification use the name
+        try:
+            self.sock = self._context.wrap_socket(raw, server_hostname=self.host)   # SNI and verification use the name
+        except BaseException:
+            if close := getattr(raw, "close", None):
+                close()
+            raise
 
 
 def request(method: str, scheme: str, host: str, path: str, *, timeout: float, read_bytes: int = 0,

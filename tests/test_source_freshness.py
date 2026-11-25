@@ -17,10 +17,14 @@ def _clean(monkeypatch):
 
 
 def make_db(path, loaded, source="MCA_CSV"):
-    with sqlite3.connect(path) as db:
-        db.execute("CREATE TABLE registry_metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
-        db.executemany("INSERT INTO registry_metadata VALUES (?, ?)",
-                       [("source", source), ("loaded_at", loaded), ("row_count", "5")])
+    db = sqlite3.connect(path)
+    try:
+        with db:
+            db.execute("CREATE TABLE registry_metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
+            db.executemany("INSERT INTO registry_metadata VALUES (?, ?)",
+                           [("source", source), ("loaded_at", loaded), ("row_count", "5")])
+    finally:
+        db.close()
 
 
 def registry(monkeypatch, tmp_path, loaded, source="MCA_CSV"):
