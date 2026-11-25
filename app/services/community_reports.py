@@ -353,12 +353,21 @@ def lookup_community(db: Session, indicators: list[dict], signature: list[int]):
         elif count >= 3:
             indicator_bucket_points = max(indicator_bucket_points, 25)
             notes.append(f"This {item['indicator_type']} was reported in 3+ separate reports.")
-        for report_id in reports:
-            db.query(CommunityReport).filter_by(id=report_id).update({"last_seen_at": now})
-            db.query(CommunityIndicator).filter_by(report_id=report_id, digest=item["digest"]).update({"last_seen_at": now})
+        digests = [d for _, d in wanted]
+        db.query(CommunityReport).filter(CommunityReport.id.in_(reports)).update(
+            {"last_seen_at": now}, synchronize_session=False)
+        db.query(CommunityIndicator).filter(
+            CommunityIndicator.report_id.in_(reports),
+            CommunityIndicator.indicator_type == item["indicator_type"],
+            CommunityIndicator.digest.in_(digests),
+        ).update({"last_seen_at": now}, synchronize_session=False)
 
-    candidate_ids = {row.report_id for band, bucket in _signature_bands(signature)
-                     for row in db.query(CommunityTemplateBand).filter_by(band=band, bucket=bucket)}
+    bands = _signature_bands(signature)
+    candidate_ids = {
+        row.report_id for row in db.query(CommunityTemplateBand.report_id).filter(
+            or_(*[and_(CommunityTemplateBand.band == b, CommunityTemplateBand.bucket == k) for b, k in bands])
+        ).all()
+    } if bands else set()
     for report in db.query(CommunityReport).filter(CommunityReport.id.in_(candidate_ids), CommunityReport.withdrawn.is_(False)).all() if candidate_ids else []:
         if report.is_demo:
             continue
