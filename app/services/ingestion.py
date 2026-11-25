@@ -7,6 +7,7 @@ to resolve digit/letter confusion (0/O, 1/I/l).
 """
 import re
 import io
+import time
 import logging
 import os
 import shutil
@@ -89,10 +90,15 @@ def _run_ocr_engines(image_np: np.ndarray, filename: str = "document") -> str:
             pil_img = PILImage.fromarray(preprocessed)
         else:
             pil_img = PILImage.fromarray(cv2.cvtColor(preprocessed, cv2.COLOR_BGR2RGB))
-        text = pytesseract.image_to_string(pil_img, config='--oem 3 --psm 6').strip()
+        text = pytesseract.image_to_string(pil_img, config='--oem 3 --psm 6', timeout=TESSERACT_TIMEOUT).strip()
         if text and len(text) > 3:
             logger.info("[INGESTION][OCR] pytesseract extracted %d chars from '%s'.", len(text), filename)
             return text
+    except RuntimeError as pyt_err:
+        if "timeout" in str(pyt_err).lower():
+            # Do not fall through to the heavier engines: they have no time limit.
+            raise ValueError("reading this image took too long; try a smaller or clearer image") from pyt_err
+        logger.debug("[INGESTION][OCR] pytesseract failed for '%s': %s", filename, pyt_err)
     except Exception as pyt_err:
         logger.debug("[INGESTION][OCR] pytesseract failed for '%s': %s", filename, pyt_err)
 
@@ -280,7 +286,8 @@ def _pdf_upi_qr_lines(file_bytes: bytes, doc: str) -> str:
             scale = QR_SCAN_DPI / 72.0
             if (w_pt * scale) * (h_pt * scale) > upi_payment.MAX_QR_PIXELS:
                 return ""
-        images = pdf2image.convert_from_bytes(file_bytes, dpi=QR_SCAN_DPI, first_page=1, last_page=pages)
+        images = pdf2image.convert_from_bytes(file_bytes, dpi=QR_SCAN_DPI, first_page=1, last_page=pages,
+                                              timeout=POPPLER_TIMEOUT)
         found = []
         for img in images:
             lines = upi_payment.upi_lines_from_image(cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR))
@@ -292,47 +299,84 @@ def _pdf_upi_qr_lines(file_bytes: bytes, doc: str) -> str:
         return ""
 
 
+MAX_NATIVE_PDF_PAGES = 60          # text-layer PDFs longer than this are refused before any extraction
+EXTRACT_CHAR_BUDGET = 60_000       # stop collecting text once this many characters exist (route limit is 50,000)
+POPPLER_TIMEOUT = 30               # seconds per rendered page (pdf2image/pdftoppm)
+TESSERACT_TIMEOUT = 20             # seconds per OCR call
+OCR_TOTAL_BUDGET_SECONDS = 90      # whole-document OCR deadline, checked between pages
+
+
+class PdfTooLong(ValueError):
+    """Refused on purpose (HTTP 422); other parser errors still fall back to the next reader."""
+
+
+def _collect_page_text(pages) -> str:
+    """Join page text but stop as soon as the character budget is spent, so a huge text layer is never built."""
+    parts, total = [], 0
+    for page in pages:
+        chunk = page.extract_text() or ""
+        parts.append(chunk)
+        total += len(chunk) + 1
+        if total > EXTRACT_CHAR_BUDGET:
+            break
+    return "\n".join(parts).strip()
+
+
 def _extract_pdf_text(file_bytes: bytes, doc: str) -> str:
     """Text-layer PDF first (pdfplumber, then pypdf); OCR only for scanned PDFs, within limits."""
     try:
         import pdfplumber
         with pdfplumber.open(io.BytesIO(file_bytes)) as pdf:
-            text = "\n".join((p.extract_text() or "") for p in pdf.pages).strip()
+            if len(pdf.pages) > MAX_NATIVE_PDF_PAGES:
+                raise PdfTooLong(f"PDF has {len(pdf.pages)} pages; the limit is {MAX_NATIVE_PDF_PAGES} pages")
+            text = _collect_page_text(pdf.pages)
         if len(text) >= MIN_NATIVE_TEXT_CHARS:
             logger.info("[INGESTION] %s: native text via pdfplumber (%d chars).", doc, len(text))
             return text
+    except PdfTooLong:
+        raise
     except Exception as e:
         logger.warning("[INGESTION] %s: pdfplumber failed (%s).", doc, type(e).__name__)
 
     try:
         from pypdf import PdfReader
         reader = PdfReader(io.BytesIO(file_bytes))
-        text = "\n".join((p.extract_text() or "") for p in reader.pages).strip()
+        if len(reader.pages) > MAX_NATIVE_PDF_PAGES:
+            raise PdfTooLong(f"PDF has {len(reader.pages)} pages; the limit is {MAX_NATIVE_PDF_PAGES} pages")
+        text = _collect_page_text(reader.pages)
         if len(text) >= MIN_NATIVE_TEXT_CHARS:
             logger.info("[INGESTION] %s: native text via pypdf (%d chars).", doc, len(text))
             return text
+    except PdfTooLong:
+        raise
     except Exception as e:
         logger.warning("[INGESTION] %s: pypdf failed (%s).", doc, type(e).__name__)
 
-    # Scanned PDF: guard first (raises ValueError -> HTTP 422), then render + OCR.
+    # Scanned PDF: guard first (raises ValueError -> HTTP 422), then render and OCR one page at a time so memory
+    # stays at one page and the whole job stays inside a deadline.
     page_count = check_pdf_ocr_limits(file_bytes)
-    try:
-        import pdf2image
-        images = pdf2image.convert_from_bytes(file_bytes, dpi=OCR_DPI, first_page=1, last_page=page_count)
-    except Exception as e:
-        raise ValueError(f"scanned PDF could not be rendered for OCR ({type(e).__name__})") from e
-
+    import pdf2image
+    deadline = time.monotonic() + OCR_TOTAL_BUDGET_SECONDS
     ocr_pages = []
-    for idx, img in enumerate(images, start=1):
+    for idx in range(1, page_count + 1):
+        if time.monotonic() > deadline:
+            raise ValueError("reading this scanned PDF took too long; try fewer pages or a text-based PDF")
+        try:
+            images = pdf2image.convert_from_bytes(file_bytes, dpi=OCR_DPI, first_page=idx, last_page=idx,
+                                                  timeout=POPPLER_TIMEOUT)
+        except Exception as e:
+            raise ValueError(f"scanned PDF could not be rendered for OCR ({type(e).__name__})") from e
         try:
             # pdf2image gives RGB; the OpenCV pipeline expects BGR.
-            page_text = run_ocr_on_image(cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR), filename=f"{doc} p{idx}")
+            page_text = run_ocr_on_image(cv2.cvtColor(np.array(images[0]), cv2.COLOR_RGB2BGR), filename=f"{doc} p{idx}")
             if page_text:
                 ocr_pages.append(page_text)
         except ValueError as e:
             logger.warning("[INGESTION] %s: OCR failed on page %d (%s).", doc, idx, e)
+        if sum(len(t) for t in ocr_pages) > EXTRACT_CHAR_BUDGET:
+            break
     text = "\n".join(ocr_pages).strip()
-    logger.info("[INGESTION] %s: OCR text (%d chars, %d pages).", doc, len(text), len(images))
+    logger.info("[INGESTION] %s: OCR text (%d chars, %d pages).", doc, len(text), page_count)
     return text
 
 

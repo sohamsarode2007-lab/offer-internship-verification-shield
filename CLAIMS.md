@@ -292,6 +292,19 @@ been verified in this workspace.
   Lookup API documentation but was not run against the live service from the build environment.
 - VirusTotal is not used: its free API is capped at 500 requests a day and barred from commercial products.
 
+## Upload limits
+
+- A request body over 52 MB on `/analyze` (256 KB elsewhere) is refused with 413 as soon as the size is known,
+  from `Content-Length` or by counting streamed bytes, before the upload is parsed. A reverse proxy limit should
+  sit in front of this as well; this is the second line, not a replacement.
+- Per file: 10 MB, up to 5 files, text extracted capped at 50,000 characters. Text-layer PDFs over 60 pages are
+  refused; text collection stops at a character budget. Scanned PDFs: at most 10 pages, rendered and read one page
+  at a time, 30 s per page render, 20 s per OCR call and 90 s for the whole document. A `.eml` may have at most 60
+  parts and 400 headers, keeps at most 5 PDF/image attachments, and refuses an attachment over 10 MB (20 MB total).
+- At most 4 analyses run at once per server process; a request that cannot get a slot within 3 s gets 503.
+- Not covered: the optional EasyOCR and PaddleOCR engines have no time limit of their own (a Tesseract timeout
+  stops the job rather than falling through to them). Do not install them on a public deployment.
+
 ## Data sources panel and request budget
 
 - The "How it works" page shows each source with the date it was last refreshed and its age: the local company

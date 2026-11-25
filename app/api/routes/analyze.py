@@ -2,6 +2,7 @@ import logging
 import os
 from typing import List, Optional
 
+from app.api.request_limits import analyze_slot
 from fastapi import APIRouter, Depends, File, Form, Request, UploadFile, HTTPException, status
 from sqlalchemy.orm import Session
 
@@ -78,7 +79,8 @@ ALLOWED_EXTENSIONS = {"pdf", "png", "jpg", "jpeg", "bmp", "tiff", "txt", "eml"}
 
 # Plain `def`: DNS, WHOIS and OCR are blocking calls, so FastAPI runs this in its
 # threadpool instead of blocking the event loop.
-@router.post("/analyze", response_model=AnalyzeResponse, status_code=status.HTTP_200_OK)
+@router.post("/analyze", response_model=AnalyzeResponse, status_code=status.HTTP_200_OK,
+             dependencies=[Depends(analyze_slot)])
 @limiter.limit(RATE_LIMIT)
 def analyze_offer(
     request: Request,

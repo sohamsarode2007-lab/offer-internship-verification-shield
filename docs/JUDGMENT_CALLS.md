@@ -343,3 +343,11 @@ Status: **open** = not reviewed yet.
       test_email_auth), one message string (test_community_reports), and three fixtures that now carry a matching
       domain and company (test_audit_regressions, test_scam_text, test_result_wording). No assertion about payment
       demands or wording was loosened; the only band changes are the two header cases above.
+
+40. **Upload and request limits (open).**
+    - **Numbers are my choices:** 52 MB request cap (5 x 10 MB plus form overhead), 60 native PDF pages, 90 s OCR
+      deadline, 4 concurrent analyses, 3 s wait for a slot. Change them in `ingestion.py`, `email_auth.py` and the
+      `MAX_REQUEST_BYTES` / `ANALYZE_CONCURRENCY` settings if your host is bigger or smaller.
+    - **In-process limits are not isolation:** a worker process or container with a memory limit is still the
+      right defence against a crafted file; these limits reduce the damage a single file can do.
+    - **Concurrency is per process:** with N workers the real limit is N x 4.

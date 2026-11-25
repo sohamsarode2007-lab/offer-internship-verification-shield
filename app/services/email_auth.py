@@ -33,12 +33,24 @@ def _address_domain(value: Optional[str]) -> tuple[Optional[str], str]:
     return (domain if HOSTNAME_RE.fullmatch(domain) else None), display
 
 
+MAX_MIME_PARTS = 60                         # total parts in the message tree
+MAX_EMAIL_ATTACHMENTS = 5                   # PDF/image attachments kept (the rest are ignored)
+MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024     # per attachment, after decoding
+MAX_ATTACHMENT_TOTAL_BYTES = 20 * 1024 * 1024
+MAX_HEADER_COUNT = 400
+
+
 def parse_eml(file_bytes: bytes) -> Dict[str, Any]:
     """Extract body, file attachments and minimal parsed sender metadata."""
     try:
         message = BytesParser(policy=policy.default).parsebytes(file_bytes)
     except Exception as exc:
         raise ValueError("email message could not be parsed") from exc
+    if len(message.keys()) > MAX_HEADER_COUNT:
+        raise ValueError("email has too many headers to read safely")
+    for count, _part in enumerate(message.walk(), start=1):
+        if count > MAX_MIME_PARTS:
+            raise ValueError(f"email has more than {MAX_MIME_PARTS} parts; it is too complex to read safely")
     body = ""
     try:
         body_part = message.get_body(preferencelist=("plain",))
@@ -53,7 +65,10 @@ def parse_eml(file_bytes: bytes) -> Dict[str, Any]:
     except (LookupError, UnicodeError, ValueError) as exc:
         raise ValueError("email body could not be decoded") from exc
     attachments = []
+    total_bytes = 0
     for part in message.iter_attachments():
+        if len(attachments) >= MAX_EMAIL_ATTACHMENTS:
+            break
         content_type = part.get_content_type().lower()
         filename = part.get_filename() or "attachment"
         extension = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
@@ -68,7 +83,12 @@ def parse_eml(file_bytes: bytes) -> Dict[str, Any]:
         else:
             continue
         data = part.get_payload(decode=True)
+        if data and len(data) > MAX_ATTACHMENT_BYTES:
+            raise ValueError("an email attachment is larger than 10 MB")
         if data:
+            total_bytes += len(data)
+            if total_bytes > MAX_ATTACHMENT_TOTAL_BYTES:
+                raise ValueError("the email attachments together are larger than 20 MB")
             attachments.append({"filename": f"email-attachment.{allowed}", "content_type": content_type, "data": data})
     from_domain, display_name = _address_domain(message.get("From"))
     _, from_address = parseaddr(str(message.get("From") or ""))

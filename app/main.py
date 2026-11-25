@@ -5,6 +5,8 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
+from app.api.request_limits import BodyLimitMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from slowapi import _rate_limit_exceeded_handler
@@ -76,6 +78,9 @@ app.add_middleware(
     allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
+
+# Outermost: refuse oversized bodies before anything reads them (see app/api/request_limits.py).
+app.add_middleware(BodyLimitMiddleware)
 
 app.include_router(analyze_router)
 app.include_router(community_router)
