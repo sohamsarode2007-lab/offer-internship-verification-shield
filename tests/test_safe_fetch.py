@@ -1,5 +1,6 @@
 """Pinned-address client: resolve once, public only, connect to the address that was checked."""
 import socket
+import ssl
 
 import pytest
 
@@ -63,6 +64,9 @@ def test_https_uses_the_name_for_sni_while_connecting_to_the_checked_address(mon
     seen = {}
 
     class Ctx:
+        verify_mode = ssl.CERT_REQUIRED
+        check_hostname = True
+
         def wrap_socket(self, raw, server_hostname=None):
             seen["sni"] = server_hostname
             raise RuntimeError("stop")
