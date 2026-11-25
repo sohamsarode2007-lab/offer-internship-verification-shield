@@ -127,3 +127,21 @@ def test_gstin_cin_location_note_is_informational(mca_db):
     assert "GSTIN state: Delhi (07); CIN RoC location: Delhi (DL)" in result["details"]
     assert "informational only" in result["details"]
 
+
+@pytest.mark.parametrize("phrase", ["2 years of experience", "1 year bond", "3 years degree"])
+def test_job_duration_years_not_treated_as_company_age(mca_db, phrase):
+    _, db_path = mca_db
+    _set_incorporation_date(db_path, "15/03/2025")
+    result = gv.verify_gstin(facts(f"{NAME} requires {phrase}\nCIN: {CIN}\nGSTIN: {GSTIN}"))
+    assert result["consistency_risk_points"] == 0
+    assert "no founding-year/age claim" in result["details"]
+
+
+def test_company_age_in_business_contradiction_adds_fifteen(mca_db):
+    _, db_path = mca_db
+    _set_incorporation_date(db_path, "15/03/2025")
+    result = gv.verify_gstin(facts(f"{NAME}, 10+ years in business\nCIN: {CIN}\nGSTIN: {GSTIN}"))
+    assert result["consistency_risk_points"] == 15
+    assert "age claim 10 years" in result["details"]
+
+

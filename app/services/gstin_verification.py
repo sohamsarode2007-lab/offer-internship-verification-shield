@@ -273,7 +273,8 @@ def _date_consistency(record: Dict[str, Any], raw_text: str, source_label: str =
     if not parsed:
         return 0, []
     claim = re.search(
-        r"\b(?:established|founded|since)\s+(\d{4})\b|\b(\d{1,2})\s+years?\b",
+        r"\b(?:established|founded|incorporated|operating|in\s+business)\s+(?:in\s+|since\s+)?(\d{4})\b"
+        r"|\b(\d{1,2})\+?\s+years?\s+(?:old|in\s+business|of\s+(?:operations|existence|excellence|legacy))\b",
         raw_text, re.IGNORECASE,
     )
     if not claim:
