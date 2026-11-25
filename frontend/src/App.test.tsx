@@ -333,6 +333,15 @@ describe('add evidence and check again', () => {
     expect(await screen.findByText('Likely legitimate')).toBeTruthy()
   })
 
+  it('clears the add-evidence box after a successful re-check when hints remain', async () => {
+    const user = await showResult(payload({ evidence_hints: hints, overall_risk_score: 40 }))
+    vi.mocked(api.analyze).mockResolvedValueOnce(payload({ evidence_hints: hints, overall_risk_score: 35 }))
+    const box = await screen.findByLabelText('More details to add') as HTMLTextAreaElement
+    await user.type(box, 'CIN: U74999DL2016PTC298345')
+    await user.click(screen.getByRole('button', { name: 'Check again with this' }))
+    await waitFor(() => expect(box.value).toBe(''))
+  })
+
   it('asks for something to add instead of sending an empty re-check', async () => {
     const user = await showResult(payload({ evidence_hints: hints }))
     await user.click(await screen.findByRole('button', { name: 'Check again with this' }))
@@ -417,6 +426,7 @@ describe('dispute verification page', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Confirm domain' }))
     expect(vi.mocked(api.verifyDispute)).toHaveBeenCalledWith('abcdefghijklmnopqrstuvwxyz')
     expect(await screen.findByText(/Domain is suppressed/)).toBeInTheDocument()
+    expect(screen.queryByText(/needs the link from the verification email/)).toBeNull()
     expect(window.location.hash).toBe('')
   })
   it('asks for the email link when there is no code', () => {
@@ -447,6 +457,20 @@ describe('upload and copy feedback', () => {
     const write = vi.fn().mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('blocked'))
     Object.defineProperty(navigator, 'clipboard', { value: { writeText: write }, configurable: true })
     await user.click(screen.getByRole('button', { name: 'Copy summary' }))
+    expect(await screen.findByRole('button', { name: 'Copied' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Copied' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Could not copy automatically')
+  })
+  it('shows copy feedback and error state when copying withdrawal code', async () => {
+    vi.mocked(api.submitReport).mockResolvedValueOnce({ status: 'reported', withdrawal_code: 'withdraw-code-12345' })
+    const user = await showResult(payload({ report_token: 'signed-report-token-is-long-enough', reportable_indicators: [] }))
+    const write = vi.fn().mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('blocked'))
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText: write }, configurable: true })
+    await user.click(screen.getByRole('button', { name: 'Share a suspected scam' }))
+    await user.click(screen.getByRole('button', { name: 'Continue' }))
+    await user.click(screen.getByLabelText(CONSENT_TEXT))
+    await user.click(screen.getByRole('button', { name: 'Report scam' }))
+    await user.click(await screen.findByRole('button', { name: 'Copy code' }))
     expect(await screen.findByRole('button', { name: 'Copied' })).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Copied' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('Could not copy automatically')

@@ -104,6 +104,7 @@ function ReportDialog({ token, indicators, onClose }: { token: string; indicator
   const [consented, setConsented] = useState(false)
   const [step, setStep] = useState(1)
   const [withdrawalCode, setWithdrawalCode] = useState('')
+  const [copyState, setCopyState] = useState<'' | 'copied' | 'failed'>('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const dialogRef = useRef<HTMLDivElement>(null)
@@ -130,7 +131,7 @@ function ReportDialog({ token, indicators, onClose }: { token: string; indicator
     catch (err) { setError(err instanceof Error ? err.message : 'The report could not be submitted.') }
     finally { setBusy(false) }
   }
-  async function copyCode() { await navigator.clipboard?.writeText(withdrawalCode) }
+  async function copyCode() { try { await navigator.clipboard.writeText(withdrawalCode); setCopyState('copied') } catch { setCopyState('failed') } }
   return <div className={styles.modalBackdrop} onMouseDown={e => { if (e.target === e.currentTarget) onClose() }}><div ref={dialogRef} className={styles.dialog} role="dialog" aria-modal="true" aria-labelledby="report-title" tabIndex={-1}>
     <button className={styles.closeButton} aria-label="Close report dialog" onClick={onClose}>Close</button>
     {!withdrawalCode ? step === 1 ? <><h2 id="report-title">Choose details to share</h2><p>Review the masked details extracted from this offer.</p>
@@ -141,7 +142,7 @@ function ReportDialog({ token, indicators, onClose }: { token: string; indicator
       <label className={styles.consent}><input type="checkbox" checked={consented} onChange={e => setConsented(e.target.checked)}/><span>{CONSENT_TEXT}</span></label>
       {error && <p className={styles.error} role="alert">{error}</p>}
       <div className={styles.actions}><button type="button" className={styles.secondaryButton} onClick={() => setStep(1)}>Back</button><button onClick={submit} disabled={!consented || busy}>{busy ? 'Sending…' : 'Report scam'}</button></div>
-    </> : <><h2 id="report-title">Reported</h2><p>Future job seekers who receive the same details will be warned.</p><div className={styles.withdrawCode}><span>Withdrawal code</span><strong>{withdrawalCode}</strong></div><button className={styles.secondaryButton} onClick={copyCode}>Copy code</button><p className={styles.help}>Save this code. It’s the only way to withdraw this report, and we can’t show it again.</p><button className={styles.textButton} onClick={onClose}>Close</button></>}
+    </> : <><h2 id="report-title">Reported</h2><p>Future job seekers who receive the same details will be warned.</p><div className={styles.withdrawCode}><span>Withdrawal code</span><strong>{withdrawalCode}</strong></div><button className={styles.secondaryButton} onClick={copyCode}>{copyState === 'copied' ? 'Copied' : 'Copy code'}</button>{copyState === 'failed' && <p className={styles.error} role="alert">Could not copy automatically. Save the code above manually.</p>}<p className={styles.help}>Save this code. It’s the only way to withdraw this report, and we can’t show it again.</p><button className={styles.textButton} onClick={onClose}>Close</button></>}
   </div></div>
 }
 
@@ -167,13 +168,20 @@ function AddEvidence({ result, input, onResult }: { result: AnalyzeResponse; inp
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const fileId = useId()
+  const fileRef = useRef<HTMLInputElement>(null)
   if (!hints.length) return null
   async function recheck(event: FormEvent) {
     event.preventDefault(); setError('')
     if (!extra.trim() && !file) { setError('Add some text or choose a file first.'); return }
     const next = { text: [input.text, extra.trim()].filter(Boolean).join('\n\n'), file: file ?? input.file }
     setBusy(true)
-    try { onResult(await analyze(next.text, next.file), next); window.scrollTo({ top: 0, behavior: 'instant' }) }
+    try {
+      const updated = await analyze(next.text, next.file)
+      setExtra(''); setFile(null)
+      if (fileRef.current) fileRef.current.value = ''
+      onResult(updated, next)
+      window.scrollTo({ top: 0, behavior: 'instant' })
+    }
     catch (err) { setError(err instanceof Error ? err.message : 'The request failed. Try again.') }
     finally { setBusy(false) }
   }
@@ -182,7 +190,7 @@ function AddEvidence({ result, input, onResult }: { result: AnalyzeResponse; inp
     <form onSubmit={recheck}>
       <label className={styles.textWell}><span>More details to add</span><textarea value={extra} onChange={e => setExtra(e.target.value)} disabled={busy} rows={4} placeholder="Paste the sender's address, CIN or GSTIN, or anything else from the offer"/></label>
       <label htmlFor={fileId} className={styles.uploadLabel}>Add a file (original email, screenshot or QR code)</label>
-      <input id={fileId} type="file" accept=".pdf,.png,.jpg,.jpeg,.bmp,.tiff,.eml,.txt" disabled={busy} onChange={e => setFile(e.target.files?.[0] ?? null)}/>
+      <input ref={fileRef} id={fileId} type="file" accept=".pdf,.png,.jpg,.jpeg,.bmp,.tiff,.eml,.txt" disabled={busy} onChange={e => setFile(e.target.files?.[0] ?? null)}/>
       <p className={styles.help}>Only one file is checked at a time; a new file replaces the earlier one. Nothing you add is stored.</p>
       <button type="submit" disabled={busy}>{busy ? 'Checking…' : 'Check again with this'}</button>
       {error && <p className={styles.error} role="alert">{error}</p>}
@@ -249,7 +257,7 @@ function VerifyDisputePage() {
   const token = new URLSearchParams(window.location.hash.replace(/^#/, '')).get('token') ?? ''
   const [message, setMessage] = useState(''); const [error, setError] = useState(''); const [busy, setBusy] = useState(false)
   async function confirm() { setBusy(true); setError(''); setMessage(''); try { const r = await verifyDispute(token); setMessage(r.message); window.history.replaceState({}, '', '/verify-dispute') } catch (err) { setError(err instanceof Error ? err.message : 'That link is invalid or has expired.') } finally { setBusy(false) } }
-  return <section className={styles.formPage}><h1>Confirm your dispute</h1>{token ? <><p>Confirm that you control this domain. The link works once and expires after 24 hours.</p><button onClick={confirm} disabled={busy || !!message}>{busy ? 'Confirming…' : 'Confirm domain'}</button></> : <p>This page needs the link from the verification email.</p>}{message && <p role="status">{message}</p>}{error && <p role="alert" className={styles.error}>{error}</p>}</section>
+  return <section className={styles.formPage}><h1>Confirm your dispute</h1>{token ? <><p>Confirm that you control this domain. The link works once and expires after 24 hours.</p><button onClick={confirm} disabled={busy || !!message}>{busy ? 'Confirming…' : 'Confirm domain'}</button></> : !message && <p>This page needs the link from the verification email.</p>}{message && <p role="status">{message}</p>}{error && <p role="alert" className={styles.error}>{error}</p>}</section>
 }
 
 function DisputePage() {
@@ -347,7 +355,7 @@ export default function App() {
   else if (path === '/verify-dispute') page = <VerifyDisputePage/>
   else if (path === '/dashboard') page = <DashboardPage/>
   else if (path === '/how-it-works') page = <HowPage/>
-  else if (result && path === '/') page = <Result result={result} input={input} onResult={show} onClear={() => { setResult(null); window.location.reload() }}/>
+  else if (result && path === '/') page = <Result result={result} input={input} onResult={show} onClear={() => { setResult(null); setInput({ text: '', file: null }) }}/>
   else page = <Home onResult={show}/>
   return <Shell>{page}</Shell>
 }

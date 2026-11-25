@@ -26,8 +26,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       detail = typeof body.detail === 'string' ? body.detail : ''
     } catch { /* The status message is enough. */ }
     let message = messages[response.status] ?? (detail || 'The request failed. Try again.')
-    // 413 covers both "file too big" and "text too long"; keep the server's wording for the text case.
-    if (response.status === 413 && /characters/i.test(detail)) message = detail
+    // 413 covers "file too big", "text too long", and BodyLimitMiddleware's request cap; keep the server's wording when specific.
+    if (response.status === 413 && (/characters/i.test(detail) || /larger than this service accepts/i.test(detail))) message = detail
     // 422 is also the server's answer to an .eml sent together with other files; its own wording is the useful one.
     if (response.status === 422 && /\.eml/i.test(detail)) message = detail
     if (response.status === 400 && detail) {
