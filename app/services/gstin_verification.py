@@ -437,9 +437,10 @@ def verify_gstin(facts: Dict[str, Any]) -> Dict[str, Any]:
             f"'{sender_domain.lower()}'; registered companies normally use their own domain"
         )
 
+    point_notes = [n for n in consistency_notes if "+10" in n or "+15" in n]
     if problems:
         return _result("fail", True, "; ".join(problems + consistency_notes) + ".", identifiers, 0.0,
-                       consistency_risk_points=consistency_points)
+                       consistency_risk_points=consistency_points, consistency_notes=point_notes)
 
     # A CIN is verified only against the loaded local company-master data.
     if cin:
@@ -460,5 +461,5 @@ def verify_gstin(facts: Dict[str, Any]) -> Dict[str, Any]:
     return _result(
         "insufficient_information", True,
         f"{listed}: format and check character are valid, but {registry_note}; {REGISTRY_NOTE}. " + " ".join(consistency_notes),
-        identifiers, None, consistency_risk_points=consistency_points,
+        identifiers, None, consistency_risk_points=consistency_points, consistency_notes=point_notes,
     )
