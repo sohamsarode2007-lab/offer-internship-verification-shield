@@ -6,6 +6,7 @@ import json
 import os
 import re
 import secrets
+import time
 import uuid
 from datetime import datetime, timedelta, timezone
 
@@ -394,6 +395,20 @@ def purge_expired(db: Session, now: datetime | None = None):
     from app.services.institution_dashboard import purge_old_observations
     purge_old_observations(db, now.date())
     db.commit()
+
+
+_LAST_PURGE_MONOTONIC: float | None = None
+_PURGE_INTERVAL_SECONDS = 900.0
+
+
+def purge_if_due(db: Session):
+    """Run purge_expired at most once every 15 minutes per worker process."""
+    global _LAST_PURGE_MONOTONIC
+    now = time.monotonic()
+    if _LAST_PURGE_MONOTONIC is not None and now - _LAST_PURGE_MONOTONIC < _PURGE_INTERVAL_SECONDS:
+        return
+    _LAST_PURGE_MONOTONIC = now
+    purge_expired(db)
 
 
 def stats(db: Session):

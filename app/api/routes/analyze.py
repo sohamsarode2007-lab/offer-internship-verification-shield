@@ -98,7 +98,7 @@ def analyze_offer(
         raise HTTPException(status.HTTP_400_BAD_REQUEST,
                             "Either 'text' form field or 'file' upload must be provided.")
 
-    community_reports.purge_expired(db)
+    community_reports.purge_if_due(db)
 
     if text and len(text) > MAX_TEXT_CHARS:
         raise HTTPException(status.HTTP_413_CONTENT_TOO_LARGE,

@@ -69,7 +69,7 @@ def _send_verification(email: str, token: str, domain: str):
 @router.post("/report")
 @limiter.limit("5/hour")
 def report(request: Request, payload: ReportRequest, db: Session = Depends(get_db)):
-    cr.purge_expired(db)
+    cr.purge_if_due(db)
     try:
         result = cr.accept_report(db, payload.report_token, payload.selected_indicators,
                                   payload.consent, payload.consent_version)
@@ -91,7 +91,7 @@ def withdraw(request: Request, payload: WithdrawRequest, db: Session = Depends(g
 @router.post("/disputes")
 @limiter.limit("3/hour")
 def dispute(request: Request, payload: DisputeRequest, db: Session = Depends(get_db)):
-    cr.purge_expired(db)
+    cr.purge_if_due(db)
     kind = payload.indicator_type.lower()
     if kind not in {"upi", "bank", "phone", "email", "domain"}:
         raise HTTPException(400, "unsupported indicator type")
@@ -152,5 +152,5 @@ def verify_dispute(request: Request, payload: VerifyRequest, db: Session = Depen
 @router.get("/indicators/stats")
 @limiter.limit("30/minute")
 def indicator_stats(request: Request, db: Session = Depends(get_db)):
-    cr.purge_expired(db)
+    cr.purge_if_due(db)
     return cr.stats(db)
