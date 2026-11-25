@@ -57,6 +57,7 @@ Bands: 0-30 likely legitimate | 31-60 insufficient evidence, verify manually | 6
 from typing import List, Dict, Any, Optional
 
 from app.services import identity_tie
+from app.services.check_types import CheckDict
 
 SCORING_MODEL = "rule_based_v2"
 
@@ -139,7 +140,7 @@ def _community_reason(details: str) -> str:
 
 
 def calculate_risk_score(
-    check_results: List[Dict[str, Any]],
+    check_results: List[CheckDict],
     facts: Optional[Dict[str, Any]] = None
 ) -> Dict[str, Any]:
     """Apply the rule_based_v2 points table. `facts` is accepted for API compatibility."""

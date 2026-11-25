@@ -403,3 +403,19 @@ Status: **open** = not reviewed yet.
     files a dispute, checks the trends and how-it-works pages, the .eml-with-other-files notice and the security
     headers, at desktop and phone width. It no longer takes screenshots into `docs/screenshots`, and it does not test the
     registry-match, struck-off or shared-sender cases (those are covered by backend tests and the eval).
+
+46. **Community reporting stays on (decided by you).** There is no switch for it in the code; reporting is enabled
+    whenever `INDICATOR_PEPPER` is set (without it, matching reports as "unavailable" and nothing is recorded). I did not add
+    an off switch because you decided to keep it on; say if you want one as an emergency kill switch.
+
+47. **Code-quality changes (open).**
+    - The analysis pipeline moved out of the route into `app/services/offer_analysis.py` (read submission, run checks,
+      store verdict) with a typed `CheckDict`; the route now only validates the request and maps errors to HTTP. Behaviour
+      is unchanged (same tests, same eval).
+    - Community lookup now loads each match's report in the same query (was one extra query per match) and fetches
+      disputes in one query per indicator.
+    - **One test assertion changed, on purpose:** `test_database_contains_no_raw_indicator_or_offer_text` asserted the
+      digits "5000" were absent from stored rows, which fails by chance when those digits appear inside a timestamp or
+      hash (about 1 run in 100). It now looks for "5000" as a whole word, which still catches any leaked amount.
+    - **Not done:** the rest of the "typed evidence" idea (typing every check's extra keys) and dashboard-query tuning;
+      not needed for correctness and I did not want to churn the scoring code before you review it.

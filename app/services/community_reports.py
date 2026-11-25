@@ -9,7 +9,8 @@ import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy.orm import Session
+from sqlalchemy import and_, or_
+from sqlalchemy.orm import Session, joinedload
 
 from app.models.models import (CommunityDispute, CommunityIndicator, CommunityReport,
     CommunityTemplateBand, CommunityToken)
@@ -320,24 +321,24 @@ def lookup_community(db: Session, indicators: list[dict], signature: list[int]):
     notes = []
     now = _utcnow()
     for item in indicators:
-        matches = []
-        for version, pepper in peppers.items():
-            digest = _digest(item["indicator_type"], item["normalized_value"], pepper)
-            matches.extend(db.query(CommunityIndicator).filter_by(indicator_type=item["indicator_type"], digest=digest, key_version=version).all())
+        wanted = [(version, _digest(item["indicator_type"], item["normalized_value"], pepper))
+                  for version, pepper in peppers.items()]
+        # One query per indicator, with each match's report loaded in the same query (not one query per match).
+        matches = db.query(CommunityIndicator).options(joinedload(CommunityIndicator.report)).filter(
+            CommunityIndicator.indicator_type == item["indicator_type"],
+            or_(*[and_(CommunityIndicator.digest == d, CommunityIndicator.key_version == v) for v, d in wanted]),
+        ).all()
         live = [m for m in matches if not m.report.is_demo and not m.report.withdrawn]
         reports = {m.report_id for m in live}
         if not reports:
             continue
         if not spans_enough_days([m.report.created_at for m in live]):
             continue                      # a single day's reports are not counted; see MIN_DISTINCT_DAYS
-        disputes = []
-        for version, pepper in peppers.items():
-            digest = _digest(item["indicator_type"], item["normalized_value"], pepper)
-            dispute = db.query(CommunityDispute).filter_by(indicator_type=item["indicator_type"], digest=digest,
-                key_version=version, resolved_at=None).filter(
-                CommunityDispute.created_at > active_dispute_cutoff(now)).first()
-            if dispute:
-                disputes.append(dispute)
+        disputes = db.query(CommunityDispute).filter(
+            CommunityDispute.indicator_type == item["indicator_type"],
+            or_(*[and_(CommunityDispute.digest == d, CommunityDispute.key_version == v) for v, d in wanted]),
+            CommunityDispute.resolved_at.is_(None),
+            CommunityDispute.created_at > active_dispute_cutoff(now)).all()
         if disputes and not (item["indicator_type"] == "domain" and any(x.domain_verified for x in disputes)):
             notes.append("An indicator match is disputed by the company, under review.")
         if item["indicator_type"] == "domain" and any(x.domain_verified for x in disputes):

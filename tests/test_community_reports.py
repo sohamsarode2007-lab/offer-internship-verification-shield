@@ -1,4 +1,5 @@
 import json
+import re
 from datetime import timedelta
 
 import pytest
@@ -276,7 +277,9 @@ def test_database_contains_no_raw_indicator_or_offer_text(db):
         serialized = repr(rows)
         assert value not in serialized
         assert "Dear Alice" not in serialized
-        assert "5000" not in serialized
+        # A whole-word match: the bare digits "5000" can occur by chance inside a timestamp's microseconds or a hash
+        # (this test failed about one run in a hundred before), which says nothing about leaked text.
+        assert not re.search(r"\b5000\b", serialized)
 
 
 def test_key_rotation_keeps_prior_hash_matchable(monkeypatch, db):
