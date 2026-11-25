@@ -89,10 +89,10 @@ or updates expected bands from predictions.
 | EC45 | pay_to_withdraw strong +30; +20; +20: 70 | high risk |
 | EC41 | Copied real CIN and a passing domain: 0; registry match meets the guard | likely legitimate |
 
-EC20–EC22 (`registry_fixture=true`, `input_type=text_file`) read the demo offers in
-`fixtures/demo/` and run with the synthetic company master
-(`fixtures/demo/synthetic_mca_master.csv`, fictional companies only) loaded into a
-temporary SQLite file in `DEMO_MODE`. All other cases run with no registry loaded.
+EC20–EC22 (`registry_fixture=true`, `input_type=text_file`) read the test offers in
+`tests/fixtures/offers/` and run with the fictional test-only company list
+(`tests/fixtures/offers/company_registry.csv`) loaded into a temporary SQLite file.
+All other cases run with no registry loaded.
 EC21 and EC22 are labelled `scam` but land in the manual-review band: a registry
 failure alone is worth +25, so without a payment demand they are abstentions, not
 high risk. That is the documented behaviour, not a miss.
@@ -140,8 +140,8 @@ before running tests. Truth labels are unchanged.
 | Eval EC01, EC04, EC05, EC08 | likely legitimate | insufficient evidence, verify manually | They have a passing domain and structurally valid GSTIN but no registry match or authenticated sender; the low-risk guard raises subtotal 0 to 31. |
 | Regression tests using `GOOD` with only domain + valid GSTIN (negated fee, no fee, inbound stipend, recipient-email variant) | likely legitimate | insufficient evidence, verify manually | Structural evidence is insufficient without an external verification signal. |
 
-The Emberlake demo document stays `likely legitimate` only when the synthetic
-company master is loaded in `DEMO_MODE`; its companies are fictional and the
+The Emberlake test fixture stays `likely legitimate` only when the test-only
+company list is loaded; its companies are fictional and the
 result is not a claim of live MCA verification.
 
 ## Held-out rule

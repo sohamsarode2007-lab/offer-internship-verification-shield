@@ -23,7 +23,7 @@ OCR uploads need Tesseract; scanned PDFs also need Poppler. The CI workflow inst
 
 **Production settings.** Set `ENVIRONMENT=production` and the app refuses to start unless
 `INDICATOR_PEPPER` is 32+ characters, `ALLOWED_ORIGINS` lists the real site (no localhost or `*`),
-`DATABASE_URL` is PostgreSQL, rate limiting is on and `DEMO_MODE` is unset; it also hides `/docs`.
+`DATABASE_URL` is PostgreSQL, and rate limiting is on; it also hides `/docs`.
 Behind a host's proxy, set `FORWARDED_ALLOW_IPS` (the proxy's address, or `*` on a platform that always sits
 behind its own proxy and cannot be reached directly) so each visitor's real address reaches the app; production
 start-up requires it. Rate-limit counters are in memory per process: keep one worker, or set
@@ -32,13 +32,6 @@ is served over https. Server access logs (request paths, client addresses) are o
 The Docker image builds the web page in a first stage, installs exact hashed versions from
 `requirements.lock` and starts uvicorn with `--no-access-log`. Stored analysis results are deleted after
 365 days.
-
-## Demo fixtures
-
-The synthetic demo includes two fictional company domains and a fictional
-government-scheme scam example. Set `DEMO_MODE=1` and
-`DEMO_FIXTURE_DOMAINS=emberlakeanalytics.example,brightpathedtech.example` to
-exercise the labelled domain fixtures. See [fixture notes](fixtures/demo/README.md).
 
 ## Registry and report guidance
 
@@ -57,9 +50,7 @@ recent incorporation without a contradictory claim is informational only.
 GSTIN and CIN location codes are shown as informational context.
 
 No official MCA data is included: the official bulk snapshot requires eKYC and is
-future scope. For demos, `fixtures/demo/synthetic_mca_master.csv` holds fictional
-companies; load it with `--synthetic` (stored as `source=SYNTHETIC`, used only when
-`DEMO_MODE=1`). See [fixture notes](fixtures/demo/README.md#synthetic-company-registry).
+future scope. For tests and local evaluation, load your own CSV snapshot with `scripts/load_mca_master.py`.
 
 Sender-authentication results are read only from original `.eml` uploads, not from pasted
 text or PDF/image uploads. They are shown for information and failures count against the
@@ -106,13 +97,7 @@ shows that it is under review. Only a domain dispute verified through a
 one-time link sent to that same domain is temporarily excluded from scoring.
 Configure SMTP to deliver those links; the code sits in the link's #fragment and is posted in a request body, so it never appears in server logs. Dispute contact email is retained for
 12 months after resolution. Reports can be withdrawn with their one-time code;
-inactive indicators expire after 24 months. Simulated reports (8
-fictional senders in `fixtures/demo/vit_simulated_senders.csv`, 45 reports over
-12 weeks) can be seeded only with `DEMO_MODE=1` using
-`python scripts/seed_demo_reports.py` (idempotent; `run_demo.bat` runs it); they
-are flagged demo and count only in demo mode. The same script seeds 484
-simulated checks with the same three fields every real check records (week,
-band, category) so the demo's 12-week chart and category summary are populated.
+inactive indicators expire after 24 months.
 
 HMACed identifiers and MinHash signatures are pseudonymised, not anonymous.
 The DPDP Act, 2023 and its Rules, including the lawful basis for third-party
@@ -188,20 +173,16 @@ the Vite app in another:
 ```powershell
 Set-Location frontend
 npm ci
-$env:VITE_DEMO = "1"
 # Optional when the API is not available through the Vite proxy:
 # $env:VITE_API_URL = "http://127.0.0.1:8000"
 npm run dev
 ```
 
-`VITE_DEMO=1` shows the fictional text samples from `fixtures/demo/`;
-otherwise the sample row is hidden.
-
 **Rollup runs as WebAssembly.** `frontend/package.json` has an npm `overrides`
 entry mapping `rollup` to `@rollup/wasm-node` (same version as the Rollup that
 Vite resolves), so Vite never loads Rollup's native `.node` binary. That binary
 is blocked by Windows Application Control on some PCs, which breaks
-`npm run build`, the frontend tests and `run_demo.bat`. The WebAssembly build is
+`npm run build` and the frontend tests. The WebAssembly build is
 a little slower but behaves the same on every platform, including CI. When
 upgrading Vite, keep the override's version in step with the Rollup range Vite
 requires, then regenerate `package-lock.json`.
@@ -213,7 +194,9 @@ Playwright's downloaded Chromium can be blocked by the same policy
 ```powershell
 $env:PLAYWRIGHT_CHANNEL = "msedge"
 npm --prefix frontend run test:e2e
-``` Vite proxies backend routes to
+```
+
+Vite proxies backend routes to
 `http://127.0.0.1:8000`. The default backend `ALLOWED_ORIGINS` includes the Vite
 origin `http://127.0.0.1:5173` and `http://localhost:5173`.
 

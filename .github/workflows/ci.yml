@@ -97,7 +97,7 @@ jobs:
         run: python eval/run_eval.py
 
   # Browser end-to-end flows (analyze, payment-demand floor, consent, withdrawal, dispute, dashboard).
-  # Runs against DEMO_MODE with synthetic fixtures only; no network lookups and no real data.
+  # Runs against ephemeral SQLite with offline fixtures; no external lookups and no real data.
   e2e:
     runs-on: ubuntu-24.04
     timeout-minutes: 25

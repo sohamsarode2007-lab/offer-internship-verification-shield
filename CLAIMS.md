@@ -24,38 +24,14 @@ been verified in this workspace.
   are marked `synthetic=true`; the free-mailbox/GSTIN-format examples use
   fictional `.example` domains and checksum-generated GSTINs.
 
-## Demo mode
+## Company-master lookup
 
-- The demo uses `DEMO_MODE` fixtures for two fictional domains:
-  `emberlakeanalytics.example` and `brightpathedtech.example`. Fixture results are
-  labelled in the output as `[DEMO FIXTURE — not a live DNS result]`; they are not
-  live DNS or company registry results.
-- The government-scheme document is also fictional and is labelled as a sample
-  scam pattern in its source text.
-- **The demo company registry is synthetic.** `fixtures/demo/synthetic_mca_master.csv`
-  lists 13 fictional companies (invented names, made-up CINs in the real CIN format;
-  active, struck-off, dissolved and under-liquidation statuses). Loaded with
-  `scripts/load_mca_master.py --synthetic`, the database records `source=SYNTHETIC`
-  and the app consults it only when `DEMO_MODE=1`; outside demo mode it behaves as if
-  no registry is loaded. This demonstrates the full pipeline (CSV → loader → SQLite →
-  CIN lookup → scoring) with fictional data only.
-- In demo mode, synthetic registry results are displayed like any registry result,
-  **without a synthetic label on the website**: the details read
-  `Company registry match: <name>; Active; incorporated <date>.` for an active,
-  name-matched company; failures lead with the problem: `Company is <status> in
-  company registry records: <name>; incorporated <date>.` or `CIN belongs to a
-  different company in company registry records: ...`. The same wording is used for
-  real company-master data. No UI
-  text, API detail or page describes this data as official, live, MCA data or from
-  data.gov.in. Every such response carries the non-displayed API field
-  `registry_source: "synthetic"`, so a result can always be traced to the synthetic
-  snapshot. Presenters should state in the demo that the companies are fictional.
 - No company-master data is included in this repository. Two optional sources can
   answer a CIN lookup, and each response carries the non-displayed field
   `registry_source`: `mca_csv` (a CSV the operator loaded locally with
   `scripts/load_mca_master.py`) or `ogd` (one lookup by CIN against the
   data.gov.in "RoC-wise Company Master Data" resource, made only when the operator
-  sets `DATA_GOV_IN_API_KEY` and DEMO_MODE is off). That resource is a periodically
+  sets `DATA_GOV_IN_API_KEY`). That resource is a periodically
   refreshed snapshot published under the Government Open Data License - India
   (attribution: Ministry of Corporate Affairs, data.gov.in), not a live registry;
   a company may have changed status since. If the API times out, is blocked or
@@ -65,6 +41,11 @@ been verified in this workspace.
   read; addresses, capital and industry fields are discarded. The registry
   industry-classification column is not used because a sample row for a large
   IT-services company carried an unrelated manufacturing classification.
+- Registry results read
+  `Company registry match: <name>; Active; incorporated <date>.` for an active,
+  name-matched company; failures lead with the problem: `Company is <status> in
+  company registry records: <name>; incorporated <date>.` or `CIN belongs to a
+  different company in company registry records: ...`.
 - Company-name comparison expands legal suffixes (`Pvt.`/`Ltd.` to `Private`/
   `Limited`) before matching, and registry statuses meaning not operating
   (strike off, dissolved, liquidation, amalgamated) fail the check; `Dormant` does not.
@@ -154,14 +135,12 @@ been verified in this workspace.
   an uploaded `.eml` are shown but never counted as a signal or as a score reduction:
   every header in an uploaded file is written by whoever made the file. A failed result
   still counts against the sender, because forging a failure only hurts the forger. Structural domain/GSTIN checks
-  alone are capped at manual review. The demo registry fixture is an explicit
-  demo-only exception for illustrating that path; it is not external verification.
+  alone are capped at manual review.
 - `scripts/load_mca_master.py` imports a company-master CSV into local SQLite and
-  records its source (`MCA_CSV`, or `SYNTHETIC` with `--synthetic`). Rows marked
-  `Synthetic=true` are refused without `--synthetic`, and the two sources are never
-  mixed in one database. This workspace does not include official MCA data (future
-  scope, eKYC required); lookup behaviour is tested with temporary database rows
-  and the synthetic demo snapshot.
+  records its source (`MCA_CSV`). Rows marked
+  `Synthetic=true` are refused so test-only rows cannot enter a runtime registry
+  database. This workspace does not include official MCA data (future
+  scope, eKYC required); lookup behaviour is tested with temporary database rows.
 - `/analyze` returns `next_steps` and `complaint_summary` based on its rule
   results. These are automated guidance, not an official complaint filing.
   High-risk results tell people who already paid to call the National Cyber
@@ -188,23 +167,20 @@ been verified in this workspace.
   domain dispute is temporarily suppressed. Unresolved disputes lapse after 90 days. Inactive indicators expire after
   24 months. Digests/signatures are pseudonymised, not anonymous; legal review
   under the DPDP Act, 2023 and its Rules is required, including third-party
-  sender data. Demo rows count only in `DEMO_MODE=1`.
+  sender data. Rows flagged `is_demo` from older builds never count.
 - Deployment hardening: with `ENVIRONMENT=production` the app refuses to start on an unsafe configuration (short
   or missing pepper, localhost/`*` origins, SQLite, rate limiting off); responses carry nosniff, frame-deny,
   no-referrer and a Content-Security-Policy; access logs are off by default; stored analysis results are deleted
   after 365 days. The Docker build and the CSP were not exercised in a real browser or container from the
   build environment.
 - The model is `rule_based_v2`; it is a fixed rule table, not a trained ML model.
-  GSTIN checks are structural. CIN lookup uses a local company-master SQLite copy;
-  it does not contact a live service. An opted-in synthetic CIN fixture is
-  available only in demo mode and is labelled in output. A synthetic company-master
-  snapshot is also demo-only; its results are traceable via `registry_source`.
+  GSTIN checks are structural. CIN lookup uses a local company-master SQLite copy
+  or an opted-in data.gov.in CIN lookup (`DATA_GOV_IN_API_KEY`).
 
 ## OCR and rate limiting
 
 - **OCR was verified in CI** by successful run `43403402979` on 2026-11-13 UTC (commit `51c6c2357ddf93566249e2287913d36a9b674263`). The log shows Tesseract and Poppler installed and the suite finished `143 passed` with no skipped tests or pytest warnings. This includes degraded-image robustness cases for the three demo PDFs across clean, 3° rotation, blur, and JPEG quality 30 variants. No band flips occurred; therefore there is no flip-causing extracted text to report. Passing cases do not print their OCR text. This verifies the CI environment, not the previously blocked local Windows Tesseract install.
-- `RATE_LIMIT` controls requests per IP. The default is `10/minute`; with
-  `DEMO_MODE=1` and `RATE_LIMIT` unset, the default is `100/minute`.
+- `RATE_LIMIT` controls requests per IP. The default is `10/minute`.
 
 ## Public scam-trends page
 
@@ -221,10 +197,6 @@ been verified in this workspace.
   Checks are not deduplicated by person, so counts
   are checks, not verified unique people. The senders table comes from consented
   community reports.
-- With `DEMO_MODE=1`, `run_demo.bat` seeds 45 simulated reports (senders table)
-  and 484 simulated checks (the same three fields) so the 12-week chart and
-  category summary are populated; checks made in demo mode are also demo-flagged.
-  Demo rows count only in demo mode. Two chart cells are deliberately below five.
 - `GET /trends/dashboard` returns week-by-band and week-by-category
   counts for 12 ISO weeks and replaces cells below five with `"<5"`, a
   `category_summary` (per category: 12-week total, last 4 weeks, previous 8
@@ -319,7 +291,7 @@ been verified in this workspace.
 ## Data sources panel and request budget
 
 - The "How it works" page shows each source with the date it was last refreshed and its age: the local company
-  registry snapshot (flagged out of date after 90 days, labelled demo when it is the fictional snapshot) and the
+  registry snapshot (flagged out of date after 90 days; a snapshot marked synthetic is ignored and reported as date unknown) and the
   hand-read employer advisories (out of date after 180 days, measured from the oldest page read). A source with no
   date is shown as "date unknown", never as current. It also shows the rules version and how many optional online
   lookups are switched on. No secrets and no offer data are involved.
@@ -379,7 +351,7 @@ been verified in this workspace.
 
 
 - **Evidence source line.** Each check in the result shows its source (offer text, email headers, DNS lookup, local company
-  snapshot, community reports or demo fixture), whether it affects the score, forces high risk or has no effect, and a
+  snapshot or community reports), whether it affects the score, forces high risk or has no effect, and a
   confidence. A check that could not tell (unknown or not applicable) shows "not enough to tell", never a pass. The
   record holds no offer text or identifiers.
 
