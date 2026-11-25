@@ -370,3 +370,19 @@ def test_old_analysis_results_and_their_check_rows_are_deleted(db):
     cr.purge_expired(db)
     assert [c.check_name for c in db.query(CheckResult).all()] == ["recent"]
     assert db.query(Offer).count() == 1 and db.query(VerificationResult).count() == 1
+
+
+def test_short_offers_under_five_words_do_not_collide_on_empty_minhash(db):
+    short_scam = "Pay fee rky.verma@ybl"
+    short_legit = "Short offer note"
+    sig_scam = cr.minhash_signature(short_scam)
+    sig_legit = cr.minhash_signature(short_legit)
+    assert sig_scam == []
+    assert sig_legit == []
+    item = candidate()
+    token, _ = cr.issue_report_token(db, [item], sig_scam)
+    assert token is not None
+    cr.accept_report(db, token, [f"{item['indicator_type']}:{item['digest']}"], True, cr.CONSENT_VERSION)
+    assert cr.lookup_community(db, [], sig_legit)["risk_points"] == 0
+    assert cr.issue_report_token(db, [], sig_legit) == (None, [])
+

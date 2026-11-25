@@ -203,13 +203,15 @@ def minhash_signature(text: str) -> list[int]:
     words = re.findall(r"[a-z0-9<>]+", redact_text(text).casefold())
     shingles = [" ".join(words[i:i + 5]) for i in range(max(0, len(words) - 4))]
     if not shingles:
-        shingles = ["<EMPTY>"]
+        return []
     hashes = [int.from_bytes(hashlib.sha256(s.encode()).digest()[:8], "big") for s in shingles]
     return [min((h ^ ((i + 1) * 0x9E3779B97F4A7C15)) & 0xFFFFFFFFFFFFFFFF for h in hashes)
             for i in range(MINHASH_SIZE)]
 
 
 def _signature_bands(signature: list[int]):
+    if len(signature) != MINHASH_SIZE:
+        return []
     return [(band, hashlib.sha256(",".join(map(str, signature[band * BAND_SIZE:(band + 1) * BAND_SIZE])).encode()).hexdigest())
             for band in range(MINHASH_SIZE // BAND_SIZE)]
 
@@ -243,7 +245,7 @@ def issue_report_token(db: Session, indicators: list[dict], signature: list[int]
     """Signed, single-use token. band/scam_category (rule outputs, no text) let a consented
     report be counted on the scam-trends dashboard."""
     current, _ = _pepper_config()
-    if not current or not signature:
+    if not current or (not signature and not indicators):
         return None, []
     version, pepper = current
     jti = str(uuid.uuid4())
