@@ -36,6 +36,8 @@ DEMANDS = [
     "Registration ke liye fees bharna hoga.",
     # sentence boundary after company suffix
     "No hidden charges at Acme Pvt. Ltd. Pay 2000 rupees for BGV charges.",
+    # disguised fee in same sentence as "we will provide"
+    "We will provide your offer letter once you pay 2000 rupees for BGV charges.",
 ]
 
 NOT_DEMANDS = [

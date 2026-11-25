@@ -74,7 +74,7 @@ _EXTRA_RE = re.compile("|".join(f"(?:{p})" for p in EXTRA_FEE_PATTERNS), re.IGNO
 _COMPANY_BEARS_RE = re.compile(
     r"\b(?:bears?|borne|bearing|covers?|covered|at\s+its\s+own\s+cost|free\s+of\s+cost|"
     r"at\s+no\s+(?:extra\s+)?cost|paid\s+by\s+the\s+company|waived|waiver|exempt(?:ed)?)\b"
-    r"|\b(?:we|company|employer|organi[sz]ation)\s+(?:will\s+)?(?:pay|credit|transfer|send|provide)",
+    r"|\b(?:we|company|employer|organi[sz]ation)\s+(?:will\s+)?(?:pay|credit|transfer|send)\b",
     re.IGNORECASE,
 )
 
@@ -170,8 +170,8 @@ def _find_phrase_demands(text: str, spans) -> List[Dict[str, Any]]:
         s, e = _sentence_of(spans, m.start())
         if _is_negated(text, s, m.start()):
             continue
-        sentence = text[s:e]
-        if _COMPANY_BEARS_RE.search(sentence) or _INBOUND_MONEY_RE.search(sentence):
+        local = text[max(s, m.start() - 80):min(e, m.end() + 80)]
+        if _COMPANY_BEARS_RE.search(local) or _INBOUND_MONEY_RE.search(local):
             continue
         demands.append({"kind": "phrase", "match": re.sub(r"\s+", " ", m.group(0).strip()),
                         "start": m.start(), "end": m.end()})
