@@ -133,14 +133,6 @@ describe('analysis result', () => {
     for (const engineWord of ['offset', 'score floor', "'likely legitimate'"]) expect(why.textContent).not.toContain(engineWord)
   })
 
-  it('shows the demo-fixture note as small steel text', async () => {
-    await showResult(payload({ checks: [{ check_name: 'domain_verification', status: 'pass', details: '[DEMO FIXTURE — not a live DNS result] x.example.' }] }))
-    const note = screen.getByText('Demo fixture, not a live check')
-    expect(note.tagName).toBe('SPAN')
-    const css = readFileSync(resolve(__dirname, 'App.module.css'), 'utf8')
-    expect(css).toMatch(/\.demoNote \{[^}]*color: var\(--steel\)[^}]*font-size: 12px/)
-  })
-
   it('renders ledger names, status glyphs and details in API order', async () => {
     await showResult(payload({ checks: [
       { check_name: 'sender_authentication', status: 'pass', details: 'DMARC and aligned DKIM passed.' },
@@ -197,11 +189,6 @@ describe('analysis result', () => {
     expect(within(section).getByRole('link', { name: 'National Cyber Crime Reporting Portal' })).toHaveAttribute('href', 'https://cybercrime.gov.in/')
     expect(within(section).getByText('Contact your bank or payment app immediately.')).toBeInTheDocument()
     expect(section.querySelector('ul')).toHaveClass(styles.safetyCards)
-  })
-
-  it('labels demo fixture evidence', async () => {
-    await showResult(payload({ checks: [{ check_name: 'domain_verification', status: 'pass', details: '[DEMO FIXTURE — not a live DNS result] emberlakeanalytics.example.' }] }))
-    expect(screen.getByText('Demo fixture, not a live check')).toBeInTheDocument()
   })
 
   it('hides Why, complaint summary and report controls when their fields are absent', async () => {

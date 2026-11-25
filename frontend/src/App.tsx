@@ -37,12 +37,10 @@ function Home({ onResult }: { onResult: (result: AnalyzeResponse, input: Submitt
   const file: File | File[] | null = files.length === 0 ? null : files.length === 1 ? files[0] : files
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
-  const [demoText, setDemoText] = useState('')
   const [linkOffer, setLinkOffer] = useState(false)
   const [linkConsent, setLinkConsent] = useState(false)
   useEffect(() => { let live = true; loadConfig().then(c => { if (live) setLinkOffer(c.link_lookups) }); return () => { live = false } }, [])
   const fileInputId = useId()
-  const demo = import.meta.env.VITE_DEMO === '1'
   const [pickNote, setPickNote] = useState('')
   async function run(event: FormEvent) {
     event.preventDefault(); setError('')
@@ -52,46 +50,36 @@ function Home({ onResult }: { onResult: (result: AnalyzeResponse, input: Submitt
     catch (err) { setError(err instanceof Error ? err.message : 'The request failed. Try again.') }
     finally { setBusy(false) }
   }
-  async function sample(name: string) {
-    setError('')
-    try {
-      const response = await fetch(`/demo/${name}`)
-      if (!response.ok) throw new Error('Sample could not be loaded.')
-      setText(await response.text()); setFiles([]); setDemoText(name)
-    } catch { setError('The sample could not be loaded. Try again.') }
-  }
   return <section className={styles.home}>
     <div className={styles.homeIntro}><h1>Check an offer before you pay anything.</h1><p>We check payment requests, sender details and available company records.</p></div>
     <form onSubmit={run} className={styles.intake}>
       <div className={styles.intakeGrid}>
-        <label className={styles.textWell}><span>Paste offer text</span><textarea value={text} onChange={e => { setText(e.target.value); setDemoText('') }} disabled={busy} placeholder="Paste the message or offer letter here" rows={12}/></label>
-        <div className={styles.uploadWell}><label htmlFor={fileInputId} className={styles.uploadLabel}>Choose up to 5 files (PDF, image or .txt), or one .eml</label><input id={fileInputId} type="file" multiple accept=".pdf,.png,.jpg,.jpeg,.bmp,.tiff,.eml,.txt" disabled={busy} onChange={e => { const picked = Array.from(e.target.files ?? []); setFiles(picked.slice(0, 5)); setDemoText(''); setPickNote(picked.length > 5 ? `Only the first 5 of ${picked.length} files were kept.` : picked.length > 1 && picked.some(f => f.name.toLowerCase().endsWith('.eml')) ? 'An .eml must be uploaded on its own. Choose either the .eml or the other files.' : '') }}/>
+        <label className={styles.textWell}><span>Paste offer text</span><textarea value={text} onChange={e => setText(e.target.value)} disabled={busy} placeholder="Paste the message or offer letter here" rows={12}/></label>
+        <div className={styles.uploadWell}><label htmlFor={fileInputId} className={styles.uploadLabel}>Choose up to 5 files (PDF, image or .txt), or one .eml</label><input id={fileInputId} type="file" multiple accept=".pdf,.png,.jpg,.jpeg,.bmp,.tiff,.eml,.txt" disabled={busy} onChange={e => { const picked = Array.from(e.target.files ?? []); setFiles(picked.slice(0, 5)); setPickNote(picked.length > 5 ? `Only the first 5 of ${picked.length} files were kept.` : picked.length > 1 && picked.some(f => f.name.toLowerCase().endsWith('.eml')) ? 'An .eml must be uploaded on its own. Choose either the .eml or the other files.' : '') }}/>
           <p className={styles.help}>Uploading the original email lets us read its sender-check results (SPF, DKIM, DMARC). Anyone can edit those lines in a file, so a failure counts against the offer but a pass is never counted as proof. Upload one .eml on its own; PDFs, images and .txt files can go together (up to 5).</p><p className={styles.help}>Gmail: open the message → ⋮ → “Download message”.</p>
-          {pickNote && <p className={styles.help} role="status">{pickNote}</p>}{files.length > 0 && <p className={styles.selectedFile}>Selected: {files.map(f => f.name).join(', ')}</p>}{demoText && <p className={styles.selectedFile}>Sample loaded: {demoText.replace('.txt', '')}</p>}
+          {pickNote && <p className={styles.help} role="status">{pickNote}</p>}{files.length > 0 && <p className={styles.selectedFile}>Selected: {files.map(f => f.name).join(', ')}</p>}
         </div>
       </div>
       {linkOffer && <label className={styles.consent}><input type="checkbox" checked={linkConsent} onChange={e => setLinkConsent(e.target.checked)} disabled={busy}/><span>{LINK_CONSENT_TEXT}</span></label>}
       <div className={styles.submitLine}><button type="submit" disabled={busy}>{busy ? 'Checking…' : 'Check offer'}</button><p>We don’t store your offer or your personal details. Only the result is kept.</p></div>
       {error && <p className={styles.error} role="alert">{error}</p>}
     </form>
-    {demo && <div className={styles.samples}><span>Try a sample:</span><button type="button" className={styles.textButton} disabled={busy} onClick={() => sample('legit_emberlake.txt')}>Emberlake offer</button><button type="button" className={styles.textButton} disabled={busy} onClick={() => sample('scam_fake_govt_scheme_fee.txt')}>Government scheme</button><button type="button" className={styles.textButton} disabled={busy} onClick={() => sample('legit_brightpath_young_startup.txt')}>Brightpath internship</button><button type="button" className={styles.textButton} disabled={busy} onClick={() => sample('registry_name_match_quillmere.txt')}>Quillmere internship</button><button type="button" className={styles.textButton} disabled={busy} onClick={() => sample('registry_struck_off_tarnwick.txt')}>Tarnwick internship</button><button type="button" className={styles.textButton} disabled={busy} onClick={() => sample('registry_cin_mismatch_halvorn.txt')}>Halvorn internship</button><button type="button" className={styles.textButton} disabled={busy} onClick={() => sample('scam_shared_upi_corvane.txt')}>Corvane internship</button></div>}
   </section>
 }
 
 const sourceText: Record<string, string> = {
   dns_lookup: 'DNS lookup', offer_text: 'offer text', email_headers: 'email headers', community_reports: 'community reports',
-  offer_text_and_local_registry_snapshot: 'offer text and local company snapshot', demo_fixture: 'demo fixture', derived_check: 'derived check',
+  offer_text_and_local_registry_snapshot: 'offer text and local company snapshot', derived_check: 'derived check',
 }
 const affectsText: Record<string, string> = { score: 'affects the score', safety_floor: 'forces high risk', context: 'no score effect' }
 
 function EvidenceLedger({ checks, meta = [] }: { checks: CheckResult[]; meta?: NonNullable<AnalyzeResponse['evidence_meta']> }) {
   return <section className={styles.ledgerSection}><h2>Evidence</h2><div className={styles.ledgerWrap}><table className={styles.ledger} aria-label="Evidence"><thead><tr><th scope="col">Check</th><th scope="col">Result</th></tr></thead><tbody>{checks.map((check, index) => {
     const details = check.details ?? ''
-    const demoMarker = details.includes('[DEMO FIXTURE')
     const m = meta.find(item => item.check_name === check.check_name)
     return <tr className={styles.ledgerRow} key={`${check.check_name}-${index}`} style={{ '--row-index': index } as React.CSSProperties}>
       <th scope="row">{labelByCheck[check.check_name] ?? check.check_name.replaceAll('_', ' ')}</th>
-      <td><span className={styles.status}><span aria-hidden="true">{statusGlyph[check.status]}</span> {statusText[check.status]}</span>{demoMarker && <span className={styles.demoNote}>Demo fixture, not a live check</span>}{m && <span className={styles.sourceNote}>Source: {sourceText[m.source] ?? m.source} · {affectsText[m.affects] ?? m.affects} · confidence: {m.confidence === 'none' ? 'not enough to tell' : m.confidence}</span>}{details && <details className={styles.details}><summary>Details</summary><p>{details}</p></details>}</td>
+      <td><span className={styles.status}><span aria-hidden="true">{statusGlyph[check.status]}</span> {statusText[check.status]}</span>{m && <span className={styles.sourceNote}>Source: {sourceText[m.source] ?? m.source} · {affectsText[m.affects] ?? m.affects} · confidence: {m.confidence === 'none' ? 'not enough to tell' : m.confidence}</span>}{details && <details className={styles.details}><summary>Details</summary><p>{details}</p></details>}</td>
     </tr>
   })}</tbody></table></div></section>
 }
@@ -317,7 +305,7 @@ function DashboardPage() {
   return <section className={styles.dashboardPage}><h1>Scam trends</h1><p>Weekly results, scam categories and reported senders from checks on this site. Counts are checks, not verified unique people.</p>{!dashboard && !error && <p className={styles.help} role="status">Loading…</p>}{error && <><p role="alert" className={styles.error}>{error}</p><button type="button" className={styles.secondaryButton} onClick={() => setAttempt(n => n + 1)}>Try again</button></>}{dashboard && <div className={styles.dashboardResults}><SendersTable dashboard={dashboard}/><h2>Results by week</h2><TrendChart dashboard={dashboard}/><CategorySummary dashboard={dashboard}/></div>}</section>
 }
 
-const sourceStatusText: Record<string, string> = { current: 'Up to date', stale: 'Out of date', demo: 'Demo data', unknown: 'Date unknown' }
+const sourceStatusText: Record<string, string> = { current: 'Up to date', stale: 'Out of date', unknown: 'Date unknown' }
 
 function SourcesPanel() {
   const [data, setData] = useState<Awaited<ReturnType<typeof loadSources>> | null>(null)
@@ -337,7 +325,7 @@ function SourcesPanel() {
 function HowPage() {
   return <article className={styles.howPage}><h1>What this checks</h1><p className={styles.lede}>An automated review of specific signals in an offer. It helps you decide what to verify; it cannot prove who wrote a message or whether a job is real.</p>
     <section><h2>Who sent it</h2><p>For an original .eml, the service reads the recipient provider’s topmost Authentication-Results, DMARC, SPF and aligned DKIM, plus sender details. This verifies sender authentication as recorded by that mail provider, not message authorship. Pasted text and documents show only the domain claimed in the content.</p></section>
-    <section><h2>Email domain</h2><p>Checks domain availability, age, mailbox type and lookalike signals. A passing result means those domain rules passed; it does not verify company identity. Demo fixture responses are labelled and are not live checks.</p></section>
+    <section><h2>Email domain</h2><p>Checks domain availability, age, mailbox type and lookalike signals. A passing result means those domain rules passed; it does not verify company identity.</p></section>
     <section><h2>Company registration</h2><p>Checks GSTIN structure, and we check the CIN against company registry records. A registry match means the CIN belongs to an active company with the same name; a different company name or an inactive status is flagged. GSTIN and CIN state codes are informational.</p></section>
     <section><h2>Payment request</h2><p>Looks for fee and deposit demands, nearby UPI details, and relevant urgency. A detected phrase does not prove that money changed hands. Salary, stipend and reimbursement context is excluded from standalone payment-demand detection.</p></section>
     <section><h2>Reports from other job seekers</h2><p>With consent, selected scammer-role indicators and a redacted wording fingerprint can be matched against reports. Evidence is bucketed, correlated evidence is capped, and community evidence alone cannot cause a high-risk verdict. Reports are not independently verified.</p></section>
