@@ -137,11 +137,11 @@ def top_senders(db: Session) -> list[dict]:
     """
     from collections import Counter
     from app.models.models import CommunityDispute, CommunityIndicator, CommunityReport
-    from app.services.community_reports import CONSENT_VERSION
+    from app.services.community_reports import CONSENT_VERSION, active_dispute_cutoff, spans_enough_days
 
     query = db.query(CommunityIndicator.indicator_type, CommunityIndicator.digest, CommunityIndicator.key_version,
                      CommunityIndicator.report_id, CommunityIndicator.masked_display,
-                     CommunityIndicator.iso_week, CommunityIndicator.scam_category).join(CommunityReport).filter(
+                     CommunityIndicator.iso_week, CommunityIndicator.scam_category, CommunityReport.created_at).join(CommunityReport).filter(
         CommunityReport.withdrawn.is_(False),
         CommunityReport.consent_version >= CONSENT_VERSION,
         CommunityIndicator.masked_display.isnot(None),
@@ -150,21 +150,25 @@ def top_senders(db: Session) -> list[dict]:
         query = query.filter(CommunityReport.is_demo.is_(False))
 
     groups: dict[tuple, dict] = {}
-    for kind, digest, version, report_id, display, week, category in query.all():
+    for kind, digest, version, report_id, display, week, category, created in query.all():
         group = groups.setdefault((kind, digest, version), {
-            "indicator_type": kind, "indicator": display, "reports": set(), "weeks": [], "categories": Counter()})
+            "indicator_type": kind, "indicator": display, "reports": set(), "weeks": [], "categories": Counter(),
+            "times": []})
         group["reports"].add(report_id)
+        group["times"].append(created)
         if week:
             group["weeks"].append(week)
         if category:
             group["categories"][category] += 1
 
     disputed = {(d.indicator_type, d.digest, d.key_version)
-                for d in db.query(CommunityDispute).filter(CommunityDispute.resolved_at.is_(None)).all()}
+                for d in db.query(CommunityDispute).filter(
+                    CommunityDispute.resolved_at.is_(None),
+                    CommunityDispute.created_at > active_dispute_cutoff()).all()}
     senders = []
     for key, group in groups.items():
         count = len(group["reports"])
-        if count < SENDER_THRESHOLD:
+        if count < SENDER_THRESHOLD or not spans_enough_days(group["times"]):
             continue
         category = (sorted(group["categories"].items(), key=lambda kv: (-kv[1], kv[0]))[0][0]
                     if group["categories"] else "other")

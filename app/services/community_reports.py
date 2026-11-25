@@ -9,7 +9,6 @@ import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.models.models import (CommunityDispute, CommunityIndicator, CommunityReport,
@@ -19,6 +18,13 @@ from app.services import upi_payment
 from app.utils.email_domains import is_free_mailbox, is_upi_handle
 
 CONSENT_VERSION = 4  # v4: details appear in masked form on the public scam-trends page (v3 named one college)
+# Independence is not provable without identifying reporters, so the only gate is a weak one: reports for the same
+# indicator must span at least this many different UTC days before they count (one burst in one sitting never does).
+MIN_DISTINCT_DAYS = 2
+DISPUTE_ACTIVE_DAYS = 90        # an unresolved dispute affects results for this long, then lapses
+DISPUTE_KEEP_DAYS = 180         # and is deleted (with its contact email) after this long
+MAX_ACTIVE_DISPUTES_PER_EMAIL = 3
+MAX_ACTIVE_DISPUTES_PER_INDICATOR = 5
 MINHASH_SIZE = 128
 BAND_SIZE = 8
 PHONE_RE = re.compile(r"(?<!\w)(?:\+?91[\s().-]?)?[6-9]\d{9}(?!\w)")
@@ -33,6 +39,15 @@ PAYMENT_CONTEXT_RE = re.compile(r"\b(?:pay|payment|transfer|send|deposit|fee|acc
 
 def _utcnow():
     return datetime.now(timezone.utc)
+
+
+def spans_enough_days(created_times) -> bool:
+    """True when the reports were made on at least MIN_DISTINCT_DAYS different UTC days."""
+    return len({t.date() for t in created_times if t is not None}) >= MIN_DISTINCT_DAYS
+
+
+def active_dispute_cutoff(now: datetime | None = None) -> datetime:
+    return (now or _utcnow()) - timedelta(days=DISPUTE_ACTIVE_DAYS)
 
 
 def _pepper_config():
@@ -308,14 +323,18 @@ def lookup_community(db: Session, indicators: list[dict], signature: list[int]):
         for version, pepper in peppers.items():
             digest = _digest(item["indicator_type"], item["normalized_value"], pepper)
             matches.extend(db.query(CommunityIndicator).filter_by(indicator_type=item["indicator_type"], digest=digest, key_version=version).all())
-        reports = {m.report_id for m in matches if not m.report.is_demo and not m.report.withdrawn}
+        live = [m for m in matches if not m.report.is_demo and not m.report.withdrawn]
+        reports = {m.report_id for m in live}
         if not reports:
             continue
+        if not spans_enough_days([m.report.created_at for m in live]):
+            continue                      # a single day's reports are not counted; see MIN_DISTINCT_DAYS
         disputes = []
         for version, pepper in peppers.items():
             digest = _digest(item["indicator_type"], item["normalized_value"], pepper)
             dispute = db.query(CommunityDispute).filter_by(indicator_type=item["indicator_type"], digest=digest,
-                key_version=version, resolved_at=None).first()
+                key_version=version, resolved_at=None).filter(
+                CommunityDispute.created_at > active_dispute_cutoff(now)).first()
             if dispute:
                 disputes.append(dispute)
         if disputes and not (item["indicator_type"] == "domain" and any(x.domain_verified for x in disputes)):
@@ -325,10 +344,10 @@ def lookup_community(db: Session, indicators: list[dict], signature: list[int]):
         count = len(reports)
         if count >= 10:
             indicator_bucket_points = max(indicator_bucket_points, 40)
-            notes.append(f"This {item['indicator_type']} was reported by 10+ people.")
+            notes.append(f"This {item['indicator_type']} was reported in 10+ separate reports.")
         elif count >= 3:
             indicator_bucket_points = max(indicator_bucket_points, 25)
-            notes.append(f"This {item['indicator_type']} was reported by 3+ people.")
+            notes.append(f"This {item['indicator_type']} was reported in 3+ separate reports.")
         for report_id in reports:
             db.query(CommunityReport).filter_by(id=report_id).update({"last_seen_at": now})
             db.query(CommunityIndicator).filter_by(report_id=report_id, digest=item["digest"]).update({"last_seen_at": now})
@@ -361,15 +380,24 @@ def purge_expired(db: Session, now: datetime | None = None):
         db.delete(report)
     db.query(CommunityDispute).filter(CommunityDispute.resolved_at.is_not(None),
         CommunityDispute.resolved_at < now - timedelta(days=365)).delete(synchronize_session=False)
+    db.query(CommunityDispute).filter(CommunityDispute.created_at < now - timedelta(days=DISPUTE_KEEP_DAYS)
+        ).delete(synchronize_session=False)
     from app.services.institution_dashboard import purge_old_observations
     purge_old_observations(db, now.date())
     db.commit()
 
 
 def stats(db: Session):
-    query = db.query(CommunityIndicator.indicator_type, func.count(func.distinct(CommunityIndicator.report_id))).join(
-        CommunityReport).filter(CommunityReport.withdrawn.is_(False))
-    query = query.filter(CommunityReport.is_demo.is_(False))
-    rows = query.group_by(CommunityIndicator.indicator_type).all()
-    return {"indicators": [{"indicator_type": kind, "reports": count if count >= 5 else None,
-                             "suppressed": count < 5} for kind, count in rows]}
+    query = db.query(CommunityIndicator.indicator_type, CommunityIndicator.report_id, CommunityReport.created_at).join(
+        CommunityReport).filter(CommunityReport.withdrawn.is_(False), CommunityReport.is_demo.is_(False))
+    by_kind: dict = {}
+    for kind, report_id, created in query.all():
+        entry = by_kind.setdefault(kind, {"ids": set(), "times": []})
+        entry["ids"].add(report_id)
+        entry["times"].append(created)
+    out = []
+    for kind, entry in by_kind.items():
+        count = len(entry["ids"])
+        shown = count >= 5 and spans_enough_days(entry["times"])
+        out.append({"indicator_type": kind, "reports": count if shown else None, "suppressed": not shown})
+    return {"indicators": out}

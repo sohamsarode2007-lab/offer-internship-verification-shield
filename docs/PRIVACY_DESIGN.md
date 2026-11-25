@@ -157,15 +157,18 @@ consent covers that one check and is not remembered or stored.
   “Reported by other job seekers; not enough independent evidence to call this high
   risk.” Neither community signal satisfies the external-verification low-risk
   guard. These limits address the [poisoning threat](#poisoning-a-legitimate-companys-identifiers).
-- Details use buckets only: “reported by 3+ people” or “reported by 10+
-  people”; never disclose exact counts or other reports' contents. `/indicators/stats`
+- Details use buckets only: “reported in 3+ separate reports” or “reported in 10+
+  separate reports”; never disclose exact counts or other reports' contents. `/indicators/stats`
   is aggregate-only and suppresses cells below 5.
 - Synthetic demo reports are marked `is_demo` and participate only when
   `DEMO_MODE=1`; they never inflate production counts.
 
 ## Disputes and retention
 
-Disputes are rate-limited. A dispute does not automatically suppress an
+Disputes are rate-limited and capped (3 open per contact address, compared case-insensitively; 5 per
+indicator). An unresolved dispute stops affecting results after 90 days and is deleted, with its contact
+email, after 180 days. The verification code is sent in the link's #fragment (never part of a request URL)
+and is posted in a request body, so it is not written to access logs or browser history. A dispute does not automatically suppress an
 indicator: its score remains active and its detail adds “disputed by the
 company, under review”. The exception is a domain dispute verified by a
 one-time link sent to an address at that same domain; that domain may be
@@ -194,7 +197,7 @@ independent evidence that the offer is fraudulent.
 
 | Attacker goal | Method | Mitigation | Residual risk |
 | --- | --- | --- | --- |
-| Poison a legitimate company's identifiers | Submit repeated false reports for a company's payment/contact identifiers | Only analyzer-extracted scammer-role values can be selected; student previews and can deselect; one-use tokens; per-IP limits; score thresholds; disputes; domain suppression only after same-domain email verification | Distinct tokens do not prove distinct people; distributed attackers can still poison. A verified domain dispute can temporarily hide a true warning pending review. |
+| Poison a legitimate company's identifiers | Submit repeated false reports for a company's payment/contact identifiers | Only analyzer-extracted scammer-role values can be selected; student previews and can deselect; one-use tokens; per-IP limits; score thresholds; disputes; domain suppression only after same-domain email verification | Distinct tokens do not prove distinct people (reports for one indicator must also span two different days before they count or show publicly, which stops a single burst but not a patient attacker); distributed attackers can still poison. A verified domain dispute can temporarily hide a true warning pending review. |
 | Enumerate whether a specific UPI ID was reported | Probe analyses and observe score/details | Secret peppered HMACs; never expose hashes or exact counts; bucketed details; suppress aggregate stats cells below 5; rate limits | Adaptive probes can reveal threshold crossings. Compromised pepper enables guessed-value checks against database digests. |
 | Replay a report token | Re-submit token or withdrawal code | Signed 24-hour report tokens; atomic single use; replay-state purge after 48 hours; withdrawal code verifier is single-use | Theft before consumption can submit/withdraw once; short expiry and TLS reduce but do not eliminate theft risk. |
 | Leak or rotate the pepper unsafely | Access configuration/database or discard an active key version | Deployment secret storage, no logging/committing; per-digest key version; old key retained only until associated digests expire | Database plus pepper permits guessing low-entropy identifiers. Key rotation requires retaining old keys and complicates operations. |

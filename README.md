@@ -84,13 +84,16 @@ names and identifiers, amounts, and dates. The service does not store offer
 text. Counts affect scoring at 3 reports (+25) and 10 reports (+40); similar
 reported templates add +25. These are warning signals, never external
 verification, and are not independently verified claims. Details disclose
-only “3+ people” or “10+ people”. `/indicators/stats` returns aggregate
-counts and suppresses cells below 5.
+only “3+ separate reports” or “10+ separate reports”. Reports must span at least
+two different days before they count or appear publicly (one burst never does; this is
+not proof of independence). `/indicators/stats` returns aggregate counts and suppresses
+cells below 5.
 
-Disputes are rate limited. A dispute does not remove points; its match detail
+Disputes are rate limited and capped (3 open per address, 5 per indicator). An unresolved dispute
+lapses after 90 days and is deleted after 180. A dispute does not remove points; its match detail
 shows that it is under review. Only a domain dispute verified through a
 one-time link sent to that same domain is temporarily excluded from scoring.
-Configure SMTP to deliver those links. Dispute contact email is retained for
+Configure SMTP to deliver those links; the code sits in the link's #fragment and is posted in a request body, so it never appears in server logs. Dispute contact email is retained for
 12 months after resolution. Reports can be withdrawn with their one-time code;
 inactive indicators expire after 24 months. Simulated reports (8
 fictional senders in `fixtures/demo/vit_simulated_senders.csv`, 45 reports over

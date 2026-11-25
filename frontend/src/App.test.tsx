@@ -12,7 +12,7 @@ import styles from './App.module.css'
 
 vi.mock('./api/client', async importOriginal => {
   const actual = await importOriginal<typeof import('./api/client')>()
-  return { ...actual, analyze: vi.fn(), submitReport: vi.fn(), withdrawReport: vi.fn(), submitDispute: vi.fn(), loadDashboard: vi.fn(), loadConfig: vi.fn(), loadSources: vi.fn() }
+  return { ...actual, analyze: vi.fn(), submitReport: vi.fn(), withdrawReport: vi.fn(), submitDispute: vi.fn(), verifyDispute: vi.fn(), loadDashboard: vi.fn(), loadConfig: vi.fn(), loadSources: vi.fn() }
 })
 
 const indicators: ReportableIndicator[] = [
@@ -250,7 +250,7 @@ describe('Scam trends page', () => {
     const senders = await screen.findByRole('heading', { name: 'Reported senders' })
     const chart = screen.getByRole('heading', { name: 'Results by week' })
     expect(senders.compareDocumentPosition(chart) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    expect(screen.getByText('Shown only after 3 or more people report the same sender.')).toBeInTheDocument()
+    expect(screen.getByText('Shown only after 3 or more separate reports name the same sender, made on at least two different days.')).toBeInTheDocument()
     const table = screen.getByRole('table', { name: 'Reported senders' })
     expect(within(table).getByText('pl•••@gmail.com')).toBeInTheDocument()
     expect(within(table).getByText('12')).toBeInTheDocument()
@@ -417,3 +417,22 @@ describe('add evidence and check again', () => {
   })
 })
 
+
+describe('dispute verification page', () => {
+  it('posts the code from the fragment in a request body and removes it from the address bar', async () => {
+    window.history.replaceState({}, '', '/verify-dispute#token=abcdefghijklmnopqrstuvwxyz')
+    vi.mocked(api.verifyDispute).mockResolvedValueOnce({ status: 'domain_verified', message: 'Domain is suppressed while the dispute is under review.' })
+    render(<App />)
+    expect(vi.mocked(api.verifyDispute)).not.toHaveBeenCalled()       // nothing is sent until the person confirms
+    await userEvent.click(screen.getByRole('button', { name: 'Confirm domain' }))
+    expect(vi.mocked(api.verifyDispute)).toHaveBeenCalledWith('abcdefghijklmnopqrstuvwxyz')
+    expect(await screen.findByText(/Domain is suppressed/)).toBeInTheDocument()
+    expect(window.location.hash).toBe('')
+  })
+  it('asks for the email link when there is no code', () => {
+    window.history.replaceState({}, '', '/verify-dispute')
+    render(<App />)
+    expect(screen.getByText(/needs the link from the verification email/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Confirm domain' })).toBeNull()
+  })
+})

@@ -66,6 +66,9 @@ export function withdrawReport(payload: WithdrawRequest) {
 export function submitDispute(payload: DisputeRequest) {
   return request<DisputeResponse>('/disputes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
 }
+export function verifyDispute(token: string) {
+  return request<{ status: string; message: string }>('/disputes/verify', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token }) })
+}
 export function loadDashboard() {
   return request<InstitutionDashboard>('/trends/dashboard')
 }

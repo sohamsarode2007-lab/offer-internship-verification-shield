@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useId, useMemo, useRef, useState } from 'react'
-import { analyze, loadConfig, loadDashboard, loadSources, SENDERS_CSV_URL, submitDispute, submitReport, WEEKLY_CSV_URL, withdrawReport } from './api/client'
+import { analyze, loadConfig, loadDashboard, loadSources, SENDERS_CSV_URL, submitDispute, submitReport, verifyDispute, WEEKLY_CSV_URL, withdrawReport } from './api/client'
 import { buildInvestigationReport } from './investigationReport'
 import { CONSENT_TEXT, CONSENT_VERSION, LINK_CONSENT_TEXT } from './consent'
 import type { AnalyzeResponse, CheckResult, DisputeRequest, InstitutionDashboard, ReportableIndicator, RiskBand, ScamCategory, TopSender } from './api/types'
@@ -254,6 +254,14 @@ function WithdrawPage() {
   return <section className={styles.formPage}><h1>Withdraw a report</h1><p>Enter the one-time code you saved when submitting the report.</p><form onSubmit={send}><label>Withdrawal code<input value={code} onChange={e => setCode(e.target.value)} required autoComplete="off"/></label><button disabled={busy || !code.trim()}>{busy ? 'Withdrawing…' : 'Withdraw report'}</button></form>{message && <p role="status">{message}</p>}{error && <p role="alert" className={styles.error}>{error}</p>}</section>
 }
 
+function VerifyDisputePage() {
+  // The code travels in the #fragment, which the browser never sends to a server; it is posted in a request body.
+  const token = new URLSearchParams(window.location.hash.replace(/^#/, '')).get('token') ?? ''
+  const [message, setMessage] = useState(''); const [error, setError] = useState(''); const [busy, setBusy] = useState(false)
+  async function confirm() { setBusy(true); setError(''); setMessage(''); try { const r = await verifyDispute(token); setMessage(r.message); window.history.replaceState({}, '', '/verify-dispute') } catch (err) { setError(err instanceof Error ? err.message : 'That link is invalid or has expired.') } finally { setBusy(false) } }
+  return <section className={styles.formPage}><h1>Confirm your dispute</h1>{token ? <><p>Confirm that you control this domain. The link works once and expires after 24 hours.</p><button onClick={confirm} disabled={busy || !!message}>{busy ? 'Confirming…' : 'Confirm domain'}</button></> : <p>This page needs the link from the verification email.</p>}{message && <p role="status">{message}</p>}{error && <p role="alert" className={styles.error}>{error}</p>}</section>
+}
+
 function DisputePage() {
   const [kind, setKind] = useState<'upi'|'bank'|'phone'|'email'|'domain'>('domain'); const [value, setValue] = useState(''); const [email, setEmail] = useState(''); const [reason, setReason] = useState('our_business_detail'); const [message, setMessage] = useState(''); const [error, setError] = useState(''); const [busy, setBusy] = useState(false)
   async function send(event: FormEvent) { event.preventDefault(); setBusy(true); setError(''); setMessage(''); try { const result = await submitDispute({ indicator_type: kind, value, contact_email: email, reason_code: reason as DisputeRequest['reason_code'] }); setMessage(result.message) } catch (err) { setError(err instanceof Error ? err.message : 'The dispute could not be submitted.') } finally { setBusy(false) } }
@@ -276,10 +284,10 @@ function SendersTable({ dashboard }: { dashboard: InstitutionDashboard }) {
   const senders = dashboard.top_senders ?? []
   return <section className={styles.sendersSection} aria-labelledby="senders-title">
     <div className={styles.sendersHead}><h2 id="senders-title">Reported senders</h2><a className={styles.exportLink} href={SENDERS_CSV_URL} download>Export warning list</a></div>
-    <p className={styles.help}>Shown only after {dashboard.sender_threshold ?? 3} or more people report the same sender.</p>
+    <p className={styles.help}>Shown only after {dashboard.sender_threshold ?? 3} or more separate reports name the same sender, made on at least two different days.</p>
     {senders.length ? <div className={styles.ledgerWrap}><table className={styles.ledger} aria-label="Reported senders"><thead><tr><th scope="col">Sender</th><th scope="col">Type</th><th scope="col" className={styles.numeric}>Reports</th><th scope="col">Seen</th><th scope="col">Most common</th><th scope="col">Status</th></tr></thead><tbody>{senders.map(s => <tr className={styles.ledgerRow} key={`${s.indicator_type}:${s.indicator}`}>
       <th scope="row">{s.indicator}</th><td>{senderTypeLabels[s.indicator_type] ?? s.indicator_type}</td><td className={styles.numeric}>{s.reports}</td><td>{s.first_week === s.last_week ? s.first_week : `${s.first_week} – ${s.last_week}`}</td><td>{categoryLabels[s.most_common_category] ?? s.most_common_category}</td><td>{s.dispute_status ? <span className={styles.disputed}>Disputed by the company, under review</span> : '—'}</td>
-    </tr>)}</tbody></table></div> : <p className={styles.emptyNote}>No sender has been reported by {dashboard.sender_threshold ?? 3} or more people yet.</p>}
+    </tr>)}</tbody></table></div> : <p className={styles.emptyNote}>No sender has {dashboard.sender_threshold ?? 3} or more separate reports yet.</p>}
   </section>
 }
 
@@ -345,6 +353,7 @@ export default function App() {
   let page: React.ReactNode
   if (path === '/withdraw') page = <WithdrawPage/>
   else if (path === '/dispute') page = <DisputePage/>
+  else if (path === '/verify-dispute') page = <VerifyDisputePage/>
   else if (path === '/dashboard') page = <DashboardPage/>
   else if (path === '/how-it-works') page = <HowPage/>
   else if (result && path === '/') page = <Result result={result} input={input} onResult={show} onClear={() => { setResult(null); window.location.reload() }}/>

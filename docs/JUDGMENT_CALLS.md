@@ -360,3 +360,16 @@ Status: **open** = not reviewed yet.
     - **Behind a proxy** the connection address seen by the app may be the proxy's; configure the host so the real
       client address reaches the app, or this cap applies to everyone together.
     - **Not run against real sites:** the pinned client is tested with mocked DNS and sockets only.
+
+42. **Community reports and disputes hardening (open).**
+    - **No true independence check exists.** Reporters are anonymous by design, so the gate is only "reports span 2
+      different UTC days" (`MIN_DISTINCT_DAYS`). It stops a one-sitting burst, not a patient attacker. A real moderation
+      queue would need a person doing the reviewing; I did not invent one.
+    - **Template-wording matches are not gated** by the two-day rule (a single matching report still adds +25, as
+      before). It can never produce high risk on its own, but one false report can flag lookalike letters.
+    - **Numbers are my choices:** disputes active 90 days, deleted at 180; 3 open per address, 5 per indicator;
+      `/indicators/stats` 30 per minute and `/disputes/verify` 10 per hour per address.
+    - **Verification link changed:** emails now link to `/verify-dispute#token=...`; the old `GET /disputes/verify?token=`
+      is gone. Links already emailed under the old format stop working (they expire in 24 h anyway).
+    - **Test setup changed, assertions did not:** report fixtures now alternate today/yesterday so they meet the
+      two-day gate; new tests cover the one-day burst (no points, not shown) and the two-day case.

@@ -128,10 +128,10 @@ def _registration_fail_reason(details: str) -> str:
 
 def _community_reason(details: str) -> str:
     parts = []
-    if "10+ people" in details:
-        parts.append("Reported by 10+ people")
-    elif "3+ people" in details:
-        parts.append("Reported by 3+ people")
+    if "10+ separate reports" in details:
+        parts.append("Reported in 10+ separate reports")
+    elif "3+ separate reports" in details:
+        parts.append("Reported in 3+ separate reports")
     if "similar to a reported scam template" in details:
         parts.append("the wording matches a scam letter other job seekers reported" if parts
                      else "The wording matches a scam letter other job seekers reported")

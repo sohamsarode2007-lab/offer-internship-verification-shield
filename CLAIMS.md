@@ -181,11 +181,11 @@ been verified in this workspace.
   is the highest indicator bucket plus template evidence, capped at +40 total;
   several identifiers do not stack. Community evidence alone cannot produce
   high risk: if it alone crosses 60, the score is capped at manual review with
-  an explicit factor. Details disclose buckets only. Withdrawals delete a
+  an explicit factor. Details disclose buckets only (“3+ separate reports”, never “people”; reports are not verified unique people). Reports for one indicator count, and appear on the public trends page, only if they were made on at least two different days. Withdrawals delete a
   report's contributions. Reports are not
   independently verified and do not count as external verification. Disputed
   indicators keep scoring during review; only a same-domain email-verified
-  domain dispute is temporarily suppressed. Inactive indicators expire after
+  domain dispute is temporarily suppressed. Unresolved disputes lapse after 90 days. Inactive indicators expire after
   24 months. Digests/signatures are pseudonymised, not anonymous; legal review
   under the DPDP Act, 2023 and its Rules is required, including third-party
   sender data. Demo rows count only in `DEMO_MODE=1`.

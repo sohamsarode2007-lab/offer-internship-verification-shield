@@ -33,9 +33,19 @@ def candidate(kind="upi", value="rky.verma@ybl"):
             "key_version": 7, "masked": cr.masked(kind, value), "normalized_value": cr.normalize(kind, value)}
 
 
-def store_report(db, item=None, text="Acme offers a role and asks candidates to submit fees."):
+def backdate(db, result, days):
+    import hashlib
+    row = db.query(CommunityReport).filter_by(
+        withdrawal_code_hash=hashlib.sha256(result["withdrawal_code"].encode()).hexdigest()).one()
+    row.created_at = cr._utcnow() - timedelta(days=days)
+    db.commit()
+
+
+def store_report(db, item=None, text="Acme offers a role and asks candidates to submit fees.", same_day=False):
+    """Reports alternate between today and yesterday so they meet the two-day gate, unless same_day is set."""
     token, preview = cr.issue_report_token(db, [item] if item else [], cr.minhash_signature(text))
     result = cr.accept_report(db, token, [item["indicator_type"] + ":" + item["digest"]] if item else [], True, cr.CONSENT_VERSION)
+    backdate(db, result, 0 if same_day else db.query(CommunityReport).count() % 2)
     return result, preview
 
 
@@ -117,22 +127,22 @@ def test_indicator_thresholds_are_three_then_ten_reports(db):
     store_report(db, item)
     match = cr.lookup_community(db, [item], cr.minhash_signature("An incoming letter that does not resemble template."))
     assert match["risk_points"] == 25
-    assert "reported by 3+ people" in match["details"] and "3 reports" not in match["details"]
+    assert "reported in 3+ separate reports" in match["details"] and "3 reports" not in match["details"]
     for _ in range(7):
         store_report(db, item)
     match = cr.lookup_community(db, [item], cr.minhash_signature("An incoming letter that does not resemble template."))
     assert match["risk_points"] == 40
-    assert "reported by 10+ people" in match["details"] and "10 reports" not in match["details"]
+    assert "reported in 10+ separate reports" in match["details"] and "10 reports" not in match["details"]
 
 
 def test_correlated_indicator_and_template_evidence_caps_at_forty(db):
     items = [candidate(), candidate("email", "hr@fraud.example"), candidate("domain", "fraud.example")]
     text = "A reported synthetic recruitment letter with a fee request and contact instructions."
     signature = cr.minhash_signature(text)
-    for _ in range(3):
+    for day in range(3):
         token, _ = cr.issue_report_token(db, items, signature)
         selected = [x["indicator_type"] + ":" + x["digest"] for x in items]
-        cr.accept_report(db, token, selected, True, cr.CONSENT_VERSION)
+        backdate(db, cr.accept_report(db, token, selected, True, cr.CONSENT_VERSION), day)
     incoming = [dict(x) for x in items]
     match = cr.lookup_community(db, incoming, signature)
     assert match["risk_points"] == 40
@@ -171,7 +181,7 @@ def test_community_match_does_not_satisfy_external_verification_guard():
         {"check_name": "gstin_verification", "status": "pass", "identifier_present": True},
         {"check_name": "payment_detection", "status": "pass"},
         {"check_name": "community_reports", "status": "fail", "risk_points": 25,
-         "details": "This upi appears in reports from 3+ people."},
+         "details": "This upi was reported in 3+ separate reports."},
     ])
     assert result["risk_band"] == "insufficient evidence, verify manually"
     assert any("no externally verified registry match" in x
@@ -304,3 +314,42 @@ def test_rows_marked_demo_never_count(monkeypatch, db):
     match_signature = cr.minhash_signature("This unrelated text does not resemble any template.")
     assert cr.lookup_community(db, [item], match_signature)["risk_points"] == 0
     assert cr.stats(db)["indicators"] == []
+
+
+def test_one_days_reports_never_count_even_at_ten(db):
+    """Non-trigger for the two-day gate: a burst in one sitting adds no points and no public count."""
+    item = candidate()
+    for _ in range(10):
+        store_report(db, item, same_day=True)
+    match = cr.lookup_community(db, [item], cr.minhash_signature("An unrelated incoming letter about something else."))
+    assert match["risk_points"] == 0
+    assert cr.stats(db)["indicators"] == [{"indicator_type": "upi", "reports": None, "suppressed": True}]
+
+
+def test_reports_across_two_days_count(db):
+    item = candidate()
+    store_report(db, item, same_day=True)
+    store_report(db, item, same_day=True)
+    r, _ = store_report(db, item, same_day=True)
+    backdate(db, r, 2)
+    match = cr.lookup_community(db, [item], cr.minhash_signature("An unrelated incoming letter about something else."))
+    assert match["risk_points"] == 25
+
+
+def test_disputes_lapse_after_ninety_days_and_are_deleted_later(db):
+    item = candidate("domain", "lapse.example")
+    for _ in range(3):
+        store_report(db, item)
+    row = CommunityDispute(indicator_type="domain", digest=item["digest"], key_version=7,
+        contact_email="a@lapse.example", reason="reported_in_error", domain_verified=True)
+    db.add(row)
+    db.commit()
+    other = cr.minhash_signature("An unrelated incoming letter about something else.")
+    assert cr.lookup_community(db, [item], other)["risk_points"] == 0     # verified dispute suppresses the domain
+    row.created_at = cr._utcnow() - timedelta(days=cr.DISPUTE_ACTIVE_DAYS + 1)
+    db.commit()
+    assert cr.lookup_community(db, [item], other)["risk_points"] == 25    # lapsed: warning counts again
+    row.created_at = cr._utcnow() - timedelta(days=cr.DISPUTE_KEEP_DAYS + 1)
+    db.commit()
+    cr.purge_expired(db)
+    assert db.query(CommunityDispute).count() == 0

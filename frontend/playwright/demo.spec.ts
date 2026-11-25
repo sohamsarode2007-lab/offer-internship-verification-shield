@@ -35,7 +35,7 @@ test('demo analysis, reporting, dashboard, and public screens', async ({ page },
     await page.getByRole('button', { name: 'Check offer' }).click()
     await expect(page.getByRole('heading', { name: sample.band, exact: true })).toBeVisible()
     if (sample.band === 'Likely legitimate') await expect(page.getByRole('button', { name: 'Report this scam' })).toHaveCount(0)
-    if (sample.button === 'Corvane internship') await expect(page.getByRole('table', { name: 'Why' }).getByText('Reported by 3+ people')).toBeVisible()
+    if (sample.button === 'Corvane internship') await expect(page.getByRole('table', { name: 'Why' }).getByText('Reported in 3+ separate reports')).toBeVisible()
     await capture(page, testInfo, sample.shot)
   }
 
@@ -81,7 +81,7 @@ test('demo analysis, reporting, dashboard, and public screens', async ({ page },
   await expect(page.getByRole('heading', { name: 'Scam trends' })).toBeVisible()
   const senders = page.getByRole('table', { name: 'Reported senders' })
   await expect(senders).toBeVisible()
-  await expect(page.getByText('Shown only after 3 or more people report the same sender.')).toBeVisible()
+  await expect(page.getByText('Shown only after 3 or more separate reports name the same sender, made on at least two different days.')).toBeVisible()
   // The sender the student just checked (Corvane letter) is on the warning list, masked.
   await expect(senders.getByRole('rowheader', { name: 'careerd•••@ybl' })).toBeVisible()
   await expect(senders.getByText('Disputed by the company, under review')).toBeVisible()

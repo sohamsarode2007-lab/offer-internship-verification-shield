@@ -26,12 +26,22 @@ def _indicator(kind, value):
             "masked": cr.masked(kind, value), "normalized_value": cr.normalize(kind, value)}
 
 
-def _report(db, indicators, band="high risk", category="security_deposit", consent=True):
+def _report(db, indicators, band="high risk", category="security_deposit", consent=True, same_day=False):
     text = "Synthetic offer " + uuid.uuid4().hex + " asks for a deposit before joining the remote role."
     token, _ = cr.issue_report_token(db, indicators, cr.minhash_signature(text), band=band, scam_category=category)
     if consent:
         selected = [i["indicator_type"] + ":" + i["digest"] for i in indicators]
-        return cr.accept_report(db, token, selected, True, cr.CONSENT_VERSION)
+        result = cr.accept_report(db, token, selected, True, cr.CONSENT_VERSION)
+        # alternate today / yesterday so reports meet the two-day gate (see test_one_days_reports_do_not_show)
+        import hashlib
+        from datetime import timedelta
+        from app.models.models import CommunityReport
+        if not same_day:
+            row = db.query(CommunityReport).filter_by(
+                withdrawal_code_hash=hashlib.sha256(result["withdrawal_code"].encode()).hexdigest()).one()
+            row.created_at = cr._utcnow() - timedelta(days=db.query(CommunityReport).count() % 2)
+            db.commit()
+        return result
     db.commit()
     return None
 
@@ -148,3 +158,13 @@ def test_dashboard_api_and_csv_export(api_client, db):
     row = next(r for r in rows[1:] if r[0] == "'" + item["masked"])     # formula injection neutralised
     assert row[1:3] == ["email", "3"] and row[5] == "registration_fee" and row[6] == "not disputed"
     assert local not in response.text and local not in api_client.get("/trends/dashboard").text
+
+
+def test_one_days_reports_do_not_show(db):
+    upi = _indicator("upi", f"burst{uuid.uuid4().hex[:8]}@ybl")
+    for _ in range(5):
+        _report(db, [upi], same_day=True)
+    assert _sender(db, upi["masked"]) is None          # five reports in one sitting: not shown publicly
+    _report(db, [upi])                                  # a report on another day
+    sender = _sender(db, upi["masked"])
+    assert sender is None or sender["reports"] >= 3
