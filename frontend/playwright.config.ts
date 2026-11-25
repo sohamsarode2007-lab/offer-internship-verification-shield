@@ -2,14 +2,10 @@ import { defineConfig, devices } from '@playwright/test'
 import { randomBytes } from 'node:crypto'
 
 const db = 'sqlite:///./frontend/e2e-test.db'
-const pepper = process.env.E2E_DEMO_PEPPER ?? randomBytes(32).toString('hex')
+const pepper = process.env.E2E_PEPPER ?? randomBytes(32).toString('hex')
 const baseEnv = {
   ...process.env,
   DATABASE_URL: db,
-  DEMO_MODE: '1',
-  DEMO_FIXTURE_DOMAINS: 'emberlakeanalytics.example,brightpathedtech.example,quillmeresoftware.example,tarnwicklogistics.example,halvornfintech.example',
-  // Synthetic company master built by playwright/run-e2e.mjs (fictional companies; DEMO_MODE only).
-  MCA_DB_PATH: process.env.E2E_REGISTRY_DB ?? 'frontend/e2e-registry.sqlite3',
   INDICATOR_PEPPER: pepper,
   INDICATOR_KEY_VERSION: '1',
   RATE_LIMIT: '100/minute',
@@ -48,7 +44,7 @@ export default defineConfig({
       url: 'http://127.0.0.1:5173',
       reuseExistingServer: false,
       timeout: 60_000,
-      env: { ...process.env, VITE_DEMO: '1', VITE_API_URL: '' },
+      env: { ...process.env, VITE_API_URL: '' },
     },
   ],
 })

@@ -396,3 +396,10 @@ Status: **open** = not reviewed yet.
       files, shows a note instead of silently dropping files.
     - **Left alone:** the `VITE_DEMO` sample buttons and "demo fixture" labels are off by default and point at files
       that no longer exist; I did not remove them because the frontend redesign will replace that screen.
+
+45. **End-to-end tests rewritten (open).** The old browser test depended on demo samples, a synthetic company register
+    and seeded reports, all removed on this branch, so it could not start. The new `frontend/playwright/app.spec.ts`
+    uses no seeded data: it pastes a fictional fee-demanding offer (expects "High risk"), reports it, withdraws it,
+    files a dispute, checks the trends and how-it-works pages, the .eml-with-other-files notice and the security
+    headers, at desktop and phone width. It no longer takes screenshots into `docs/screenshots`, and it does not test the
+    registry-match, struck-off or shared-sender cases (those are covered by backend tests and the eval).
