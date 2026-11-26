@@ -48,6 +48,8 @@ class AnalyzeResponse(BaseModel):
     evidence_hints: List[dict] = Field(default_factory=list)
     # Official look-ups the person can run themselves: [{id, title, number, url, why, steps, caution}].
     self_checks: List[dict] = Field(default_factory=list)
+    # A copyable message asking the employer to confirm the offer, or None: see app/services/employer_message.py.
+    employer_message: Optional[dict] = None
     # Matched what-to-do-now steps (helpline 1930, cybercrime.gov.in): see app/services/safety_playbook.py.
     safety_actions: List[dict] = Field(default_factory=list)
     # Per-check source, score effect, confidence and freshness (no values): see app/services/evidence_meta.py.

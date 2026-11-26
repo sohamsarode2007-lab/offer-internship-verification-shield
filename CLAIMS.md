@@ -168,6 +168,9 @@ been verified in this workspace.
   24 months. Digests/signatures are pseudonymised, not anonymous; legal review
   under the DPDP Act, 2023 and its Rules is required, including third-party
   sender data. Rows flagged `is_demo` from older builds never count.
+- Employer confirmation message: a fixed-wording message the person can copy and send to contact details they find
+  themselves. The only offer-derived value is the company name (already shown on the result, never stored). It never
+  claims a verified contact, is not sent by the tool, and is not offered when a payment demand was found.
 - Deployment hardening: with `ENVIRONMENT=production` the app refuses to start on an unsafe configuration (short
   or missing pepper, localhost/`*` origins, SQLite, rate limiting off); responses carry nosniff, frame-deny,
   no-referrer and a Content-Security-Policy; access logs are off by default; stored analysis results are deleted

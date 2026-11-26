@@ -229,6 +229,18 @@ function SelfChecks({ checks }: { checks: NonNullable<AnalyzeResponse['self_chec
     </li>)}</ul></section>
 }
 
+function EmployerMessage({ message }: { message: NonNullable<AnalyzeResponse['employer_message']> }) {
+  const [state, setState] = useState<'' | 'copied' | 'failed'>('')
+  async function copy() { try { await navigator.clipboard.writeText(`Subject: ${message.subject}\n\n${message.body}`); setState('copied') } catch { setState('failed') } }
+  return <section className={styles.addEvidence}><h2>{message.title}</h2><p>{message.why}</p>
+    <ol>{message.steps.map((step, i) => <li key={i}>{step}</li>)}</ol>
+    <pre aria-label="Message to send" className={styles.help} style={{ whiteSpace: 'pre-wrap' }}>{`Subject: ${message.subject}\n\n${message.body}`}</pre>
+    <em>{message.caution}</em>
+    <span className={styles.actions}><button type="button" className={styles.secondaryButton} onClick={copy}>{state === 'copied' ? 'Copied' : 'Copy message'}</button></span>
+    {state === 'failed' && <p role="alert" className={styles.error}>Could not copy automatically. Select the message above and copy it yourself.</p>}
+  </section>
+}
+
 function Result({ result, input, onResult, onClear }: { result: AnalyzeResponse; input: Submitted; onResult: (result: AnalyzeResponse, input: Submitted) => void; onClear: () => void }) {
   const [reportOpen, setReportOpen] = useState(false)
   const band = result.risk_band
@@ -241,7 +253,7 @@ function Result({ result, input, onResult, onClear }: { result: AnalyzeResponse;
       <div className={styles.actions}>{canReport && <button onClick={() => setReportOpen(true)}>Share a suspected scam</button>}<button type="button" className={styles.secondaryButton} onClick={() => downloadReport(result)}>Download full report</button><button className={styles.secondaryButton} onClick={onClear}>Check another offer</button></div>
       {result.complaint_summary?.trim() && <Complaint summary={result.complaint_summary}/>}
     </div>
-    <div className={styles.evidenceSide}><SafetyActions actions={result.safety_actions ?? []}/><WhyList result={result}/><EvidenceLedger checks={result.checks ?? []} meta={result.evidence_meta ?? []}/><SelfChecks checks={result.self_checks ?? []}/><AddEvidence result={result} input={input} onResult={onResult}/></div>
+    <div className={styles.evidenceSide}><SafetyActions actions={result.safety_actions ?? []}/><WhyList result={result}/><EvidenceLedger checks={result.checks ?? []} meta={result.evidence_meta ?? []}/><SelfChecks checks={result.self_checks ?? []}/>{result.employer_message && <EmployerMessage message={result.employer_message}/>}<AddEvidence result={result} input={input} onResult={onResult}/></div>
     {reportOpen && canReport && result.report_token && <ReportDialog token={result.report_token} indicators={result.reportable_indicators ?? []} onClose={() => setReportOpen(false)}/>}
   </section>
 }

@@ -486,3 +486,21 @@ describe('upload and copy feedback', () => {
     expect(vi.mocked(api.loadDashboard)).toHaveBeenCalledTimes(2)
   })
 })
+
+describe('employer confirmation message', () => {
+  const employer_message = { title: 'Ask the company to confirm this offer', why: 'The surest check is to ask the employer directly.', steps: ['Find the company website yourself.'], subject: 'Please confirm an offer made in your company\'s name', body: 'Hello,\n\nI have received an offer that names Acme.', caution: 'A reply from the same address as the offer proves nothing.' }
+  it('shows the message and copies subject and body together', async () => {
+    const user = userEvent.setup()
+    await showResult(payload({ employer_message }))
+    const write = vi.fn().mockResolvedValue(undefined)
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText: write }, configurable: true })
+    expect(screen.getByRole('heading', { name: 'Ask the company to confirm this offer' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Copy message' }))
+    expect(write).toHaveBeenCalledWith(expect.stringContaining('Subject: Please confirm an offer'))
+    expect(await screen.findByRole('button', { name: 'Copied' })).toBeInTheDocument()
+  })
+  it('is absent when the server sent none', async () => {
+    await showResult(payload({ employer_message: null }))
+    expect(screen.queryByRole('heading', { name: 'Ask the company to confirm this offer' })).toBeNull()
+  })
+})

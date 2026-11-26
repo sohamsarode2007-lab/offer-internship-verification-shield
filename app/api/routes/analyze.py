@@ -23,6 +23,7 @@ from app.services import (
     community_reports,
     institution_dashboard,
     offer_analysis,
+    employer_message,
 )
 
 logger = logging.getLogger(__name__)
@@ -215,6 +216,7 @@ def _analyze_offer_impl(
         # Returned for display only; never persisted (Offer.company_name stays NULL).
         company_name=get_field_value(facts, "company_name", "company_name_legacy"),
         self_checks=self_checks.build_self_checks(facts, check_dicts),
+        employer_message=employer_message.build_employer_message(facts, check_dicts),
         safety_actions=safety_playbook.build_safety_actions(check_dicts, raw_text, risk_band, link_result["threat_listed"]),
         evidence_meta=evidence_meta.build_evidence_meta(check_dicts),
         evidence_hints=evidence_hints.build_evidence_hints(
