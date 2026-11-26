@@ -103,7 +103,7 @@ def test_verification_link_keeps_the_code_out_of_the_url_the_server_sees(monkeyp
         def __init__(self, *a, **k): pass
         def __enter__(self): return self
         def __exit__(self, *a): return False
-        def starttls(self): pass
+        def starttls(self, context=None): sent["tls_context"] = context
         def login(self, *a): pass
         def send_message(self, message): sent["body"] = message.get_content()
 
@@ -113,6 +113,27 @@ def test_verification_link_keeps_the_code_out_of_the_url_the_server_sees(monkeyp
     assert community._send_verification("legal@acme.example", "SECRETTOKEN123", "acme.example")
     assert "https://shield.example/verify-dispute#token=SECRETTOKEN123" in sent["body"]
     assert "?token=" not in sent["body"]
+
+
+def test_smtp_starttls_verifies_the_server_certificate(monkeypatch):
+    import ssl
+    from app.api.routes import community
+    sent = {}
+
+    class FakeSMTP:
+        def __init__(self, *a, **k): pass
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def starttls(self, context=None): sent["ctx"] = context
+        def login(self, *a): pass
+        def send_message(self, message): pass
+
+    monkeypatch.setenv("SMTP_HOST", "smtp.example")
+    monkeypatch.setenv("PUBLIC_BASE_URL", "https://shield.example")
+    monkeypatch.setattr(community.smtplib, "SMTP", FakeSMTP)
+    community._send_verification("legal@acme.example", "T", "acme.example")
+    assert sent["ctx"] is not None
+    assert sent["ctx"].verify_mode == ssl.CERT_REQUIRED and sent["ctx"].check_hostname is True
 
 
 def test_open_disputes_are_capped_per_address_and_per_indicator(api_client, monkeypatch):

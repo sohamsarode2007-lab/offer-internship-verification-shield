@@ -3,6 +3,7 @@ import hashlib
 import os
 import secrets
 import smtplib
+import ssl
 from datetime import timedelta
 from email.message import EmailMessage
 
@@ -58,7 +59,8 @@ def _send_verification(email: str, token: str, domain: str):
     message["To"] = email
     message.set_content(f"Verify this domain dispute for {domain}: {base_url.rstrip('/')}/verify-dispute#token={token}\nThis link expires in 24 hours.")
     with smtplib.SMTP(host, int(os.getenv("SMTP_PORT", "587")), timeout=10) as smtp:
-        smtp.starttls()
+        # create_default_context() verifies the server certificate and host name; smtplib's own default does not.
+        smtp.starttls(context=ssl.create_default_context())
         username = os.getenv("SMTP_USERNAME")
         if username:
             smtp.login(username, os.getenv("SMTP_PASSWORD", ""))
