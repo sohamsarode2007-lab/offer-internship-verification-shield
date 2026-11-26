@@ -36,7 +36,7 @@ def _open(url: str) -> Optional[bytes]:
     """
     parts = urllib.parse.urlsplit(url)
     timeout = float_env("CAREERS_PAGE_TIMEOUT", TIMEOUT_SECONDS, 0.5, 10.0)
-    status, _location, _cert, body = safe_fetch.request("GET", "https", parts.hostname, parts.path or "/",
+    status, _location, _cert, body = safe_fetch.request("GET", "https", parts.hostname or "", parts.path or "/",
                                                         timeout=timeout, read_bytes=MAX_BYTES,
                                                         user_agent="offer-verification-shield (informational check)")
     return body if status == 200 else None

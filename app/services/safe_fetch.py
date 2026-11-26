@@ -81,13 +81,14 @@ def request(method: str, scheme: str, host: str, path: str, *, timeout: float, r
         raise UnsafeTarget("unsupported scheme")
     port = 443 if scheme == "https" else 80
     address = public_addresses(host, port)[0]
+    conn: http.client.HTTPConnection
     if scheme == "https":
         conn = _PinnedHTTPSConnection(host, port, address, timeout, ssl.create_default_context())
     else:
         conn = _PinnedHTTPConnection(host, port, address, timeout)
     try:
         conn.request(method, path or "/", headers={"User-Agent": user_agent, "Accept": "*/*", "Connection": "close"})
-        cert = conn.sock.getpeercert() if scheme == "https" else None
+        cert = conn.sock.getpeercert() if scheme == "https" and isinstance(conn.sock, ssl.SSLSocket) else None
         response = conn.getresponse()
         body = response.read(read_bytes) if read_bytes else b""
         return response.status, response.getheader("Location"), cert, body
