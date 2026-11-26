@@ -446,3 +446,17 @@ Status: **open** = not reviewed yet.
     - **Not changed (your call from Gemini's plan):** `community_alone_crossed_high` still caps community-only evidence at
       60 even when scam-chat wording also matched; I left that rule as written because the project rule says community
       evidence alone can never produce high risk and the scam-wording case needs a decision from you.
+50. **Request for bank details or identity documents (open).** New check `personal_data_request`.
+    - **Weights:** +20 when the text asks the candidate to send bank details (account number, IFSC, cancelled cheque,
+      card or net-banking details); +10 when it asks for identity documents or certificates (Aadhaar, PAN, passport,
+      voter ID, licence, photo, marksheets, original documents). Not added together: bank wins. Nothing here can reach
+      high risk alone (the most it adds is 20); a payment demand still forces high risk.
+    - **Always applied:** it does not depend on a payment demand, because scammers often collect documents first.
+    - **Suppressions:** a request that is negated ("do not send ..."), or placed after joining ("bring originals on the
+      day of joining"), does not count.
+    - **False-positive risk, please review:** genuine HR letters sometimes ask for Aadhaar/PAN or bank details before
+      the start date for payroll. That is why the weights are small and the wording says "usually ask only after an
+      offer is accepted".
+    - **Hindi/Hinglish patterns are narrow and need a native speaker to review.**
+    - **Privacy:** the details name the families only (bank, documents); no offer text is echoed or stored.
+    - Eval EC52 added; expected band (60, manual review) derived by hand before running.

@@ -26,6 +26,7 @@ _BASE = {
     "payment_detection": ("offer_text", "this offer only", "high"),
     "sender_authentication": ("email_headers", "this offer only", "high"),
     "scam_text_patterns": ("offer_text", "this offer only", "medium"),
+    "personal_data_request": ("offer_text", "this offer only", "medium"),
     "community_reports": ("community_reports", "consented reports up to now", "medium"),
 }
 

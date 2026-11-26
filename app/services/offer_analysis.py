@@ -22,6 +22,7 @@ from app.services import (
     ingestion,
     institution_dashboard,
     payment_detection,
+    personal_data_request,
     risk_scoring,
     scam_text,
 )
@@ -120,11 +121,12 @@ def run_checks(db: Session, submission: Submission) -> Analysis:
     gstin_check = gstin_verification.verify_gstin(facts)
     payment_check = payment_detection.detect_payment_demand(facts)
     scam_text_check = scam_text.detect_scam_text(facts)
+    personal_data_check = personal_data_request.detect_personal_data_request(facts)
     report_indicators = community_reports.extract_indicators(raw_text, email_result, payment_check)
     signature = community_reports.minhash_signature(raw_text) if os.getenv("INDICATOR_PEPPER") else []
     community_check = community_reports.lookup_community(db, report_indicators, signature)
     check_dicts: list[CheckDict] = [domain_check, gstin_check, payment_check, auth_check, scam_text_check,
-                                    community_check]
+                                    personal_data_check, community_check]
     scoring = risk_scoring.calculate_risk_score(check_dicts, facts=facts)
     return Analysis(facts=facts, check_dicts=check_dicts, scoring=scoring, report_indicators=report_indicators,
                     signature=signature, gstin_check=gstin_check)

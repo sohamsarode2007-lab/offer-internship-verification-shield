@@ -371,3 +371,9 @@ been verified in this workspace.
 - **Several files in one check.** Up to five files (PDF, image, `.txt`) can be sent together with pasted text; their text
   is joined and scored as one offer, and nothing is stored. An `.eml` must be sent on its own so its sender checks run.
   A note appears when two files contain almost the same wording; it adds no score.
+
+- **Request for bank details or documents.** If the text asks the candidate to send bank details (+20) or identity
+  documents such as Aadhaar, PAN, passport or original certificates (+10), the "Why" list says so. The two are not
+  added together, and a request placed after joining or negated ("do not send ...") is ignored. It is a pattern match on
+  wording, not proof of a scam: some genuine employers ask for these before the start date. It can never produce high
+  risk on its own; only a payment demand does that. Nothing from the text is stored.
