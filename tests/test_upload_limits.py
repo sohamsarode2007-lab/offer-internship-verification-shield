@@ -103,3 +103,30 @@ def test_oversized_pdf_returns_422_from_the_api(api_client, monkeypatch):
     monkeypatch.setattr(ingestion, "MAX_NATIVE_PDF_PAGES", 2)
     r = api_client.post("/analyze", files={"file": ("o.pdf", _text_pdf(4), "application/pdf")})
     assert r.status_code == 422 and "pages" in r.text
+
+
+def _fake_heavy_engines(monkeypatch, calls):
+    import sys
+    import types
+    reader = types.SimpleNamespace(readtext=lambda img, detail=0: calls.append("easyocr") or ["Hello offer text here"])
+    monkeypatch.setattr(ingestion, "_get_easyocr_reader", lambda: reader)
+    monkeypatch.setitem(sys.modules, "pytesseract", None)   # force the Tesseract import to fail
+
+
+def test_heavy_ocr_engines_are_off_by_default(monkeypatch):
+    import numpy as np
+    calls = []
+    _fake_heavy_engines(monkeypatch, calls)
+    monkeypatch.delenv("HEAVY_OCR", raising=False)
+    with pytest.raises(ValueError, match="OCR text extraction failed"):
+        ingestion.run_ocr_on_image(np.full((50, 50, 3), 255, np.uint8), filename="t")
+    assert calls == []
+
+
+def test_heavy_ocr_engine_runs_only_when_opted_in(monkeypatch):
+    import numpy as np
+    calls = []
+    _fake_heavy_engines(monkeypatch, calls)
+    monkeypatch.setenv("HEAVY_OCR", "1")
+    assert "Hello offer text" in ingestion.run_ocr_on_image(np.full((50, 50, 3), 255, np.uint8), filename="t")
+    assert calls == ["easyocr"]

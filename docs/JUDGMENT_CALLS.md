@@ -460,3 +460,8 @@ Status: **open** = not reviewed yet.
     - **Hindi/Hinglish patterns are narrow and need a native speaker to review.**
     - **Privacy:** the details name the families only (bank, documents); no offer text is echoed or stored.
     - Eval EC52 added; expected band (60, manual review) derived by hand before running.
+51. **EasyOCR and PaddleOCR are now opt-in (open).** They cannot be interrupted once started, so a scanned image could hold
+    a worker for as long as they like. They now run only with `HEAVY_OCR=1`; by default Tesseract (20 s hard limit per
+    call, 90 s per submission) is the only image reader. Trade-off: if Tesseract is missing on a host and `HEAVY_OCR` is
+    not set, image uploads return the existing "could not read" 422 instead of falling back. Production uses Tesseract
+    (installed in CI and the Docker image), so nothing changes there. Tests cover off-by-default and opt-in.

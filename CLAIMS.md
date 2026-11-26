@@ -288,8 +288,9 @@ been verified in this workspace.
   at a time, 30 s per page render, 20 s per OCR call and 90 s for the whole document. A `.eml` may have at most 60
   parts and 400 headers, keeps at most 5 PDF/image attachments, and refuses an attachment over 10 MB (20 MB total).
 - At most 4 analyses run at once per server process; a request that cannot get a slot within 3 s gets 503.
-- Not covered: the optional EasyOCR and PaddleOCR engines have no time limit of their own (a Tesseract timeout
-  stops the job rather than falling through to them). Do not install them on a public deployment.
+- The optional EasyOCR and PaddleOCR engines cannot be interrupted once started, so they are off unless the operator
+  sets `HEAVY_OCR=1`; by default only Tesseract (hard 20 s limit per call) reads images. Do not enable them on a
+  public deployment. A Tesseract timeout stops the job rather than falling through to another engine.
 
 ## Data sources panel and request budget
 

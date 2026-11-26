@@ -24,6 +24,12 @@ logger = logging.getLogger(__name__)
 _EASYOCR_READER = None
 
 
+def heavy_ocr_enabled() -> bool:
+    """EasyOCR and PaddleOCR cannot be interrupted once started, so they run only when the operator opts in
+    (HEAVY_OCR=1). Without it, Tesseract (which has a hard time limit) is the only OCR engine."""
+    return os.getenv("HEAVY_OCR", "").strip() == "1"
+
+
 def _get_easyocr_reader():
     global _EASYOCR_READER
     if _EASYOCR_READER is None:
@@ -70,9 +76,9 @@ def _run_ocr_engines(image_np: np.ndarray, filename: str = "document") -> str:
 
     preprocessed = preprocess_image_cv2(image_np)
 
-    # 1. EasyOCR
+    # 1. EasyOCR (opt-in: no time limit of its own)
     try:
-        reader = _get_easyocr_reader()
+        reader = _get_easyocr_reader() if heavy_ocr_enabled() else None
         if reader:
             lines = reader.readtext(preprocessed, detail=0)
             extracted = "\n".join([str(l).strip() for l in lines if str(l).strip()])
@@ -104,8 +110,10 @@ def _run_ocr_engines(image_np: np.ndarray, filename: str = "document") -> str:
     except Exception as pyt_err:
         logger.debug("[INGESTION][OCR] pytesseract failed for '%s': %s", filename, pyt_err)
 
-    # 3. PaddleOCR
+    # 3. PaddleOCR (opt-in: no time limit of its own)
     try:
+        if not heavy_ocr_enabled():
+            raise RuntimeError("heavy OCR engines are disabled (set HEAVY_OCR=1 to enable)")
         import paddleocr
         ocr = paddleocr.PaddleOCR(lang='en')
         res = ocr.ocr(preprocessed)
