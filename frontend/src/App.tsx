@@ -8,7 +8,7 @@ import styles from './App.module.css'
 const labelByCheck: Record<string, string> = {
   sender_authentication: 'Who sent it', domain_verification: 'Email domain',
   gstin_verification: 'Company registration', payment_detection: 'Payment request',
-  scam_text_patterns: 'Scam-chat wording', personal_data_request: 'Request for bank details or documents', community_reports: 'Reports from other job seekers',
+  scam_text_patterns: 'Scam-chat wording', personal_data_request: 'Request for bank details, documents or secret codes', community_reports: 'Reports from other job seekers',
 }
 const statusText: Record<CheckResult['status'], string> = {
   pass: 'Passed', fail: 'Failed', insufficient_information: 'Not enough information', not_applicable: 'Not applicable',

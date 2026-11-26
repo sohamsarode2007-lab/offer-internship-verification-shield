@@ -22,10 +22,13 @@ Risk points (added):
   +15  Scam-chat wording, moderate tier only (recruiter reachable only via WhatsApp/Telegram,
        no-interview or easy-money claims)
   +10  extra when both tiers match (strong + moderate = +40 in total)
+  +40  Request for a password, PIN, OTP or card security code (never cancelled by joining/onboarding wording;
+       highest tier of the personal-data check; the tiers are not added together)
   +20  Request for bank account/card details (send/share/upload ... bank details, account number, IFSC, cheque, card)
   +10  Request for identity documents, photos or certificates (Aadhaar/PAN copy, passport, marksheets, photograph);
-       the two are not added together (bank wins: +20); never high risk on its own; ignored when the request is
-       placed after joining or negated (app/services/personal_data_request.py)
+       bank and documents are not added together (bank wins: +20); the check never forces high risk itself;
+       bank/documents requests are ignored when placed after joining, any request when negated
+       (app/services/personal_data_request.py)
   +25  Community indicator reported by 3-9 reports; +40 at 10+ reports
   +25  Community template MinHash similarity >= 0.8
   Community evidence is correlated: highest indicator bucket + template points,
@@ -73,6 +76,7 @@ W_REG_UNVERIFIED = 10.0
 W_SCAM_STRONG = 30.0
 W_SCAM_MODERATE = 15.0
 W_SCAM_BOTH_EXTRA = 10.0
+W_PERSONAL_CREDENTIALS = 40.0
 W_PERSONAL_BANK = 20.0
 W_PERSONAL_DOCS = 10.0
 W_REG_MISSING = 20.0
@@ -252,11 +256,14 @@ def calculate_risk_score(
         reason("The wording matches common WhatsApp/Telegram job-scam patterns", scam_points)
     personal = by_name.get("personal_data_request", {})
     if personal.get("status") == "fail":
-        personal_points = W_PERSONAL_BANK if personal.get("tier") == "bank" else W_PERSONAL_DOCS
+        personal_points = {"credentials": W_PERSONAL_CREDENTIALS, "bank": W_PERSONAL_BANK}.get(personal.get("tier"), W_PERSONAL_DOCS)
         other_points += personal_points
         factors.append(f"Personal-data request (+{personal_points:g}): {personal.get('details', '')}")
-        reason("The text asks for bank details or identity documents, which genuine employers usually ask for only "
-               "after an offer is accepted", personal_points)
+        if personal.get("tier") == "credentials":
+            reason("The text asks for a password, PIN or OTP, which no genuine employer needs", personal_points)
+        else:
+            reason("The text asks for bank details or identity documents, which genuine employers usually ask for only "
+                   "after an offer is accepted", personal_points)
     community = by_name.get("community_reports", {})
     community_points = min(40.0, max(0.0, float(community.get("risk_points", community.get("score", 0)) or 0)))
     if community_points:

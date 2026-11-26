@@ -465,3 +465,10 @@ Status: **open** = not reviewed yet.
     call, 90 s per submission) is the only image reader. Trade-off: if Tesseract is missing on a host and `HEAVY_OCR` is
     not set, image uploads return the existing "could not read" 422 instead of falling back. Production uses Tesseract
     (installed in CI and the Docker image), so nothing changes there. Tests cover off-by-default and opt-in.
+52. **Credential requests are a third, stronger tier (open).** Passwords, PINs, OTPs, CVV and net-banking logins score +40 and are
+    never cancelled by joining/onboarding wording (an earlier review showed "send your net-banking password after joining"
+    produced no warning). Net-banking login moved out of the bank tier into this one. Asking verbs here exclude "enter" and
+    "need", and "PIN code" (postal) is excluded, so a genuine portal message like "enter the OTP sent to your email" or an
+    address request does not fire. Choice for you: this adds 40 but does not force high risk by itself; a payment demand
+    still does that. If you want a credential request to force high risk too, it is a one-line change plus a rule in
+    AGENTS.md. Eval EC53 added (80, high risk; derived by hand before running).

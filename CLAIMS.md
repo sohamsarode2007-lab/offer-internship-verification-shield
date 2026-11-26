@@ -384,3 +384,7 @@ been verified in this workspace.
   everything this tool can see, and can be rated "likely legitimate". The tool cannot tell who controls a domain. A
   "likely legitimate" result is therefore never proof: the result page says "Not proof" and tells people to confirm
   through the employer's own website. This case is kept in the evaluation set (EC41) as a known miss and is not hidden or tuned away.
+
+- **Request for a password, PIN or OTP.** If the text asks the candidate to share a password, PIN, OTP or card security code
+  (+40), the "Why" list says no genuine employer needs these. Unlike bank details and documents, "after joining" wording
+  never cancels this warning; only a negation ("never share your OTP") does. It is a wording match, not proof.

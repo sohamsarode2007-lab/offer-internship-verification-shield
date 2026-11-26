@@ -103,3 +103,46 @@ def test_api_shows_the_check_and_the_reason_without_echoing_text(api_client):
     assert names["personal_data_request"]["status"] == "fail"
     assert any("bank details or identity documents" in x["text"] for x in r["reasons"])
     assert "Aadhaar" not in str(names["personal_data_request"])
+
+
+CREDENTIALS = [
+    "Please send your net-banking password now.",
+    "Please send your net-banking password after joining.",
+    "Please share your ATM card number and PIN during onboarding.",
+    "Share the OTP you receive to activate your internship.",
+    "Send your UPI PIN so we can credit the stipend.",
+    "Tell us your CVV on the day of joining.",
+]
+NOT_CREDENTIALS = [
+    "Never share your OTP, PIN or password with anyone, including us.",
+    "We do not ask for your password or net-banking login.",
+    "Please send your PIN code and full address for the courier.",
+    "Enter the OTP sent to your email to log in to the candidate portal.",
+    "Your stipend will be credited after you set a password for the HR portal.",
+]
+
+
+@pytest.mark.parametrize("text", CREDENTIALS)
+def test_credential_requests_are_found_even_after_joining_or_onboarding(text):
+    r = run(text)
+    assert r["status"] == "fail" and r["tier"] == "credentials", text
+
+
+@pytest.mark.parametrize("text", NOT_CREDENTIALS)
+def test_safety_advice_pin_codes_and_portal_logins_are_not_credential_requests(text):
+    r = run(text)
+    assert r["tier"] != "credentials", text
+
+
+def test_credentials_outrank_bank_and_documents_and_the_text_is_not_echoed():
+    r = run("Send your bank account details, Aadhaar card and your UPI PIN.")
+    assert r["tier"] == "credentials" and {"credentials", "bank", "documents"} <= set(r["families"])
+    assert "UPI" not in r["details"] and "Aadhaar" not in r["details"]
+
+
+def test_credential_request_adds_40_and_is_not_high_risk_by_itself():
+    base = [{"check_name": "domain_verification", "status": "insufficient_information", "details": "none"}, BASE[1]]
+    def total(extra):
+        return risk_scoring.calculate_risk_score(base + extra, facts={})["overall_risk_score"]
+    assert total([check("credentials")]) - total([check(None, "not_applicable")]) == 40
+    assert score([check("credentials")])["risk_band"] != "high risk"
