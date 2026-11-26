@@ -78,6 +78,14 @@ _COMPANY_BEARS_RE = re.compile(
     re.IGNORECASE,
 )
 
+# An instruction aimed at the candidate. Mentioning a stipend or salary nearby does not cancel a fee when the same
+# stretch of text tells the candidate to pay it ("stipend of 15000 and a laptop; you pay the BGV charges").
+_YOU_PAY_RE = re.compile(
+    r"\byou\s+(?:will\s+|shall\s+|would\s+|have\s+to\s+|need\s+to\s+|must\s+)?(?:pay|bear|deposit|send|transfer)\b"
+    r"|\b(?:please|kindly|must|first|then)\s+(?:pay|send|deposit|transfer|remit)\b",
+    re.IGNORECASE,
+)
+
 _NEGATION_RE = re.compile(
     # "no" followed by "." is the abbreviation for number ("Ref No. 12"), not a negation.
     r"\b(?:no(?!\.)|not|never|without|does\s+not|do\s+not|doesn't|don't|won't|will\s+not|"
@@ -171,7 +179,7 @@ def _find_phrase_demands(text: str, spans) -> List[Dict[str, Any]]:
         if _is_negated(text, s, m.start()):
             continue
         local = text[max(s, m.start() - 80):min(e, m.end() + 80)]
-        if _COMPANY_BEARS_RE.search(local) or _INBOUND_MONEY_RE.search(local):
+        if _COMPANY_BEARS_RE.search(local) or (_INBOUND_MONEY_RE.search(local) and not _YOU_PAY_RE.search(local)):
             continue
         demands.append({"kind": "phrase", "match": re.sub(r"\s+", " ", m.group(0).strip()),
                         "start": m.start(), "end": m.end()})

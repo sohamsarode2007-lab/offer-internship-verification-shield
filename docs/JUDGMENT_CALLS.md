@@ -427,3 +427,22 @@ Status: **open** = not reviewed yet.
     allowance and daily budgets in `request_budget.py` stay per process (not moved to the shared store). Not tried against a real proxy.
     **Azure translation is not built:** it would send offer text to a third party, against the privacy rules, and the
     Hindi/Hinglish rules are written as native-language patterns instead.
+
+49. **Review of Gemini's 20 audit commits (open).** Merged on top of my work; all tests, eval and end-to-end pass.
+    - **Changes I accept:** GSTIN age claim limited to business-age wording; sentence split after "Ltd."/"Inc." before a
+      capital letter; fee-suppression window narrowed to about 80 characters and "provide" removed; short offers no
+      longer share one empty template signature; link-check TLS and landing-host fixes; IPv6 zone IDs and socket cleanup;
+      one shared OCR deadline per submission; script/style text ignored in .eml HTML; batched community queries;
+      rate limit checked before taking a worker slot; request-path purge throttled to once per 15 minutes per process
+      (the hourly worker still runs); dead demo UI, unused scrapers and unused schemas removed.
+    - **Behaviour change to know about:** in an uploaded .eml, a domain that appears only in a link in the letter (not a
+      claimed sender email) no longer triggers the +15 "body domain differs from the From domain" signal. This avoids false
+      alarms on Zoom or form links, but a letter that names only a website and no email address is no longer compared.
+    - **A gap that survived the narrowing, now closed:** a stipend or salary mentioned within 80 characters still cancelled
+      a fee ("stipend of 15000 and a laptop; you pay the BGV charges of 2000 rupees" passed). A nearby stipend no longer
+      cancels a fee when the same stretch tells the candidate to pay; tests added for both directions.
+    - **Deleted:** `scrape_reddit.py`, `scraper.py` and two collection scripts (hardcoded personal paths, unused by the
+      app). They remain in git history if you want them back.
+    - **Not changed (your call from Gemini's plan):** `community_alone_crossed_high` still caps community-only evidence at
+      60 even when scam-chat wording also matched; I left that rule as written because the project rule says community
+      evidence alone can never produce high risk and the scam-wording case needs a decision from you.

@@ -36,6 +36,9 @@ DEMANDS = [
     "Registration ke liye fees bharna hoga.",
     # sentence boundary after company suffix
     "No hidden charges at Acme Pvt. Ltd. Pay 2000 rupees for BGV charges.",
+    # a stipend mentioned nearby does not cancel a fee the candidate is told to pay
+    "Stipend Rs 15000 and a laptop; you pay the BGV charges of 2000 rupees.",
+    "You get a stipend of Rs 20,000, but first pay Rs 1,500 as certificate fee.",
     # disguised fee in same sentence as "we will provide"
     "We will provide your offer letter once you pay 2000 rupees for BGV charges.",
 ]
@@ -55,6 +58,7 @@ NOT_DEMANDS = [
     "Koi fees nahi lagegi is internship mein.",
     "The internship fee is waived for all selected candidates.",
     "Your stipend is 15000 rupees and we will pay it every month.",
+    "Stipend Rs 15000 and a laptop; the company bears the BGV charges.",
 ]
 
 
