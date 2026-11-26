@@ -160,6 +160,11 @@ describe('analysis result', () => {
     expect(css).toMatch(/\.checkedCompany \{[^}]*color: var\(--steel\)/)
   })
 
+  it('says a likely-legitimate result is not proof and points to the employer’s own website', async () => {
+    await showResult(payload({ risk_band: 'likely legitimate' }))
+    expect(screen.getByText(/Not proof\. Confirm through the employer’s own website/)).toBeInTheDocument()
+  })
+
   it.each([null, undefined, '', '   '])('hides the company line when no name was extracted (%j)', async name => {
     await showResult(payload({ company_name: name as string | null | undefined }))
     expect(screen.queryByText(/^Checked:/)).not.toBeInTheDocument()

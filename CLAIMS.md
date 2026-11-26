@@ -378,3 +378,9 @@ been verified in this workspace.
   added together, and a request placed after joining or negated ("do not send ...") is ignored. It is a pattern match on
   wording, not proof of a scam: some genuine employers ask for these before the start date. It can never produce high
   risk on its own; only a payment demand does that. Nothing from the text is stored.
+
+- **What it cannot catch (stated plainly).** A scam that copies a real company's registration number and uses a contact
+  domain that is exactly that company's name, with a clean domain history, looks the same as a genuine offer to
+  everything this tool can see, and can be rated "likely legitimate". The tool cannot tell who controls a domain. A
+  "likely legitimate" result is therefore never proof: the result page says "Not proof" and tells people to confirm
+  through the employer's own website. This case is kept in the evaluation set (EC41) as a known miss and is not hidden or tuned away.

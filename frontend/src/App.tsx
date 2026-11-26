@@ -147,7 +147,7 @@ function ReportDialog({ token, indicators, onClose }: { token: string; indicator
 }
 
 const verdictText: Record<string, { title: string; subline?: string }> = {
-  'likely legitimate': { title: 'Likely legitimate' },
+  'likely legitimate': { title: 'Likely legitimate', subline: 'Not proof. Confirm through the employer’s own website before you pay or share documents' },
   'insufficient evidence, verify manually': { title: 'Insufficient evidence', subline: 'Verify manually before you proceed' },
   'high risk': { title: 'High risk' },
 }
