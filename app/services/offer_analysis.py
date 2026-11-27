@@ -139,7 +139,8 @@ def to_check_schemas(check_dicts: list) -> list:
 
 def store_result(db: Session, check_schemas: list, overall_risk_score: int, completeness_percentage: int,
                  risk_band: str, scam_category: str) -> Optional[int]:
-    """Store the verdict and per-check results only (never the text, file names or identifiers).
+    """Store the verdict and per-check outcomes only: check name, status and score (never the text, file names,
+    identifiers, or the per-check explanation sentences, which can quote a domain or registration number).
     Returns the new offer id, or None if storing failed (the analysis is still returned to the person)."""
     try:
         db_offer = Offer(title=None, company_name=None, raw_text=None, file_path=None)
@@ -152,7 +153,8 @@ def store_result(db: Session, check_schemas: list, overall_risk_score: int, comp
         db.flush()
         for c_schema in check_schemas:
             db.add(CheckResult(verification_id=db_verification.id, check_name=c_schema.check_name,
-                               status=c_schema.status.value, score=c_schema.score, details=c_schema.details))
+                               status=c_schema.status.value, score=c_schema.score,
+                               details=None))   # the explanation can quote a submitted domain or number: never stored
         # One anonymous public trend row per check: ISO week, band, category only
         # (no text, identifiers, file name, IP or link to this analysis). See PRIVACY_DESIGN.md.
         institution_dashboard.record_check_observation(

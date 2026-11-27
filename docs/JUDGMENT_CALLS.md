@@ -477,3 +477,8 @@ Status: **open** = not reviewed yet.
     limiter instances share one count (skipped, not passed, when `REDIS_TEST_URL` is unset). The Web Risk daily budget
     and the per-client link-check allowance are still in memory per process; sharing them needs new code, so this is
     documented in the README rather than claimed fixed. Not yet checked: the Docker image with Redis on a real host.
+54. **Per-check explanation text is no longer stored (open).** `check_results.details` now stays empty: those sentences can
+    quote a submitted domain or registration number, which conflicted with a blanket "no identifiers stored" promise.
+    The person still sees the full explanations in the response. Migration 011 clears the column for older rows. Nothing
+    read that column back, so no feature is lost. Request-path purging (at most once per 15 minutes per process) is kept
+    for now and is a candidate to remove when the hourly worker is the only purger, preparing for larger traffic.

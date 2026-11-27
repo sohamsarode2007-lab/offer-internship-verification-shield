@@ -49,6 +49,18 @@ def test_store_result_keeps_only_verdict_and_check_rows(db):
     offer = db.query(Offer).one()
     assert offer.raw_text is None and offer.title is None and offer.company_name is None and offer.file_path is None
     assert db.query(VerificationResult).count() == 1 and db.query(CheckResult).count() == len(schemas)
+    assert all(row.details is None for row in db.query(CheckResult).all())   # explanations are never stored
+
+
+def test_stored_rows_contain_no_submitted_domain_or_registration_number(db):
+    text = ("Congratulations on your offer from Zorblat Labs. Contact hr@zorblat-labs.example. "
+            "CIN U72900MH2015PTC123456. Pay a Rs 500 registration fee.")
+    analysis = oa.run_checks(db, oa.read_submission(text, []))
+    assert any("zorblat-labs" in (c.get("details") or "") for c in analysis.check_dicts)   # shown to the person
+    schemas = oa.to_check_schemas(analysis.check_dicts)
+    oa.store_result(db, schemas, 90, 50, "high risk", "registration_fee")
+    stored = " ".join(str(v) for row in db.query(CheckResult).all() for v in (row.check_name, row.status, row.score, row.details))
+    assert "zorblat" not in stored.lower() and "U72900" not in stored
 
 
 def test_store_result_failure_returns_none_and_rolls_back(db, monkeypatch):
