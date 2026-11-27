@@ -60,6 +60,17 @@ describe('data sources panel', () => {
   })
 })
 
+describe('how it works wording', () => {
+  it('calls uploaded email authentication unverified and the registry a local, possibly old copy', async () => {
+    window.history.replaceState({}, '', '/how-it-works')
+    vi.mocked(api.loadSources).mockRejectedValueOnce(new Error('x'))
+    render(<App />)
+    expect(await screen.findByText(/unverified claims: a recorded “pass” is never counted as proof/)).toBeTruthy()
+    expect(screen.getByText(/not a live registry, and it can be out of date/)).toBeTruthy()
+    expect(screen.queryByText(/verifies sender authentication/)).toBeNull()
+  })
+})
+
 describe('link lookup consent', () => {
   async function home(enabled: boolean) {
     vi.mocked(api.loadConfig).mockResolvedValue({ link_lookups: enabled })
