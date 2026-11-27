@@ -22,6 +22,14 @@ production.
 - Every new scoring signal gets: a documented weight in risk_scoring.py's docstring, an entry in CLAIMS.md, and
   tests for both the triggering and the non-triggering case.
 
+## Comments and prior decisions
+- Do not write comments that justify a choice or say why it is better than another ("we use X because it is safer").
+  Such text goes stale and later agents treat it as settled. A comment may state only a fact the reader cannot see
+  in the code: a constraint that must stay true, a unit, or an external limit.
+- Decisions and trade-offs go in docs/JUDGMENT_CALLS.md, marked open until the owner has reviewed them.
+- A recorded rationale is a claim, not evidence. Before building on an earlier choice, read the code and its
+  tests and check that it does what the note says. If they disagree, trust the code and fix or flag the note.
+
 ## Environment
 - Windows. Python 3.11 venv at .venv. Device Guard blocks .exe launchers in the venv: always use
   `.\.venv\Scripts\python.exe -m <tool>` (pytest, uvicorn, alembic, pip).

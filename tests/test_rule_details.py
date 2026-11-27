@@ -17,7 +17,7 @@ def test_is_lookalike(domain):
 
 
 def test_tcsion_is_official():
-    assert "tcsion.com" in set(dv.BRAND_OFFICIAL_DOMAINS["tcs"])   # set membership, not a substring test
+    assert any(domain == "tcsion.com" for domain in dv.BRAND_OFFICIAL_DOMAINS["tcs"])
     assert dv.find_lookalike("tcsion.com") is None
 
 
