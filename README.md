@@ -27,7 +27,7 @@ OCR uploads need Tesseract; scanned PDFs also need Poppler. The CI workflow inst
 Behind a host's proxy, set `FORWARDED_ALLOW_IPS` (the proxy's address, or `*` on a platform that always sits
 behind its own proxy and cannot be reached directly) so each visitor's real address reaches the app; production
 start-up requires it. Rate-limit counters are in memory per process: keep one worker, or set
-`RATE_LIMIT_STORAGE_URI` (for example a Redis address) to share them. Responses carry security headers and a Content-Security-Policy; set `HSTS_ENABLED=1` only once the site
+`RATE_LIMIT_STORAGE_URI` (for example a Redis address) to share them. Only the request rate limit is shared that way: the Web Risk daily budget and the per-client link-check allowance (`LINK_CHECKS_PER_HOUR`) stay per process, so with N workers each of those can be used up to N times; keep one worker if that matters. Responses carry security headers and a Content-Security-Policy; set `HSTS_ENABLED=1` only once the site
 is served over https. Server access logs (request paths, client addresses) are off unless `ACCESS_LOG=1`.
 The Docker image builds the web page in a first stage, installs exact hashed versions from
 `requirements.lock` and starts uvicorn with `--no-access-log`. Stored analysis results are deleted after

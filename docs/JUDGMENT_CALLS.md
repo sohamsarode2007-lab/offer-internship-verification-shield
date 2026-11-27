@@ -472,3 +472,8 @@ Status: **open** = not reviewed yet.
     address request does not fire. Choice for you: this adds 40 but does not force high risk by itself; a payment demand
     still does that. If you want a credential request to force high risk too, it is a one-line change plus a rule in
     AGENTS.md. Eval EC53 added (80, high risk; derived by hand before running).
+53. **Redis is now installable; two counters stay per process (open).** `redis` is in requirements.txt and the hashed lock
+    (7.4.1; `limits` requires <8), and CI starts a Redis service for `tests/test_shared_rate_limit.py`, which proves two
+    limiter instances share one count (skipped, not passed, when `REDIS_TEST_URL` is unset). The Web Risk daily budget
+    and the per-client link-check allowance are still in memory per process; sharing them needs new code, so this is
+    documented in the README rather than claimed fixed. Not yet checked: the Docker image with Redis on a real host.

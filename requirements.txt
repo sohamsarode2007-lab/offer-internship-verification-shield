@@ -9,6 +9,7 @@ uvicorn>=0.22
 python-multipart>=0.0.18   # earlier releases have a denial-of-service fix missing
 pydantic>=2.0
 slowapi>=0.1.9
+redis>=5,<8   # optional shared rate-limit counters (RATE_LIMIT_STORAGE_URI=redis://...); limits needs <8
 
 # Database
 # 2.0.x: falls back to pure Python if its compiled extension is blocked
