@@ -54,7 +54,11 @@ jobs:
       # Optional: lets the OCR robustness tests run instead of skipping.
       # The test suite itself never needs network (DNS/WHOIS are mocked).
       - name: Install OCR binaries
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends tesseract-ocr poppler-utils
+        run: |
+          # packages.microsoft.com sometimes answers 403, which makes `apt-get update` exit 100.
+          sudo grep -l "packages.microsoft.com" /etc/apt/sources.list.d/* 2>/dev/null | xargs -r sudo rm -f
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends tesseract-ocr poppler-utils
 
       - uses: actions/setup-node@v7
         with:
