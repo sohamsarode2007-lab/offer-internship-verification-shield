@@ -491,3 +491,10 @@ Status: **open** = not reviewed yet.
     `KNOWN_DANGEROUS_MISSES`). The stricter alternative (never produce this band without independent proof of domain
     ownership) has no independent source in this pipeline, so it would end the band entirely: 11 of the 19 legitimate eval
     cases would move to manual review. Frontend tests that asserted the old headline were changed to the new one on purpose.
+56. **CodeQL alerts (open until merged).** The 8 alerts in the screenshot are on `main`. The two "workflow does not contain
+    permissions" ones are already fixed on this branch (read-only `permissions:` at the top of ci.yml). The five
+    polynomial-regex ones are fixed here: the account-number rule really did hang on a long run of spaces (checked: it timed
+    out on 40,000 spaces), and the amount and abbreviation rules were rewritten to the same language without overlapping
+    `\s*` groups (120,000 random strings gave identical matches before and after). The test-file alert was a set
+    membership test flagged as a substring test; it now says so. CodeQL itself cannot run here, so confirm the alerts
+    close after the merge and the next scan; new ones on other regexes are possible.

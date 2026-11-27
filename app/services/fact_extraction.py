@@ -171,7 +171,7 @@ def extract_account_numbers(text: str) -> Dict[str, Any]:
         if is_upi_handle(m.group(1)):
             vpas.append(m.group(0))
 
-    bank_accs = re.findall(r'\b(?:account\s*(?:no|number)?\s*:?\s*)(\d{9,18})\b', text, re.IGNORECASE)
+    bank_accs = re.findall(r'\baccount(?:\s*(?:no|number))?[\s:]*(\d{9,18})\b', text, re.IGNORECASE)
 
     all_accounts = vpas + bank_accs
     return create_field_dict(all_accounts if all_accounts else None, 0.90 if all_accounts else 0.0)

@@ -138,7 +138,8 @@ def sentence_spans(text: str) -> List[Tuple[int, int]]:
     spans, start = [], 0
     for m in _BOUNDARY_RE.finditer(text):
         if m.group(0)[0] == ".":
-            word = re.search(r"([A-Za-z.]+)$", text[start:m.start()])
+            # Abbreviations are short: look at a bounded window so a long run of letters cannot make this quadratic.
+            word = re.search(r"([A-Za-z.]+)$", text[max(start, m.start() - 24):m.start()])
             abbr = word.group(1).lower().rstrip(".") if word else ""
             if abbr in _ABBREVIATIONS and not (abbr in _SENTENCE_END_ABBREVS and text[m.end():m.end() + 1].isupper()):
                 continue
