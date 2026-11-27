@@ -3,14 +3,9 @@
 Official data: the source CSV must be obtained lawfully from an official MCA
 release. This utility does not download or modify source data.
 
-Synthetic data (--synthetic): loads a fictional demo snapshot such as
-fixtures/demo/synthetic_mca_master.csv and records source=SYNTHETIC in the
-registry_metadata table. The app uses a SYNTHETIC snapshot only when
-DEMO_MODE=1; otherwise it behaves as if no registry is loaded.
-
 Safety rules:
-  - A CSV with rows marked Synthetic=true is refused unless --synthetic is given.
-  - Synthetic and non-synthetic rows are never mixed in one database.
+  - A CSV with rows marked Synthetic=true (made-up companies) is always refused.
+  - A database previously labelled SYNTHETIC is never updated; delete it and reload.
 """
 import argparse
 import csv
@@ -51,8 +46,8 @@ def _existing_source(db: sqlite3.Connection):
     return None
 
 
-def load_csv(source: Path, destination: Path, synthetic: bool = False) -> int:
-    source_label = SOURCE_SYNTHETIC if synthetic else SOURCE_MCA_CSV
+def load_csv(source: Path, destination: Path) -> int:
+    source_label = SOURCE_MCA_CSV
     with source.open(encoding="utf-8-sig", newline="") as stream:
         reader = csv.DictReader(stream)
         columns = {normalized_header(name): name for name in (reader.fieldnames or [])}
@@ -65,8 +60,8 @@ def load_csv(source: Path, destination: Path, synthetic: bool = False) -> int:
 
     marked_synthetic = selected["synthetic"] and any(
         (row.get(selected["synthetic"]) or "").strip().lower() in TRUE_VALUES for row in rows)
-    if marked_synthetic and not synthetic:
-        raise ValueError("This CSV contains rows marked Synthetic=true; load it with --synthetic.")
+    if marked_synthetic:
+        raise ValueError("This CSV contains rows marked Synthetic=true (made-up companies); refusing to load it.")
 
     destination.parent.mkdir(parents=True, exist_ok=True)
     with sqlite3.connect(destination) as db:
@@ -110,12 +105,9 @@ def main():
     parser.add_argument("csv_path", type=Path, help="company-master CSV")
     parser.add_argument("--db", type=Path, default=Path("data/mca_master.sqlite3"),
                         help="destination SQLite DB (default: data/mca_master.sqlite3)")
-    parser.add_argument("--synthetic", action="store_true",
-                        help="mark the snapshot as SYNTHETIC (fictional demo data; used only when DEMO_MODE=1)")
     args = parser.parse_args()
-    count = load_csv(args.csv_path, args.db, synthetic=args.synthetic)
-    kind = "synthetic demo" if args.synthetic else "company"
-    print(f"Loaded or updated {count} {kind} rows in {args.db}")
+    count = load_csv(args.csv_path, args.db)
+    print(f"Loaded or updated {count} company rows in {args.db}")
 
 
 if __name__ == "__main__":

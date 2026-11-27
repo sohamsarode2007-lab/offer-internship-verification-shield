@@ -39,7 +39,7 @@ def test_raised_to_31_reads_as_plain_sentence():
 
 def test_likely_legitimate_lists_what_was_verified():
     result = _score([
-        {"check_name": "domain_verification", "status": "pass"},
+        {"check_name": "domain_verification", "status": "pass", "domain": "quillmere.example"},
         {"check_name": "gstin_verification", "status": "pass", "identifier_present": True, "registry_checked": True,
          "verification_source": "mca_registry", "verified_identifier_type": "CIN",
          "registry_company_name": "Quillmere Software Private Limited"},

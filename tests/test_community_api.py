@@ -68,10 +68,12 @@ def test_dispute_paths_require_same_domain_one_time_verification(api_client, mon
         "contact_email": "legal@acme.example", "reason_code": "our_business_detail"})
     assert verified_request.status_code == 200
     assert captured["domain"] == "acme.example"
-    verify = api_client.get("/disputes/verify", params={"token": captured["token"]})
+    old_style = api_client.get("/disputes/verify", params={"token": captured["token"]})
+    assert "domain_verified" not in old_style.text      # a code in a URL no longer verifies anything
+    verify = api_client.post("/disputes/verify", json={"token": captured["token"]})
     assert verify.status_code == 200
     assert verify.json()["status"] == "domain_verified"
-    assert api_client.get("/disputes/verify", params={"token": captured["token"]}).status_code == 400
+    assert api_client.post("/disputes/verify", json={"token": captured["token"]}).status_code == 400
 
 
 def test_dispute_reason_must_be_a_code_not_free_text(api_client, monkeypatch):
@@ -90,3 +92,74 @@ def test_malformed_bank_dispute_is_a_400_not_a_500(api_client, monkeypatch):
     r = api_client.post("/disputes", json={"indicator_type": "bank", "value": "123",
                                            "contact_email": "legal@acme.example", "reason_code": "other"})
     assert r.status_code == 400
+
+
+def test_verification_link_keeps_the_code_out_of_the_url_the_server_sees(monkeypatch):
+    """The code is in the #fragment, which browsers never send to the server (and so never reaches access logs)."""
+    from app.api.routes import community
+    sent = {}
+
+    class FakeSMTP:
+        def __init__(self, *a, **k): pass
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def starttls(self, context=None): sent["tls_context"] = context
+        def login(self, *a): pass
+        def send_message(self, message): sent["body"] = message.get_content()
+
+    monkeypatch.setenv("SMTP_HOST", "smtp.example")
+    monkeypatch.setenv("PUBLIC_BASE_URL", "https://shield.example")
+    monkeypatch.setattr(community.smtplib, "SMTP", FakeSMTP)
+    assert community._send_verification("legal@acme.example", "SECRETTOKEN123", "acme.example")
+    assert "https://shield.example/verify-dispute#token=SECRETTOKEN123" in sent["body"]
+    assert "?token=" not in sent["body"]
+
+
+def test_smtp_starttls_verifies_the_server_certificate(monkeypatch):
+    import ssl
+    from app.api.routes import community
+    sent = {}
+
+    class FakeSMTP:
+        def __init__(self, *a, **k): pass
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def starttls(self, context=None): sent["ctx"] = context
+        def login(self, *a): pass
+        def send_message(self, message): pass
+
+    monkeypatch.setenv("SMTP_HOST", "smtp.example")
+    monkeypatch.setenv("PUBLIC_BASE_URL", "https://shield.example")
+    monkeypatch.setattr(community.smtplib, "SMTP", FakeSMTP)
+    community._send_verification("legal@acme.example", "T", "acme.example")
+    assert sent["ctx"] is not None
+    assert sent["ctx"].verify_mode == ssl.CERT_REQUIRED and sent["ctx"].check_hostname is True
+
+
+def test_open_disputes_are_capped_per_address_and_per_indicator(api_client, monkeypatch):
+    monkeypatch.setattr(community_reports, "_pepper_config", lambda: ((7, "test-api-secret"), {}))
+    def file(value, email):
+        return api_client.post("/disputes", json={"indicator_type": "domain", "value": value,
+            "contact_email": email, "reason_code": "reported_in_error"})
+    for i in range(community_reports.MAX_ACTIVE_DISPUTES_PER_EMAIL):
+        assert file(f"cap{i}.example", "Same@Person.example").status_code == 200
+    assert file("capx.example", "same@person.example").status_code == 429      # case-insensitive address
+    assert file("capx.example", "other@person.example").status_code == 200      # other address unaffected
+    for i in range(community_reports.MAX_ACTIVE_DISPUTES_PER_INDICATOR - 1):
+        assert file("capx.example", f"u{i}@x.example").status_code == 200
+    assert file("capx.example", "last@x.example").status_code == 429
+
+
+def test_stats_and_verify_routes_are_rate_limited(api_client):
+    from app.api.limiter import limiter
+    limiter.enabled = True
+    try:
+        limiter.reset()
+        codes = [api_client.post("/disputes/verify", json={"token": "x" * 30}).status_code for _ in range(12)]
+        assert codes[:10] == [400] * 10 and 429 in codes[10:]
+        limiter.reset()
+        codes = [api_client.get("/indicators/stats").status_code for _ in range(32)]
+        assert 429 in codes[30:] and set(codes[:30]) == {200}
+    finally:
+        limiter.reset()
+        limiter.enabled = False

@@ -51,6 +51,7 @@ export interface AnalyzeResponse {
   /** Official look-ups the person can run themselves (e.g. the Udyam number page). */
   evidence_meta?: { check_name: string; source: string; affects: string; confidence: string; freshness: string; rule_version: string; checked_at: string }[]
   safety_actions?: { id: string; title: string; steps: string[]; urgent: boolean; helpline?: string; url?: string }[]
+  employer_message?: { title: string; why: string; steps: string[]; subject: string; body: string; caution: string } | null
   self_checks?: { id: string; title: string; number: string; url: string; why: string; steps: string[]; caution: string }[]
 }
 
@@ -117,5 +118,5 @@ export interface DataSources {
   scoring_model: string
   sources: { id: string; name: string; updated: string | null; age_days: number | null; status: 'current' | 'stale' | 'demo' | 'unknown'; detail: string }[]
   optional_lookups: Record<string, boolean>
-  request_budgets: { id: string; used_today: number; daily_limit: number }[]
+  request_budgets: { id: string; status: 'available' | 'paused' }[]
 }

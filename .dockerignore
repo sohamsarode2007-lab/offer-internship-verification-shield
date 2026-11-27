@@ -8,3 +8,8 @@ __pycache__
 *.db
 data/
 docs/
+frontend/node_modules
+frontend/dist
+frontend/test-results
+frontend/*.sqlite3
+frontend/*.db

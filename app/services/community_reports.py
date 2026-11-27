@@ -6,11 +6,12 @@ import json
 import os
 import re
 import secrets
+import time
 import uuid
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import func
-from sqlalchemy.orm import Session
+from sqlalchemy import and_, or_
+from sqlalchemy.orm import Session, joinedload
 
 from app.models.models import (CommunityDispute, CommunityIndicator, CommunityReport,
     CommunityTemplateBand, CommunityToken)
@@ -19,6 +20,14 @@ from app.services import upi_payment
 from app.utils.email_domains import is_free_mailbox, is_upi_handle
 
 CONSENT_VERSION = 4  # v4: details appear in masked form on the public scam-trends page (v3 named one college)
+# Independence is not provable without identifying reporters, so the only gate is a weak one: reports for the same
+# indicator must span at least this many different UTC days before they count (one burst in one sitting never does).
+MIN_DISTINCT_DAYS = 2
+DISPUTE_ACTIVE_DAYS = 90        # an unresolved dispute affects results for this long, then lapses
+DISPUTE_KEEP_DAYS = 180         # and is deleted (with its contact email) after this long
+ANALYSIS_RETENTION_DAYS = 365   # stored analysis results (and their per-check rows) are deleted after this long
+MAX_ACTIVE_DISPUTES_PER_EMAIL = 3
+MAX_ACTIVE_DISPUTES_PER_INDICATOR = 5
 MINHASH_SIZE = 128
 BAND_SIZE = 8
 PHONE_RE = re.compile(r"(?<!\w)(?:\+?91[\s().-]?)?[6-9]\d{9}(?!\w)")
@@ -33,6 +42,15 @@ PAYMENT_CONTEXT_RE = re.compile(r"\b(?:pay|payment|transfer|send|deposit|fee|acc
 
 def _utcnow():
     return datetime.now(timezone.utc)
+
+
+def spans_enough_days(created_times) -> bool:
+    """True when the reports were made on at least MIN_DISTINCT_DAYS different UTC days."""
+    return len({t.date() for t in created_times if t is not None}) >= MIN_DISTINCT_DAYS
+
+
+def active_dispute_cutoff(now: datetime | None = None) -> datetime:
+    return (now or _utcnow()) - timedelta(days=DISPUTE_ACTIVE_DAYS)
 
 
 def _pepper_config():
@@ -79,8 +97,7 @@ def masked(kind: str, value: str) -> str:
     """Display form shown in the report flow and on the scam-trends page.
 
     Never the full value, except a sender domain: domain indicators are only
-    extracted for non-free-mail domains, and those are shown in full.
-    """
+    extracted for non-free-mail domains, and those are shown in full."""
     if kind == "upi":
         local, handle = value.split("@", 1)
         return _visible_prefix(local, 7) + "•••@" + handle
@@ -176,8 +193,8 @@ def redact_text(text: str) -> str:
     text = IFSC_RE.sub("<IFSC>", text)
     text = ACCOUNT_RE.sub("<ACCOUNT>", text)
     text = PHONE_RE.sub("<PHONE>", text)
-    text = re.sub(r"(?i)(?:₹|INR|Rs\.?\s*)\s*[\d,]+(?:\.\d{1,2})?", "<AMOUNT>", text)
-    text = re.sub(r"(?i)\b(?:salary|stipend|amount|fee|deposit|pay|paid|cost|compensation)\s*(?:is|of|:|=)?\s*[\d,]+(?:\.\d{1,2})?\b", "<AMOUNT>", text)
+    text = re.sub(r"(?i)(?:₹|INR|Rs\.?)\s*[\d,]+(?:\.\d{1,2})?", "<AMOUNT>", text)
+    text = re.sub(r"(?i)\b(?:salary|stipend|amount|fee|deposit|pay|paid|cost|compensation)(?:\s*(?:is|of|:|=))?\s*[\d,]+(?:\.\d{1,2})?\b", "<AMOUNT>", text)
     text = re.sub(r"\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b|\b\d{4}-\d{2}-\d{2}\b", "<DATE>", text)
     text = re.sub(r"(?im)\b(?:candidate|applicant|student)\b[^\n]{0,60}", "<CANDIDATE>", text)
     return text
@@ -187,13 +204,15 @@ def minhash_signature(text: str) -> list[int]:
     words = re.findall(r"[a-z0-9<>]+", redact_text(text).casefold())
     shingles = [" ".join(words[i:i + 5]) for i in range(max(0, len(words) - 4))]
     if not shingles:
-        shingles = ["<EMPTY>"]
+        return []
     hashes = [int.from_bytes(hashlib.sha256(s.encode()).digest()[:8], "big") for s in shingles]
     return [min((h ^ ((i + 1) * 0x9E3779B97F4A7C15)) & 0xFFFFFFFFFFFFFFFF for h in hashes)
             for i in range(MINHASH_SIZE)]
 
 
 def _signature_bands(signature: list[int]):
+    if len(signature) != MINHASH_SIZE:
+        return []
     return [(band, hashlib.sha256(",".join(map(str, signature[band * BAND_SIZE:(band + 1) * BAND_SIZE])).encode()).hexdigest())
             for band in range(MINHASH_SIZE // BAND_SIZE)]
 
@@ -227,7 +246,7 @@ def issue_report_token(db: Session, indicators: list[dict], signature: list[int]
     """Signed, single-use token. band/scam_category (rule outputs, no text) let a consented
     report be counted on the scam-trends dashboard."""
     current, _ = _pepper_config()
-    if not current or not signature:
+    if not current or (not signature and not indicators):
         return None, []
     version, pepper = current
     jti = str(uuid.uuid4())
@@ -265,7 +284,7 @@ def accept_report(db: Session, token: str, selected: list[str], consent: bool, c
     signature = payload["signature"]
     report = CommunityReport(id=report_id, consent_version=CONSENT_VERSION,
         signature=json.dumps(signature), created_at=now, last_seen_at=now,
-        withdrawal_code_hash=hashlib.sha256(code.encode()).hexdigest(), is_demo=os.getenv("DEMO_MODE") == "1")
+        withdrawal_code_hash=hashlib.sha256(code.encode()).hexdigest(), is_demo=False)
     db.add(report)
     from app.services.institution_dashboard import current_iso_week
     week = current_iso_week(now.date())
@@ -304,22 +323,25 @@ def lookup_community(db: Session, indicators: list[dict], signature: list[int]):
     template_points = 0
     notes = []
     now = _utcnow()
-    demo_only = os.getenv("DEMO_MODE") == "1"
     for item in indicators:
-        matches = []
-        for version, pepper in peppers.items():
-            digest = _digest(item["indicator_type"], item["normalized_value"], pepper)
-            matches.extend(db.query(CommunityIndicator).filter_by(indicator_type=item["indicator_type"], digest=digest, key_version=version).all())
-        reports = {m.report_id for m in matches if (demo_only or not m.report.is_demo) and not m.report.withdrawn}
+        wanted = [(version, _digest(item["indicator_type"], item["normalized_value"], pepper))
+                  for version, pepper in peppers.items()]
+        # One query per indicator, with each match's report loaded in the same query (not one query per match).
+        matches = db.query(CommunityIndicator).options(joinedload(CommunityIndicator.report)).filter(
+            CommunityIndicator.indicator_type == item["indicator_type"],
+            or_(*[and_(CommunityIndicator.digest == d, CommunityIndicator.key_version == v) for v, d in wanted]),
+        ).all()
+        live = [m for m in matches if not m.report.is_demo and not m.report.withdrawn]
+        reports = {m.report_id for m in live}
         if not reports:
             continue
-        disputes = []
-        for version, pepper in peppers.items():
-            digest = _digest(item["indicator_type"], item["normalized_value"], pepper)
-            dispute = db.query(CommunityDispute).filter_by(indicator_type=item["indicator_type"], digest=digest,
-                key_version=version, resolved_at=None).first()
-            if dispute:
-                disputes.append(dispute)
+        if not spans_enough_days([m.report.created_at for m in live]):
+            continue                      # a single day's reports are not counted; see MIN_DISTINCT_DAYS
+        disputes = db.query(CommunityDispute).filter(
+            CommunityDispute.indicator_type == item["indicator_type"],
+            or_(*[and_(CommunityDispute.digest == d, CommunityDispute.key_version == v) for v, d in wanted]),
+            CommunityDispute.resolved_at.is_(None),
+            CommunityDispute.created_at > active_dispute_cutoff(now)).all()
         if disputes and not (item["indicator_type"] == "domain" and any(x.domain_verified for x in disputes)):
             notes.append("An indicator match is disputed by the company, under review.")
         if item["indicator_type"] == "domain" and any(x.domain_verified for x in disputes):
@@ -327,18 +349,27 @@ def lookup_community(db: Session, indicators: list[dict], signature: list[int]):
         count = len(reports)
         if count >= 10:
             indicator_bucket_points = max(indicator_bucket_points, 40)
-            notes.append(f"This {item['indicator_type']} was reported by 10+ people.")
+            notes.append(f"This {item['indicator_type']} was reported in 10+ separate reports.")
         elif count >= 3:
             indicator_bucket_points = max(indicator_bucket_points, 25)
-            notes.append(f"This {item['indicator_type']} was reported by 3+ people.")
-        for report_id in reports:
-            db.query(CommunityReport).filter_by(id=report_id).update({"last_seen_at": now})
-            db.query(CommunityIndicator).filter_by(report_id=report_id, digest=item["digest"]).update({"last_seen_at": now})
+            notes.append(f"This {item['indicator_type']} was reported in 3+ separate reports.")
+        digests = [d for _, d in wanted]
+        db.query(CommunityReport).filter(CommunityReport.id.in_(reports)).update(
+            {"last_seen_at": now}, synchronize_session=False)
+        db.query(CommunityIndicator).filter(
+            CommunityIndicator.report_id.in_(reports),
+            CommunityIndicator.indicator_type == item["indicator_type"],
+            CommunityIndicator.digest.in_(digests),
+        ).update({"last_seen_at": now}, synchronize_session=False)
 
-    candidate_ids = {row.report_id for band, bucket in _signature_bands(signature)
-                     for row in db.query(CommunityTemplateBand).filter_by(band=band, bucket=bucket)}
+    bands = _signature_bands(signature)
+    candidate_ids = {
+        row.report_id for row in db.query(CommunityTemplateBand.report_id).filter(
+            or_(*[and_(CommunityTemplateBand.band == b, CommunityTemplateBand.bucket == k) for b, k in bands])
+        ).all()
+    } if bands else set()
     for report in db.query(CommunityReport).filter(CommunityReport.id.in_(candidate_ids), CommunityReport.withdrawn.is_(False)).all() if candidate_ids else []:
-        if not demo_only and report.is_demo:
+        if report.is_demo:
             continue
         old_signature = json.loads(report.signature)
         score = similarity(signature, old_signature)
@@ -363,16 +394,43 @@ def purge_expired(db: Session, now: datetime | None = None):
         db.delete(report)
     db.query(CommunityDispute).filter(CommunityDispute.resolved_at.is_not(None),
         CommunityDispute.resolved_at < now - timedelta(days=365)).delete(synchronize_session=False)
+    db.query(CommunityDispute).filter(CommunityDispute.created_at < now - timedelta(days=DISPUTE_KEEP_DAYS)
+        ).delete(synchronize_session=False)
+    # Stored analysis results (score and per-check outcome; never offer text) are not kept forever.
+    from app.models.models import Offer
+    # ORM delete (not a bulk delete) so the per-check rows go too, whether or not the database enforces foreign keys.
+    for old in db.query(Offer).filter(Offer.created_at < now - timedelta(days=ANALYSIS_RETENTION_DAYS)).limit(1000).all():
+        db.delete(old)
     from app.services.institution_dashboard import purge_old_observations
     purge_old_observations(db, now.date())
     db.commit()
 
 
+_LAST_PURGE_MONOTONIC: float | None = None
+_PURGE_INTERVAL_SECONDS = 900.0
+
+
+def purge_if_due(db: Session):
+    """Run purge_expired at most once every 15 minutes per worker process."""
+    global _LAST_PURGE_MONOTONIC
+    now = time.monotonic()
+    if _LAST_PURGE_MONOTONIC is not None and now - _LAST_PURGE_MONOTONIC < _PURGE_INTERVAL_SECONDS:
+        return
+    _LAST_PURGE_MONOTONIC = now
+    purge_expired(db)
+
+
 def stats(db: Session):
-    query = db.query(CommunityIndicator.indicator_type, func.count(func.distinct(CommunityIndicator.report_id))).join(
-        CommunityReport).filter(CommunityReport.withdrawn.is_(False))
-    if os.getenv("DEMO_MODE") != "1":
-        query = query.filter(CommunityReport.is_demo.is_(False))
-    rows = query.group_by(CommunityIndicator.indicator_type).all()
-    return {"indicators": [{"indicator_type": kind, "reports": count if count >= 5 else None,
-                             "suppressed": count < 5} for kind, count in rows]}
+    query = db.query(CommunityIndicator.indicator_type, CommunityIndicator.report_id, CommunityReport.created_at).join(
+        CommunityReport).filter(CommunityReport.withdrawn.is_(False), CommunityReport.is_demo.is_(False))
+    by_kind: dict = {}
+    for kind, report_id, created in query.all():
+        entry = by_kind.setdefault(kind, {"ids": set(), "times": []})
+        entry["ids"].add(report_id)
+        entry["times"].append(created)
+    out = []
+    for kind, entry in by_kind.items():
+        count = len(entry["ids"])
+        shown = count >= 5 and spans_enough_days(entry["times"])
+        out.append({"indicator_type": kind, "reports": count if shown else None, "suppressed": not shown})
+    return {"indicators": out}

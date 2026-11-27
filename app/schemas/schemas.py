@@ -1,4 +1,3 @@
-import datetime
 from enum import Enum
 from typing import List, Optional
 from pydantic import BaseModel, ConfigDict, Field
@@ -16,26 +15,6 @@ class CheckResultSchema(BaseModel):
     status: CheckStatus
     score: Optional[float] = None
     details: Optional[str] = None
-
-class VerificationResultSchema(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    id: Optional[int] = None
-    offer_id: Optional[int] = None
-    overall_risk_score: float = Field(..., ge=0.0, le=100.0)
-    completeness_percentage: float = Field(..., ge=0.0, le=100.0)
-    created_at: Optional[datetime.datetime] = None
-    check_results: List[CheckResultSchema] = []
-
-class OfferSchema(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    id: Optional[int] = None
-    title: Optional[str] = None
-    company_name: Optional[str] = None
-    raw_text: Optional[str] = None
-    file_path: Optional[str] = None
-    created_at: Optional[datetime.datetime] = None
 
 class Reason(BaseModel):
     """One plain-language 'Why' row: text for people and its score impact ('+65', '−10' or None)."""
@@ -60,8 +39,7 @@ class AnalyzeResponse(BaseModel):
     report_token: Optional[str] = None
     reportable_indicators: List[dict] = Field(default_factory=list)
     # Not displayed by the frontend. Which company-master snapshot produced the
-    # registry result: "synthetic" (demo-only fictional data), "mca_csv", or None
-    # when no registry record was consulted. Keeps demo results traceable.
+    # registry result: "mca_csv", "ogd", or None when no registry record was consulted.
     registry_source: Optional[str] = None
     # Company name extracted from the offer text, shown under the verdict. Returned in
     # the response only; it is never stored.
@@ -70,6 +48,8 @@ class AnalyzeResponse(BaseModel):
     evidence_hints: List[dict] = Field(default_factory=list)
     # Official look-ups the person can run themselves: [{id, title, number, url, why, steps, caution}].
     self_checks: List[dict] = Field(default_factory=list)
+    # A copyable message asking the employer to confirm the offer, or None: see app/services/employer_message.py.
+    employer_message: Optional[dict] = None
     # Matched what-to-do-now steps (helpline 1930, cybercrime.gov.in): see app/services/safety_playbook.py.
     safety_actions: List[dict] = Field(default_factory=list)
     # Per-check source, score effect, confidence and freshness (no values): see app/services/evidence_meta.py.

@@ -16,12 +16,23 @@ from app.utils.email_domains import is_free_mailbox
 
 
 class _HTMLText(HTMLParser):
+    _SKIP_TAGS = {"script", "style", "noscript", "svg"}
+
     def __init__(self):
         super().__init__()
         self.parts: List[str] = []
+        self._skip_depth = 0
+
+    def handle_starttag(self, tag, attrs):
+        if tag.lower() in self._SKIP_TAGS:
+            self._skip_depth += 1
+
+    def handle_endtag(self, tag):
+        if tag.lower() in self._SKIP_TAGS and self._skip_depth > 0:
+            self._skip_depth -= 1
 
     def handle_data(self, data):
-        if data.strip():
+        if self._skip_depth == 0 and data.strip():
             self.parts.append(data.strip())
 
 
@@ -33,12 +44,24 @@ def _address_domain(value: Optional[str]) -> tuple[Optional[str], str]:
     return (domain if HOSTNAME_RE.fullmatch(domain) else None), display
 
 
+MAX_MIME_PARTS = 60                         # total parts in the message tree
+MAX_EMAIL_ATTACHMENTS = 5                   # PDF/image attachments kept (the rest are ignored)
+MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024     # per attachment, after decoding
+MAX_ATTACHMENT_TOTAL_BYTES = 20 * 1024 * 1024
+MAX_HEADER_COUNT = 400
+
+
 def parse_eml(file_bytes: bytes) -> Dict[str, Any]:
     """Extract body, file attachments and minimal parsed sender metadata."""
     try:
         message = BytesParser(policy=policy.default).parsebytes(file_bytes)
     except Exception as exc:
         raise ValueError("email message could not be parsed") from exc
+    if len(message.keys()) > MAX_HEADER_COUNT:
+        raise ValueError("email has too many headers to read safely")
+    for count, _part in enumerate(message.walk(), start=1):
+        if count > MAX_MIME_PARTS:
+            raise ValueError(f"email has more than {MAX_MIME_PARTS} parts; it is too complex to read safely")
     body = ""
     try:
         body_part = message.get_body(preferencelist=("plain",))
@@ -53,7 +76,10 @@ def parse_eml(file_bytes: bytes) -> Dict[str, Any]:
     except (LookupError, UnicodeError, ValueError) as exc:
         raise ValueError("email body could not be decoded") from exc
     attachments = []
+    total_bytes = 0
     for part in message.iter_attachments():
+        if len(attachments) >= MAX_EMAIL_ATTACHMENTS:
+            break
         content_type = part.get_content_type().lower()
         filename = part.get_filename() or "attachment"
         extension = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
@@ -68,7 +94,12 @@ def parse_eml(file_bytes: bytes) -> Dict[str, Any]:
         else:
             continue
         data = part.get_payload(decode=True)
+        if data and len(data) > MAX_ATTACHMENT_BYTES:
+            raise ValueError("an email attachment is larger than 10 MB")
         if data:
+            total_bytes += len(data)
+            if total_bytes > MAX_ATTACHMENT_TOTAL_BYTES:
+                raise ValueError("the email attachments together are larger than 20 MB")
             attachments.append({"filename": f"email-attachment.{allowed}", "content_type": content_type, "data": data})
     from_domain, display_name = _address_domain(message.get("From"))
     _, from_address = parseaddr(str(message.get("From") or ""))
@@ -141,7 +172,12 @@ def verify_sender_authentication(parsed: Dict[str, Any], body_facts: Dict[str, A
         points += 25
         signals.append("display name uses a protected brand outside its official domain (+25)")
 
-    body_domain_value = body_facts.get("sender_domain")
+    sender_email_field = body_facts.get("sender_email")
+    # URL-fallback sender_domain (where extract_facts sets sender_email.value=None) is a link in the letter, not a claimed sender address.
+    has_claimed_email = True if sender_email_field is None else bool(
+        sender_email_field.get("value") if isinstance(sender_email_field, dict) else sender_email_field
+    )
+    body_domain_value = body_facts.get("sender_domain") if has_claimed_email else None
     body_domain = body_domain_value.get("value") if isinstance(body_domain_value, dict) else body_domain_value
     body_host = str(body_domain).strip().lower().rstrip(".") if body_domain else None
     sender_host = domain.strip().lower().rstrip(".") if domain else None
@@ -151,7 +187,8 @@ def verify_sender_authentication(parsed: Dict[str, Any], body_facts: Dict[str, A
         signals.append("domain claimed in the letter differs from the authenticated From domain (+15)")
 
     if dmarc_status == "pass" and aligned:
-        signals.append("DMARC passed and DKIM is aligned (−10)")
+        signals.append("the file reports DMARC pass with aligned DKIM, but anyone can type those lines into a file, "
+                       "so it is not counted as proof and does not lower the score")
     lower_disagrees = any(_auth_signature(header) != (spf_status, dkim_status, d_value, dmarc_status)
                           for header in headers[1:])
     if lower_disagrees:
@@ -160,9 +197,9 @@ def verify_sender_authentication(parsed: Dict[str, Any], body_facts: Dict[str, A
         status = "insufficient_information"
     elif hard_auth_fail or points > 0:
         status = "fail"
-    elif dmarc_status == "pass" and aligned:
-        status = "pass"
     else:
+        # A pass is never accepted from an uploaded file: every header in it is controlled by whoever made the
+        # file. Only failures count, because forging a failure can only hurt the forger.
         status = "insufficient_information"
     no_header_note = "No Authentication-Results header (forwarded or exported without headers). " if not has_auth_results else ""
     details = no_header_note + f"Sender domain: {domain or 'unknown'}. " + (

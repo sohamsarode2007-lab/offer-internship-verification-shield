@@ -5,6 +5,9 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
+from app.api.request_limits import BodyLimitMiddleware
+from app.api.security_headers import SecurityHeadersMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from slowapi import _rate_limit_exceeded_handler
@@ -16,6 +19,7 @@ from app.api.routes.community import router as community_router
 from app.api.routes.institutions import router as institutions_router
 from app.db.database import init_dev_db, SessionLocal
 from app.services.community_reports import purge_expired
+from app.services.env_config import production_problems
 
 # Log level comes from the LOG_LEVEL env var (default INFO). Nothing is forced to DEBUG.
 logging.basicConfig(
@@ -23,12 +27,19 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
 )
 
+# Access logs would record every request path and client address; keep them off unless ACCESS_LOG=1.
+if os.getenv("ACCESS_LOG") != "1":
+    logging.getLogger("uvicorn.access").disabled = True
+
 DEFAULT_DEV_ORIGINS = "http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000"
 ALLOWED_ORIGINS = [o.strip() for o in os.getenv("ALLOWED_ORIGINS", DEFAULT_DEV_ORIGINS).split(",") if o.strip()]
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    problems = production_problems()
+    if problems:
+        raise RuntimeError("Refusing to start in production: " + "; ".join(problems))
     # SQLite dev only; Postgres schema is managed by `alembic upgrade head`.
     init_dev_db()
     def run_retention_purge():
@@ -57,9 +68,11 @@ async def lifespan(_app: FastAPI):
             pass
 
 
+_docs = None if os.getenv("ENVIRONMENT", "").strip().lower() == "production" else "/docs"
 app = FastAPI(
+    docs_url=_docs, redoc_url=None, openapi_url=None if _docs is None else "/openapi.json",
     title="Offer & Internship Verification Shield API",
-    description="Rule-based offer checks using local MCA master data when configured (no remote registry queries; labelled demo fixtures are optional).",
+    description="Rule-based offer checks using local MCA master data when configured (no remote registry queries).",
     version="1.0.0",
     lifespan=lifespan,
 )
@@ -76,6 +89,10 @@ app.add_middleware(
     allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
+
+# Outermost: refuse oversized bodies before anything reads them (see app/api/request_limits.py).
+app.add_middleware(BodyLimitMiddleware)
+app.add_middleware(SecurityHeadersMiddleware)
 
 app.include_router(analyze_router)
 app.include_router(community_router)
@@ -123,11 +140,8 @@ frontend_dist = os.path.join(os.path.dirname(os.path.dirname(__file__)), "fronte
 frontend_index = os.path.join(frontend_dist, "index.html")
 if os.path.isfile(frontend_index):
     assets_dir = os.path.join(frontend_dist, "assets")
-    demo_dir = os.path.join(frontend_dist, "demo")
     if os.path.isdir(assets_dir):
         app.mount("/assets", StaticFiles(directory=assets_dir), name="frontend_assets")
-    if os.path.isdir(demo_dir):
-        app.mount("/demo", StaticFiles(directory=demo_dir), name="frontend_demo")
 
     @app.get("/", include_in_schema=False)
     def serve_frontend_root():

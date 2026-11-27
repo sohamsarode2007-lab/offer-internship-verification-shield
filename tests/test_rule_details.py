@@ -17,7 +17,7 @@ def test_is_lookalike(domain):
 
 
 def test_tcsion_is_official():
-    assert "tcsion.com" in dv.BRAND_OFFICIAL_DOMAINS["tcs"]
+    assert any(domain == "tcsion.com" for domain in dv.BRAND_OFFICIAL_DOMAINS["tcs"])
     assert dv.find_lookalike("tcsion.com") is None
 
 

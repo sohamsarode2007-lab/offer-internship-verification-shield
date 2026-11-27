@@ -12,7 +12,6 @@ Checks (in order):
   3. Brand lookalike (tcs-careers.in, ...)  -> HARD FAIL
      (exact brand on a non-official domain; brand as a hyphenated token; edit
      distance 1 for 5-7 char brands, 1-2 for 8+ char brands)
-  4. DEMO_MODE fixture (see below)          -> pass, clearly labelled
   5. MX record: NXDOMAIN / no MX            -> HARD FAIL
   6. SPF and DMARC TXT records              -> warning only if missing
   7. WHOIS creation date < 30 days          -> HARD FAIL; lookup failure = "age unknown"
@@ -20,12 +19,7 @@ Checks (in order):
 
 Overall: any hard fail -> 'fail'; DNS unavailable -> 'insufficient_information';
 otherwise 'pass' (warnings listed in details).
-
-Demo mode: if env DEMO_MODE=1 and the domain is listed in env DEMO_FIXTURE_DOMAINS
-(comma separated), the result is 'pass' with details starting
-"[DEMO FIXTURE — not a live DNS result]". It is never applied silently.
 """
-import os
 import re
 import logging
 from datetime import datetime, timezone
@@ -43,7 +37,6 @@ logger = logging.getLogger(__name__)
 
 DNS_TIMEOUT_SECONDS = 3.0
 MIN_DOMAIN_AGE_DAYS = 30
-DEMO_PREFIX = "[DEMO FIXTURE — not a live DNS result]"
 
 
 def _make_resolver() -> dns.resolver.Resolver:
@@ -204,11 +197,6 @@ def check_domain_age(domain: str) -> Dict[str, Any]:
             "explanation": f"'{domain}' was registered {age_days} days ago."}
 
 
-def _demo_fixture_domains() -> set:
-    raw = os.getenv("DEMO_FIXTURE_DOMAINS", "")
-    return {d.strip().lower() for d in raw.split(",") if d.strip()}
-
-
 def _result(status: str, domain: Optional[str], details: str, sub_checks: List[Dict[str, Any]],
             warnings: Optional[List[str]] = None) -> Dict[str, Any]:
     score = {"pass": 95.0, "fail": 25.0}.get(status)
@@ -278,11 +266,6 @@ def verify_domain(input_data: Union[Dict[str, Any], str, None]) -> Dict[str, Any
     if mismatch:
         return _result("fail", host, mismatch,
                        [{"check_name": "employer_official_domain", "status": "fail", "explanation": mismatch}])
-    if os.getenv("DEMO_MODE") == "1" and (host in _demo_fixture_domains() or reg_domain in _demo_fixture_domains()):
-        logger.warning("[DOMAIN_VERIFY] DEMO_MODE fixture applied; result is not a live DNS lookup.")
-        return _result("pass", host,
-                       f"{DEMO_PREFIX} '{host}' is a configured demo fixture domain; MX/SPF/DMARC/WHOIS were not queried.",
-                       [{"check_name": "demo_fixture", "status": "pass", "explanation": DEMO_PREFIX}])
 
     mx = check_mx_records(host)
     if mx["status"] == "unknown":

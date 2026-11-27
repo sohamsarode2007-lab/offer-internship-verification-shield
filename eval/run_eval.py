@@ -1,4 +1,4 @@
-"""Run the synthetic regression cases through local rules or a live API."""
+"""Run the hand-written regression cases (made-up offers, test-only) through local rules or a live API."""
 
 import argparse
 import csv
@@ -45,19 +45,44 @@ _REGISTRY_DB = None
 
 
 def _synthetic_registry_db():
-    """Load fixtures/demo/synthetic_mca_master.csv (fictional companies) into a temporary SQLite file."""
+    """Load the test-only company list (fictional companies) into a temporary SQLite file."""
     global _REGISTRY_DB
     if _REGISTRY_DB is None:
         import tempfile
         sys.path.insert(0, str(ROOT))
         from scripts.load_mca_master import load_csv
-        _REGISTRY_DB = Path(tempfile.mkdtemp(prefix="eval-registry-")) / "synthetic.sqlite3"
-        load_csv(ROOT / "fixtures" / "demo" / "synthetic_mca_master.csv", _REGISTRY_DB, synthetic=True)
+        _REGISTRY_DB = Path(tempfile.mkdtemp(prefix="eval-registry-")) / "test-registry.sqlite3"
+        load_csv(ROOT / "tests" / "fixtures" / "offers" / "company_registry.csv", _REGISTRY_DB)
     return _REGISTRY_DB
 
 
+def _mock_dns(domains):
+    """Offline DNS for the eval: the cases' .example domains publish MX/SPF/DMARC, all else is NXDOMAIN."""
+    import dns.resolver
+    sys.path.insert(0, str(ROOT))
+    from app.services import domain_verification as dv
+
+    class _Txt:
+        def __init__(self, value):
+            self.strings = [value.encode()]
+
+    def resolve(name, rtype):
+        host = str(name).lower().rstrip(".")
+        base = host[len("_dmarc."):] if host.startswith("_dmarc.") else host
+        if base not in domains:
+            raise dns.resolver.NXDOMAIN()
+        if rtype == "MX" and base == host:
+            return [object()]
+        if rtype == "TXT":
+            return [_Txt("v=DMARC1; p=reject" if host.startswith("_dmarc.") else "v=spf1 -all")]
+        raise dns.resolver.NoAnswer()
+
+    dv._resolver.resolve = resolve
+    dv._whois_creation_date = lambda domain: None
+
+
 def local_band(case):
-    # Synthetic .example domains are configured as demo fixtures to keep this path
+    # The made-up .example domains answer from mocked DNS (see _mock_dns) to keep this path
     # offline and deterministic. No external DNS or registry calls are made.
     from app.services import domain_verification, fact_extraction, gstin_verification
     from app.services import payment_detection, risk_scoring, scam_text
@@ -104,36 +129,44 @@ def local_band(case):
 _EVAL_DB = None
 
 
+def _new_eval_db():
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+    from sqlalchemy.pool import StaticPool
+    from app.db.database import Base
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    return sessionmaker(bind=engine)()
+
+
 def _empty_eval_db():
     global _EVAL_DB
     if _EVAL_DB is None:
-        from sqlalchemy import create_engine
-        from sqlalchemy.orm import sessionmaker
-        from sqlalchemy.pool import StaticPool
-        from app.db.database import Base
-        engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
-        Base.metadata.create_all(engine)
-        _EVAL_DB = sessionmaker(bind=engine)()
+        _EVAL_DB = _new_eval_db()
     return _EVAL_DB
 
 
 def _seed_eval_community(case, community_reports):
+    from datetime import timedelta
     from app.services.fact_extraction import extract_facts
     from app.services.payment_detection import detect_payment_demand
-    db = _empty_eval_db()
-    if not db.query(community_reports.CommunityReport).count():
-        fixture = ("No registration number is shown. Contact HR at hr@fraud.example or WhatsApp +91 9123456001. "
-                   "This remote role requires a processing fee of Rs 500 to rky.verma@ybl. "
-                   "We are pleased to offer the analyst internship. Please confirm your joining date and reply "
-                   "to the recruitment team. The role includes training, weekly meetings, and project work with "
-                   "our engineering group.")
-        for _ in range(3):
-            facts = extract_facts(fixture)
-            indicators = community_reports.extract_indicators(fixture, None, detect_payment_demand(facts))
-            signature = community_reports.minhash_signature(fixture)
-            token, _ = community_reports.issue_report_token(db, indicators, signature)
-            selected = [x["indicator_type"] + ":" + x["digest"] for x in indicators]
-            community_reports.accept_report(db, token, selected, True, community_reports.CONSENT_VERSION)
+    db = _new_eval_db()
+    fixture = ("No registration number is shown. Contact HR at hr@fraud.example or WhatsApp +91 9123456001. "
+               "This remote role requires a processing fee of Rs 500 to rky.verma@ybl. "
+               "We are pleased to offer the analyst internship. Please confirm your joining date and reply "
+               "to the recruitment team. The role includes training, weekly meetings, and project work with "
+               "our engineering group.")
+    for idx in range(3):
+        facts = extract_facts(fixture)
+        indicators = community_reports.extract_indicators(fixture, None, detect_payment_demand(facts))
+        signature = community_reports.minhash_signature(fixture)
+        token, _ = community_reports.issue_report_token(db, indicators, signature)
+        selected = [x["indicator_type"] + ":" + x["digest"] for x in indicators]
+        community_reports.accept_report(db, token, selected, True, community_reports.CONSENT_VERSION)
+        if idx == 0:
+            for row in db.query(community_reports.CommunityReport).all():
+                row.created_at = row.created_at - timedelta(days=1)
+            db.commit()
     return db
 
 
@@ -177,10 +210,9 @@ def evaluate(cases, live=False, base_url="http://127.0.0.1:8000"):
             if case.get("input_type", "text") in {"eml", "text_file"}:
                 scan_text = (ROOT / scan_text).read_text(encoding="utf-8", errors="ignore")
             domains.update(re.findall(r"[A-Za-z0-9.-]+\.example\b", scan_text.lower()))
-        os.environ["DEMO_MODE"] = "1"
-        os.environ["DEMO_FIXTURE_DOMAINS"] = ",".join(sorted(domains))
-        # Cases flagged registry_fixture=true run against the synthetic company master
-        # (DEMO_MODE only). Every other case sees no registry at all.
+        _mock_dns(domains)
+        # Cases flagged registry_fixture=true run against the test-only company list.
+        # Every other case sees no registry at all.
         if any(case.get("registry_fixture", "").lower() == "true" for case in cases):
             os.environ["MCA_DB_PATH"] = str(_synthetic_registry_db())
         else:
@@ -259,7 +291,16 @@ def report(results):
         expected_status = "PASS" if row["predicted_band"] == row["expected_band"] else "MISMATCH"
         label_status = label_band_status(row["truth"], row["predicted_band"])
         print(f"{row['case_id']:<9} {row['truth']:<12} {row['predicted_band']:<39} {label_status:<20} {row['expected_band']:<39} {expected_status}")
-    return exact == len(results)
+    unknown = [c for c in dangerous if c not in KNOWN_DANGEROUS_MISSES]
+    if unknown:
+        print("\nFAIL: new dangerous miss(es) (a scam rated likely legitimate): " + ", ".join(unknown)
+              + ". Fix the rule; do not add to KNOWN_DANGEROUS_MISSES to make this pass.")
+    return exact == len(results) and not unknown
+
+
+# Documented limit, kept visible on purpose (CLAIMS.md, 'What it cannot catch'). Any other scam rated likely legitimate
+# fails the run.
+KNOWN_DANGEROUS_MISSES = {"EC41"}
 
 
 def main():

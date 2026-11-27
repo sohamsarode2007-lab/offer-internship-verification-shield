@@ -77,8 +77,9 @@ def test_structural_domain_and_gstin_are_capped_at_manual_review():
 
 def test_external_registry_pass_satisfies_low_risk_verification_gate():
     checks = [
-        {"check_name": "domain_verification", "status": "pass"},
+        {"check_name": "domain_verification", "status": "pass", "domain": "quillmere.example"},
         {"check_name": "gstin_verification", "status": "pass", "identifier_present": True,
+         "registry_company_name": "Quillmere Software Private Limited",
          "registry_checked": True, "verification_source": "mca_registry",
          "verified_identifier_type": "CIN", "identifiers": [{"type": "CIN"}]},
         {"check_name": "payment_detection", "status": "pass"},
@@ -88,7 +89,8 @@ def test_external_registry_pass_satisfies_low_risk_verification_gate():
     assert result["risk_band"] == "likely legitimate"
 
 
-def test_aligned_authenticated_sender_satisfies_low_risk_verification_gate():
+def test_uploaded_email_authentication_pass_cannot_satisfy_the_low_risk_gate():
+    """Headers in an uploaded file are written by whoever made the file, so a pass is never an external signal."""
     checks = [
         {"check_name": "domain_verification", "status": "pass"},
         {"check_name": "gstin_verification", "status": "insufficient_information",
@@ -98,16 +100,24 @@ def test_aligned_authenticated_sender_satisfies_low_risk_verification_gate():
         {"check_name": "payment_detection", "status": "pass"},
     ]
     result = rs.calculate_risk_score(checks)
-    assert result["overall_risk_score"] == 0.0
-    assert result["risk_band"] == "likely legitimate"
+    assert result["overall_risk_score"] == 31.0
+    assert result["risk_band"] == "insufficient evidence, verify manually"
+    assert not any("really came" in r["text"] for r in result["reasons"])
 
 
-def test_synthetic_registry_requires_demo_mode(synthetic_registry_db, monkeypatch):
+def test_registry_labelled_synthetic_is_always_ignored(tmp_path, monkeypatch):
+    import sqlite3
+    from scripts.load_mca_master import load_csv
+    from conftest import DEMO_DIR
+    db = tmp_path / "made-up.sqlite3"
+    load_csv(DEMO_DIR / "company_registry.csv", db)
+    with sqlite3.connect(db) as conn:
+        conn.execute("UPDATE registry_metadata SET value='SYNTHETIC' WHERE key='source'")
     text = ("Emberlake Analytics Pvt. Ltd.\nCIN: U74999DL2016PTC298345\n"
             "GSTIN: 07AAFCE4321L1ZO\nhr@emberlakeanalytics.example")
     facts = fe.extract_facts(text)
-    monkeypatch.setenv("MCA_DB_PATH", str(synthetic_registry_db))
-    monkeypatch.delenv("DEMO_MODE", raising=False)
+    monkeypatch.setenv("MCA_DB_PATH", str(db))
+    monkeypatch.setenv("DEMO_MODE", "1")
     result = gv.verify_gstin(facts)
     assert result["status"] == "insufficient_information"
     assert "registry_source" not in result

@@ -22,6 +22,13 @@ Risk points (added):
   +15  Scam-chat wording, moderate tier only (recruiter reachable only via WhatsApp/Telegram,
        no-interview or easy-money claims)
   +10  extra when both tiers match (strong + moderate = +40 in total)
+  +40  Request for a password, PIN, OTP or card security code (never cancelled by joining/onboarding wording;
+       highest tier of the personal-data check; the tiers are not added together)
+  +20  Request for bank account/card details (send/share/upload ... bank details, account number, IFSC, cheque, card)
+  +10  Request for identity documents, photos or certificates (Aadhaar/PAN copy, passport, marksheets, photograph);
+       bank and documents are not added together (bank wins: +20); the check never forces high risk itself;
+       bank/documents requests are ignored when placed after joining, any request when negated
+       (app/services/personal_data_request.py)
   +25  Community indicator reported by 3-9 reports; +40 at 10+ reports
   +25  Community template MinHash similarity >= 0.8
   Community evidence is correlated: highest indicator bucket + template points,
@@ -32,7 +39,6 @@ Risk points (added):
 Offsets (subtracted, only from NON-payment points; never below the payment points):
   -10  Domain check passed
   -10  Registry match
-  -10  DMARC pass with aligned DKIM (never offsets payment points)
 
 Community indicators are risk evidence only; they never satisfy the external
 verification guard. Details use threshold buckets and never expose exact counts.
@@ -44,24 +50,21 @@ independent evidence to call this high risk."
 Low-risk guard: "likely legitimate" requires ALL of:
   - contact domain check passed;
   - registration number is present and did not fail; and
-  - at least one externally verified signal: a registry pass marked as checked
-    against MCA data, or an authenticated sender from an original .eml with DMARC
-    pass and aligned DKIM.
+  - an externally verified signal: a registry pass marked as checked against MCA data
+    whose registered company name matches the contact domain (app/services/identity_tie.py),
+    because a company number can be copied onto any offer.
+    Email authentication results in an uploaded .eml are NOT such a signal: the file's
+    headers are written by whoever made it, so a pass is never counted. Failures still count.
 Structural checks alone (including a passing domain and checksum-valid GSTIN)
 do not meet this guard. A score <= 30 without an external signal is raised to 31
 with an explanatory factor.
 
-Synthetic company-master snapshot (DEMO_MODE only): a snapshot loaded with
-`load_mca_master.py --synthetic` is consulted only when DEMO_MODE=1. Its results
-use the same weights as a loaded company master (registry match -10 offset,
-satisfies the low-risk guard; inactive status or CIN/name mismatch +25), are worded
-"Company registry match" without calling the data official, live or MCA data, and
-carry registry_source="synthetic" in the API response for traceability.
-
 Bands: 0-30 likely legitimate | 31-60 insufficient evidence, verify manually | 61-100 high risk
 """
-import os
 from typing import List, Dict, Any, Optional
+
+from app.services import identity_tie
+from app.services.check_types import CheckDict
 
 SCORING_MODEL = "rule_based_v2"
 
@@ -73,6 +76,9 @@ W_REG_UNVERIFIED = 10.0
 W_SCAM_STRONG = 30.0
 W_SCAM_MODERATE = 15.0
 W_SCAM_BOTH_EXTRA = 10.0
+W_PERSONAL_CREDENTIALS = 40.0
+W_PERSONAL_BANK = 20.0
+W_PERSONAL_DOCS = 10.0
 W_REG_MISSING = 20.0
 W_NO_IDENTIFIERS = 20.0
 G_DOMAIN_PASS = 10.0
@@ -133,10 +139,10 @@ def _registration_fail_reason(details: str) -> str:
 
 def _community_reason(details: str) -> str:
     parts = []
-    if "10+ people" in details:
-        parts.append("Reported by 10+ people")
-    elif "3+ people" in details:
-        parts.append("Reported by 3+ people")
+    if "10+ separate reports" in details:
+        parts.append("Reported in 10+ separate reports")
+    elif "3+ separate reports" in details:
+        parts.append("Reported in 3+ separate reports")
     if "similar to a reported scam template" in details:
         parts.append("the wording matches a scam letter other job seekers reported" if parts
                      else "The wording matches a scam letter other job seekers reported")
@@ -144,7 +150,7 @@ def _community_reason(details: str) -> str:
 
 
 def calculate_risk_score(
-    check_results: List[Dict[str, Any]],
+    check_results: List[CheckDict],
     facts: Optional[Dict[str, Any]] = None
 ) -> Dict[str, Any]:
     """Apply the rule_based_v2 points table. `facts` is accepted for API compatibility."""
@@ -164,21 +170,12 @@ def calculate_risk_score(
         and reg.get("verification_source") == "mca_registry"
         and reg.get("verified_identifier_type") == "CIN"
     )
-    sender_authenticated = (
-        auth.get("status") == "pass"
-        and auth.get("dmarc_status") == "pass"
-        and auth.get("dkim_aligned") is True
-    )
-    # A synthetic snapshot is only ever consulted in DEMO_MODE (see gstin_verification);
-    # there it exercises the same registry-match path as a loaded company master.
-    synthetic_registry = (
-        os.getenv("DEMO_MODE") == "1"
-        and reg_status == "pass"
-        and reg.get("registry_checked") is True
-        and reg.get("registry_source") == "synthetic"
-        and reg.get("verified_identifier_type") == "CIN"
-    )
-    has_external_signal = registry_verified or sender_authenticated or synthetic_registry
+    domain_tied = identity_tie.domain_tied_to_company(
+        by_name.get("domain_verification", {}).get("domain"), reg.get("registry_company_name"))
+    # A registry match proves the company exists, not that this sender works for it (the number can be copied),
+    # so it only counts as the external signal when the contact domain is recognisably that company's name.
+    identity_unproven = registry_verified and not domain_tied
+    has_external_signal = registry_verified and domain_tied
 
     factors: List[str] = []
     # Plain-language Why rows for people: (text, score impact). No engine wording.
@@ -257,6 +254,16 @@ def calculate_risk_score(
         other_points += scam_points
         factors.append(f"Scam-chat wording found (+{scam_points:g}): {scam_text.get('details', '')}")
         reason("The wording matches common WhatsApp/Telegram job-scam patterns", scam_points)
+    personal = by_name.get("personal_data_request", {})
+    if personal.get("status") == "fail":
+        personal_points = {"credentials": W_PERSONAL_CREDENTIALS, "bank": W_PERSONAL_BANK}.get(personal.get("tier"), W_PERSONAL_DOCS)
+        other_points += personal_points
+        factors.append(f"Personal-data request (+{personal_points:g}): {personal.get('details', '')}")
+        if personal.get("tier") == "credentials":
+            reason("The text asks for a password, PIN or OTP, which no genuine employer needs", personal_points)
+        else:
+            reason("The text asks for bank details or identity documents, which genuine employers usually ask for only "
+                   "after an offer is accepted", personal_points)
     community = by_name.get("community_reports", {})
     community_points = min(40.0, max(0.0, float(community.get("risk_points", community.get("score", 0)) or 0)))
     if community_points:
@@ -278,7 +285,7 @@ def calculate_risk_score(
             factors.append(f"Contact domain passed DNS checks ({_fmt(-reduction)}, offsets non-payment points only)")
         reason("The company's email domain exists and can receive email", -reduction)
     if reg_status == "pass":
-        label = "Company registry match" if synthetic_registry else "MCA registry pass"
+        label = "MCA registry pass"
         reduction = min(G_REGISTRY_PASS, other_points)
         if reduction > 0:
             other_points -= reduction
@@ -288,13 +295,6 @@ def calculate_risk_score(
         name = reg.get("registry_company_name")
         reason(f"The company is registered and active: {name}" if name else "The company is registered and active",
                -reduction)
-    if auth.get("status") == "pass" and auth.get("dmarc_status") == "pass" and auth.get("dkim_aligned") is True:
-        reduction = min(10.0, other_points)
-        if reduction > 0:
-            other_points -= reduction
-        applied = f"applied {_fmt(-reduction)}" if reduction < 10.0 else _fmt(-reduction)
-        factors.append(f"DMARC pass with aligned DKIM ({_fmt(-10.0)} signal; {applied}, non-payment only)")
-        reason("The email really came from the company's own domain", -reduction)
 
     unbounded_score = payment_points + other_points
     score = unbounded_score
@@ -330,11 +330,15 @@ def calculate_risk_score(
         if scam_strong:
             missing.append("the text matches a known task-scam pattern")
         if not has_external_signal:
-            missing.append("no externally verified registry match or authenticated sender was found")
+            missing.append("the registered company's name does not match the contact domain, so the number may be copied"
+                           if identity_unproven else "no externally verified registry match was found")
         if missing:
             registration_gap = (not reg_present or reg_status == "fail" or not has_external_signal)
             scam_gap = scam_strong and not registration_gap
-            reason("We couldn't verify this company's registration, so we can't call it legitimate yet."
+            reason("The company number is real, but the email domain doesn't match that company's name. "
+                   "Numbers can be copied, so check with the company directly."
+                   if identity_unproven and not (not reg_present or reg_status == "fail") else
+                   "We couldn't verify this company's registration, so we can't call it legitimate yet."
                    if registration_gap else
                    "The wording matches a known task-scam pattern, so we can't call it legitimate."
                    if scam_gap else

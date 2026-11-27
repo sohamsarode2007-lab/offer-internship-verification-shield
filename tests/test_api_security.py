@@ -21,7 +21,6 @@ def test_rate_limit_returns_429_after_10_requests(api_client, monkeypatch):
 
 def test_rate_limit_environment_override(monkeypatch):
     monkeypatch.setenv("RATE_LIMIT", "23/minute")
-    monkeypatch.setenv("DEMO_MODE", "1")
     assert configured_rate_limit() == "23/minute"
 
 
@@ -37,14 +36,10 @@ def test_analyze_includes_next_steps_and_complaint_summary(api_client):
     assert "Do not send money" in payload["next_steps"][0]
 
 
-@pytest.mark.parametrize(("demo", "expected"), [(False, "10/minute"), (True, "100/minute")])
-def test_rate_limit_environment_defaults(monkeypatch, demo, expected):
+def test_rate_limit_default_is_ten_per_minute(monkeypatch):
     monkeypatch.delenv("RATE_LIMIT", raising=False)
-    if demo:
-        monkeypatch.setenv("DEMO_MODE", "1")
-    else:
-        monkeypatch.delenv("DEMO_MODE", raising=False)
-    assert configured_rate_limit() == expected
+    monkeypatch.setenv("DEMO_MODE", "1")  # the removed demo switch must not loosen the limit
+    assert configured_rate_limit() == "10/minute"
 
 
 def test_cors_allows_dev_origin_without_credentials(api_client):

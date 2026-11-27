@@ -74,7 +74,15 @@ _EXTRA_RE = re.compile("|".join(f"(?:{p})" for p in EXTRA_FEE_PATTERNS), re.IGNO
 _COMPANY_BEARS_RE = re.compile(
     r"\b(?:bears?|borne|bearing|covers?|covered|at\s+its\s+own\s+cost|free\s+of\s+cost|"
     r"at\s+no\s+(?:extra\s+)?cost|paid\s+by\s+the\s+company|waived|waiver|exempt(?:ed)?)\b"
-    r"|\b(?:we|company|employer|organi[sz]ation)\s+(?:will\s+)?(?:pay|credit|transfer|send|provide)",
+    r"|\b(?:we|company|employer|organi[sz]ation)\s+(?:will\s+)?(?:pay|credit|transfer|send)\b",
+    re.IGNORECASE,
+)
+
+# An instruction aimed at the candidate. Mentioning a stipend or salary nearby does not cancel a fee when the same
+# stretch of text tells the candidate to pay it ("stipend of 15000 and a laptop; you pay the BGV charges").
+_YOU_PAY_RE = re.compile(
+    r"\byou\s+(?:will\s+|shall\s+|would\s+|have\s+to\s+|need\s+to\s+|must\s+)?(?:pay|bear|deposit|send|transfer)\b"
+    r"|\b(?:please|kindly|must|first|then)\s+(?:pay|send|deposit|transfer|remit)\b",
     re.IGNORECASE,
 )
 
@@ -115,6 +123,8 @@ _URGENCY_RE = re.compile("|".join(f"(?:{p})" for p in URGENCY_PATTERNS), re.IGNO
 
 # Abbreviations whose trailing '.' must not end a sentence ("Rs. 5,000", "Pvt. Ltd.").
 _ABBREVIATIONS = {"rs", "no", "pvt", "ltd", "mr", "mrs", "ms", "dr", "inc", "co", "st", "vs", "etc", "e.g", "i.e"}
+# Entity/list suffixes can still end a sentence when followed by a capitalized new sentence.
+_SENTENCE_END_ABBREVS = {"ltd", "inc", "co", "etc", "st"}
 _BOUNDARY_RE = re.compile(r"[.!?।॥]+\s+|\n[ \t]*\n\s*")
 
 UPI_BEFORE_WINDOW = 120
@@ -128,8 +138,10 @@ def sentence_spans(text: str) -> List[Tuple[int, int]]:
     spans, start = [], 0
     for m in _BOUNDARY_RE.finditer(text):
         if m.group(0)[0] == ".":
-            word = re.search(r"([A-Za-z.]+)$", text[start:m.start()])
-            if word and word.group(1).lower().rstrip(".") in _ABBREVIATIONS:
+            # Abbreviations are short: look at a bounded window so a long run of letters cannot make this quadratic.
+            word = re.search(r"([A-Za-z.]+)$", text[max(start, m.start() - 24):m.start()])
+            abbr = word.group(1).lower().rstrip(".") if word else ""
+            if abbr in _ABBREVIATIONS and not (abbr in _SENTENCE_END_ABBREVS and text[m.end():m.end() + 1].isupper()):
                 continue
         spans.append((start, m.end()))
         start = m.end()
@@ -167,8 +179,8 @@ def _find_phrase_demands(text: str, spans) -> List[Dict[str, Any]]:
         s, e = _sentence_of(spans, m.start())
         if _is_negated(text, s, m.start()):
             continue
-        sentence = text[s:e]
-        if _COMPANY_BEARS_RE.search(sentence) or _INBOUND_MONEY_RE.search(sentence):
+        local = text[max(s, m.start() - 80):min(e, m.end() + 80)]
+        if _COMPANY_BEARS_RE.search(local) or (_INBOUND_MONEY_RE.search(local) and not _YOU_PAY_RE.search(local)):
             continue
         demands.append({"kind": "phrase", "match": re.sub(r"\s+", " ", m.group(0).strip()),
                         "start": m.start(), "end": m.end()})

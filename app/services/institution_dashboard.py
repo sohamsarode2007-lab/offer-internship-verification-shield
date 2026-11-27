@@ -5,7 +5,6 @@ automatically. Every /analyze call adds one anonymous trend row (ISO week, band,
 scam category; see docs/PRIVACY_DESIGN.md). The senders table comes from consented
 community reports. Multiple colleges and a staff login are future scope.
 """
-import os
 import re
 from datetime import date, datetime, timedelta, timezone
 
@@ -39,19 +38,18 @@ def get_institution(db: Session) -> Institution:
 
 
 def record_check_observation(db: Session, band: str, scam_category: str, iso_week: str,
-                             is_demo: bool, report_id: str | None = None, is_simulated: bool = False) -> None:
+                             report_id: str | None = None) -> None:
     """One anonymous public trend row: ISO week, band and category only.
 
     Every /analyze call records one (report_id stays NULL: not linked to anything).
-    report_id is set only for the simulated demo reports in app/services/demo_seed.py.
     """
     if band not in BANDS:
         return
     if scam_category not in CATEGORIES:
         scam_category = "other"
     db.add(InstitutionObservation(institution_id=get_institution(db).id, report_id=report_id,
-                                  iso_week=iso_week, band=band, scam_category=scam_category, is_demo=is_demo,
-                                  is_simulated=is_simulated))
+                                  iso_week=iso_week, band=band, scam_category=scam_category, is_demo=False,
+                                  is_simulated=False))
 
 
 TREND_RETENTION_WEEKS = 104  # 24 months
@@ -62,10 +60,6 @@ def purge_old_observations(db: Session, today: date | None = None) -> int:
     cutoff = last_weeks(today, TREND_RETENTION_WEEKS + 1)[0]
     return db.query(InstitutionObservation).filter(InstitutionObservation.iso_week < cutoff).delete(
         synchronize_session=False)
-
-
-def _include_demo() -> bool:
-    return os.getenv("DEMO_MODE") == "1"
 
 
 def _check(checks: list[dict], name: str) -> dict:
@@ -131,41 +125,47 @@ SENDER_CSV_COLUMNS = ("indicator", "type", "reports", "first_week", "last_week",
 
 
 def top_senders(db: Session) -> list[dict]:
-    """Senders (masked indicators) reported by 3+ distinct consented v3 reports, by count.
+    """Senders (masked indicators) reported by 3+ distinct consented reports, by count.
 
-    Only masked display forms leave this function; digests are used for grouping and
-    dispute lookup only. Withdrawn reports never count; demo reports count only in DEMO_MODE.
+    Requires consent_version >= CONSENT_VERSION (currently 4). Only masked display
+    forms leave this function; digests are used for grouping and dispute lookup only.
+    Because digests are keyed with INDICATOR_KEY_VERSION, rotating the pepper splits
+    counts across key versions (reports before and after rotation do not merge here).
+    Withdrawn reports and rows marked demo never count.
     """
     from collections import Counter
     from app.models.models import CommunityDispute, CommunityIndicator, CommunityReport
-    from app.services.community_reports import CONSENT_VERSION
+    from app.services.community_reports import CONSENT_VERSION, active_dispute_cutoff, spans_enough_days
 
     query = db.query(CommunityIndicator.indicator_type, CommunityIndicator.digest, CommunityIndicator.key_version,
                      CommunityIndicator.report_id, CommunityIndicator.masked_display,
-                     CommunityIndicator.iso_week, CommunityIndicator.scam_category).join(CommunityReport).filter(
+                     CommunityIndicator.iso_week, CommunityIndicator.scam_category, CommunityReport.created_at).join(CommunityReport).filter(
         CommunityReport.withdrawn.is_(False),
         CommunityReport.consent_version >= CONSENT_VERSION,
         CommunityIndicator.masked_display.isnot(None),
+        CommunityReport.is_demo.is_(False),
     )
-    if not _include_demo():
-        query = query.filter(CommunityReport.is_demo.is_(False))
 
     groups: dict[tuple, dict] = {}
-    for kind, digest, version, report_id, display, week, category in query.all():
+    for kind, digest, version, report_id, display, week, category, created in query.all():
         group = groups.setdefault((kind, digest, version), {
-            "indicator_type": kind, "indicator": display, "reports": set(), "weeks": [], "categories": Counter()})
+            "indicator_type": kind, "indicator": display, "reports": set(), "weeks": [], "categories": Counter(),
+            "times": []})
         group["reports"].add(report_id)
+        group["times"].append(created)
         if week:
             group["weeks"].append(week)
         if category:
             group["categories"][category] += 1
 
     disputed = {(d.indicator_type, d.digest, d.key_version)
-                for d in db.query(CommunityDispute).filter(CommunityDispute.resolved_at.is_(None)).all()}
+                for d in db.query(CommunityDispute).filter(
+                    CommunityDispute.resolved_at.is_(None),
+                    CommunityDispute.created_at > active_dispute_cutoff()).all()}
     senders = []
     for key, group in groups.items():
         count = len(group["reports"])
-        if count < SENDER_THRESHOLD:
+        if count < SENDER_THRESHOLD or not spans_enough_days(group["times"]):
             continue
         category = (sorted(group["categories"].items(), key=lambda kv: (-kv[1], kv[0]))[0][0]
                     if group["categories"] else "other")
@@ -244,9 +244,8 @@ def category_summary(weeks: list[str], category_counts: dict) -> list[dict]:
 
 def _weekly_counts(db: Session, institution: Institution, weeks: list[str]):
     base = [InstitutionObservation.institution_id == institution.id,
-            InstitutionObservation.iso_week.in_(weeks)]
-    if not _include_demo():
-        base.append(InstitutionObservation.is_demo.is_(False))
+            InstitutionObservation.iso_week.in_(weeks),
+            InstitutionObservation.is_demo.is_(False)]
     rows = db.query(InstitutionObservation.iso_week, InstitutionObservation.band,
         func.count(InstitutionObservation.id)).filter(*base).group_by(
             InstitutionObservation.iso_week, InstitutionObservation.band).all()

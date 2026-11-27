@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useId, useMemo, useRef, useState } from 'react'
-import { analyze, loadConfig, loadDashboard, loadSources, SENDERS_CSV_URL, submitDispute, submitReport, WEEKLY_CSV_URL, withdrawReport } from './api/client'
+import { analyze, loadConfig, loadDashboard, loadSources, SENDERS_CSV_URL, submitDispute, submitReport, verifyDispute, WEEKLY_CSV_URL, withdrawReport } from './api/client'
 import { buildInvestigationReport } from './investigationReport'
 import { CONSENT_TEXT, CONSENT_VERSION, LINK_CONSENT_TEXT } from './consent'
 import type { AnalyzeResponse, CheckResult, DisputeRequest, InstitutionDashboard, ReportableIndicator, RiskBand, ScamCategory, TopSender } from './api/types'
@@ -8,7 +8,7 @@ import styles from './App.module.css'
 const labelByCheck: Record<string, string> = {
   sender_authentication: 'Who sent it', domain_verification: 'Email domain',
   gstin_verification: 'Company registration', payment_detection: 'Payment request',
-  scam_text_patterns: 'Scam-chat wording', community_reports: 'Reports from other job seekers',
+  scam_text_patterns: 'Scam-chat wording', personal_data_request: 'Request for bank details, documents or secret codes', community_reports: 'Reports from other job seekers',
 }
 const statusText: Record<CheckResult['status'], string> = {
   pass: 'Passed', fail: 'Failed', insufficient_information: 'Not enough information', not_applicable: 'Not applicable',
@@ -37,12 +37,11 @@ function Home({ onResult }: { onResult: (result: AnalyzeResponse, input: Submitt
   const file: File | File[] | null = files.length === 0 ? null : files.length === 1 ? files[0] : files
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
-  const [demoText, setDemoText] = useState('')
   const [linkOffer, setLinkOffer] = useState(false)
   const [linkConsent, setLinkConsent] = useState(false)
   useEffect(() => { let live = true; loadConfig().then(c => { if (live) setLinkOffer(c.link_lookups) }); return () => { live = false } }, [])
   const fileInputId = useId()
-  const demo = import.meta.env.VITE_DEMO === '1'
+  const [pickNote, setPickNote] = useState('')
   async function run(event: FormEvent) {
     event.preventDefault(); setError('')
     if (!text.trim() && !file) { setError('Paste offer text or choose a file to check.'); return }
@@ -51,62 +50,53 @@ function Home({ onResult }: { onResult: (result: AnalyzeResponse, input: Submitt
     catch (err) { setError(err instanceof Error ? err.message : 'The request failed. Try again.') }
     finally { setBusy(false) }
   }
-  async function sample(name: string) {
-    setError('')
-    try {
-      const response = await fetch(`/demo/${name}`)
-      if (!response.ok) throw new Error('Sample could not be loaded.')
-      setText(await response.text()); setFiles([]); setDemoText(name)
-    } catch { setError('The sample could not be loaded. Try again.') }
-  }
   return <section className={styles.home}>
     <div className={styles.homeIntro}><h1>Check an offer before you pay anything.</h1><p>We check payment requests, sender details and available company records.</p></div>
     <form onSubmit={run} className={styles.intake}>
       <div className={styles.intakeGrid}>
-        <label className={styles.textWell}><span>Paste offer text</span><textarea value={text} onChange={e => { setText(e.target.value); setDemoText('') }} disabled={busy} placeholder="Paste the message or offer letter here" rows={12}/></label>
-        <div className={styles.uploadWell}><label htmlFor={fileInputId} className={styles.uploadLabel}>Choose up to 5 files (PDF, image, .eml or .txt)</label><input id={fileInputId} type="file" multiple accept=".pdf,.png,.jpg,.jpeg,.bmp,.tiff,.eml,.txt" disabled={busy} onChange={e => { setFiles(Array.from(e.target.files ?? []).slice(0, 5)); setDemoText('') }}/>
-          <p className={styles.help}>Uploading the original email lets us verify who actually sent it. Send an .eml on its own; other files can be checked together as one offer.</p><p className={styles.help}>Gmail: open the message → ⋮ → “Download message”.</p>
-          {files.length > 0 && <p className={styles.selectedFile}>Selected: {files.map(f => f.name).join(', ')}</p>}{demoText && <p className={styles.selectedFile}>Sample loaded: {demoText.replace('.txt', '')}</p>}
+        <label className={styles.textWell}><span>Paste offer text</span><textarea value={text} onChange={e => setText(e.target.value)} disabled={busy} placeholder="Paste the message or offer letter here" rows={12}/></label>
+        <div className={styles.uploadWell}><label htmlFor={fileInputId} className={styles.uploadLabel}>Choose up to 5 files (PDF, image or .txt), or one .eml</label><input id={fileInputId} type="file" multiple accept=".pdf,.png,.jpg,.jpeg,.bmp,.tiff,.eml,.txt" disabled={busy} onChange={e => { const picked = Array.from(e.target.files ?? []); setFiles(picked.slice(0, 5)); setPickNote(picked.length > 5 ? `Only the first 5 of ${picked.length} files were kept.` : picked.length > 1 && picked.some(f => f.name.toLowerCase().endsWith('.eml')) ? 'An .eml must be uploaded on its own. Choose either the .eml or the other files.' : '') }}/>
+          <p className={styles.help}>Uploading the original email lets us read its sender-check results (SPF, DKIM, DMARC). Anyone can edit those lines in a file, so a failure counts against the offer but a pass is never counted as proof. Upload one .eml on its own; PDFs, images and .txt files can go together (up to 5).</p><p className={styles.help}>Gmail: open the message → ⋮ → “Download message”.</p>
+          {pickNote && <p className={styles.help} role="status">{pickNote}</p>}{files.length > 0 && <p className={styles.selectedFile}>Selected: {files.map(f => f.name).join(', ')}</p>}
         </div>
       </div>
       {linkOffer && <label className={styles.consent}><input type="checkbox" checked={linkConsent} onChange={e => setLinkConsent(e.target.checked)} disabled={busy}/><span>{LINK_CONSENT_TEXT}</span></label>}
       <div className={styles.submitLine}><button type="submit" disabled={busy}>{busy ? 'Checking…' : 'Check offer'}</button><p>We don’t store your offer or your personal details. Only the result is kept.</p></div>
       {error && <p className={styles.error} role="alert">{error}</p>}
     </form>
-    {demo && <div className={styles.samples}><span>Try a sample:</span><button type="button" className={styles.textButton} disabled={busy} onClick={() => sample('legit_emberlake.txt')}>Emberlake offer</button><button type="button" className={styles.textButton} disabled={busy} onClick={() => sample('scam_fake_govt_scheme_fee.txt')}>Government scheme</button><button type="button" className={styles.textButton} disabled={busy} onClick={() => sample('legit_brightpath_young_startup.txt')}>Brightpath internship</button><button type="button" className={styles.textButton} disabled={busy} onClick={() => sample('registry_name_match_quillmere.txt')}>Quillmere internship</button><button type="button" className={styles.textButton} disabled={busy} onClick={() => sample('registry_struck_off_tarnwick.txt')}>Tarnwick internship</button><button type="button" className={styles.textButton} disabled={busy} onClick={() => sample('registry_cin_mismatch_halvorn.txt')}>Halvorn internship</button><button type="button" className={styles.textButton} disabled={busy} onClick={() => sample('scam_shared_upi_corvane.txt')}>Corvane internship</button></div>}
   </section>
 }
 
 const sourceText: Record<string, string> = {
   dns_lookup: 'DNS lookup', offer_text: 'offer text', email_headers: 'email headers', community_reports: 'community reports',
-  offer_text_and_local_registry_snapshot: 'offer text and local company snapshot', demo_fixture: 'demo fixture', derived_check: 'derived check',
+  offer_text_and_local_registry_snapshot: 'offer text and local company snapshot', derived_check: 'derived check',
 }
 const affectsText: Record<string, string> = { score: 'affects the score', safety_floor: 'forces high risk', context: 'no score effect' }
 
 function EvidenceLedger({ checks, meta = [] }: { checks: CheckResult[]; meta?: NonNullable<AnalyzeResponse['evidence_meta']> }) {
   return <section className={styles.ledgerSection}><h2>Evidence</h2><div className={styles.ledgerWrap}><table className={styles.ledger} aria-label="Evidence"><thead><tr><th scope="col">Check</th><th scope="col">Result</th></tr></thead><tbody>{checks.map((check, index) => {
     const details = check.details ?? ''
-    const demoMarker = details.includes('[DEMO FIXTURE')
     const m = meta.find(item => item.check_name === check.check_name)
     return <tr className={styles.ledgerRow} key={`${check.check_name}-${index}`} style={{ '--row-index': index } as React.CSSProperties}>
       <th scope="row">{labelByCheck[check.check_name] ?? check.check_name.replaceAll('_', ' ')}</th>
-      <td><span className={styles.status}><span aria-hidden="true">{statusGlyph[check.status]}</span> {statusText[check.status]}</span>{demoMarker && <span className={styles.demoNote}>Demo fixture, not a live check</span>}{m && <span className={styles.sourceNote}>Source: {sourceText[m.source] ?? m.source} · {affectsText[m.affects] ?? m.affects} · confidence: {m.confidence === 'none' ? 'not enough to tell' : m.confidence}</span>}{details && <details className={styles.details}><summary>Details</summary><p>{details}</p></details>}</td>
+      <td><span className={styles.status}><span aria-hidden="true">{statusGlyph[check.status]}</span> {statusText[check.status]}</span>{m && <span className={styles.sourceNote}>Source: {sourceText[m.source] ?? m.source} · {affectsText[m.affects] ?? m.affects} · confidence: {m.confidence === 'none' ? 'not enough to tell' : m.confidence}</span>}{details && <details className={styles.details}><summary>Details</summary><p>{details}</p></details>}</td>
     </tr>
   })}</tbody></table></div></section>
 }
 
 function downloadReport(result: AnalyzeResponse) {
   const url = URL.createObjectURL(new Blob([buildInvestigationReport(result)], { type: 'text/markdown' }))
-  const link = document.createElement('a'); link.href = url; link.download = 'offer-check-report.md'; link.click(); URL.revokeObjectURL(url)
+  const link = document.createElement('a'); link.href = url; link.download = 'offer-check-report.md'; link.click(); setTimeout(() => URL.revokeObjectURL(url), 10_000)   // revoking at once cancels the download in Safari and Firefox
 }
 
 function Complaint({ summary }: { summary: string }) {
-  const copy = async () => { await navigator.clipboard?.writeText(summary) }
+  const [copyState, setCopyState] = useState<'' | 'copied' | 'failed'>('')
+  const copy = async () => { try { await navigator.clipboard.writeText(summary); setCopyState('copied') } catch { setCopyState('failed') } }
   function download() {
     const url = URL.createObjectURL(new Blob([`# Report summary\n\n${summary}\n`], { type: 'text/markdown' }))
-    const link = document.createElement('a'); link.href = url; link.download = 'report-summary.md'; link.click(); URL.revokeObjectURL(url)
+    const link = document.createElement('a'); link.href = url; link.download = 'report-summary.md'; link.click(); setTimeout(() => URL.revokeObjectURL(url), 10_000)
   }
-  return <section className={styles.complaint}><h2>Report it to the police</h2><p>{summary}</p><div className={styles.actions}><button type="button" className={styles.secondaryButton} onClick={copy}>Copy summary</button><button type="button" className={styles.secondaryButton} onClick={download}>Download summary</button></div></section>
+  return <section className={styles.complaint}><h2>Report it to the police</h2><p>{summary}</p><div className={styles.actions}><button type="button" className={styles.secondaryButton} onClick={copy}>{copyState === 'copied' ? 'Copied' : 'Copy summary'}</button><button type="button" className={styles.secondaryButton} onClick={download}>Download summary</button></div>{copyState === 'failed' && <p role="alert" className={styles.error}>Could not copy automatically. Select the summary text above and copy it yourself.</p>}</section>
 }
 
 function ReportDialog({ token, indicators, onClose }: { token: string; indicators: ReportableIndicator[]; onClose: () => void }) {
@@ -114,6 +104,7 @@ function ReportDialog({ token, indicators, onClose }: { token: string; indicator
   const [consented, setConsented] = useState(false)
   const [step, setStep] = useState(1)
   const [withdrawalCode, setWithdrawalCode] = useState('')
+  const [copyState, setCopyState] = useState<'' | 'copied' | 'failed'>('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const dialogRef = useRef<HTMLDivElement>(null)
@@ -140,7 +131,7 @@ function ReportDialog({ token, indicators, onClose }: { token: string; indicator
     catch (err) { setError(err instanceof Error ? err.message : 'The report could not be submitted.') }
     finally { setBusy(false) }
   }
-  async function copyCode() { await navigator.clipboard?.writeText(withdrawalCode) }
+  async function copyCode() { try { await navigator.clipboard.writeText(withdrawalCode); setCopyState('copied') } catch { setCopyState('failed') } }
   return <div className={styles.modalBackdrop} onMouseDown={e => { if (e.target === e.currentTarget) onClose() }}><div ref={dialogRef} className={styles.dialog} role="dialog" aria-modal="true" aria-labelledby="report-title" tabIndex={-1}>
     <button className={styles.closeButton} aria-label="Close report dialog" onClick={onClose}>Close</button>
     {!withdrawalCode ? step === 1 ? <><h2 id="report-title">Choose details to share</h2><p>Review the masked details extracted from this offer.</p>
@@ -151,12 +142,12 @@ function ReportDialog({ token, indicators, onClose }: { token: string; indicator
       <label className={styles.consent}><input type="checkbox" checked={consented} onChange={e => setConsented(e.target.checked)}/><span>{CONSENT_TEXT}</span></label>
       {error && <p className={styles.error} role="alert">{error}</p>}
       <div className={styles.actions}><button type="button" className={styles.secondaryButton} onClick={() => setStep(1)}>Back</button><button onClick={submit} disabled={!consented || busy}>{busy ? 'Sending…' : 'Report scam'}</button></div>
-    </> : <><h2 id="report-title">Reported</h2><p>Future job seekers who receive the same details will be warned.</p><div className={styles.withdrawCode}><span>Withdrawal code</span><strong>{withdrawalCode}</strong></div><button className={styles.secondaryButton} onClick={copyCode}>Copy code</button><p className={styles.help}>Save this code. It’s the only way to withdraw this report, and we can’t show it again.</p><button className={styles.textButton} onClick={onClose}>Close</button></>}
+    </> : <><h2 id="report-title">Reported</h2><p>Future job seekers who receive the same details will be warned.</p><div className={styles.withdrawCode}><span>Withdrawal code</span><strong>{withdrawalCode}</strong></div><button className={styles.secondaryButton} onClick={copyCode}>{copyState === 'copied' ? 'Copied' : 'Copy code'}</button>{copyState === 'failed' && <p className={styles.error} role="alert">Could not copy automatically. Save the code above manually.</p>}<p className={styles.help}>Save this code. It’s the only way to withdraw this report, and we can’t show it again.</p><button className={styles.textButton} onClick={onClose}>Close</button></>}
   </div></div>
 }
 
 const verdictText: Record<string, { title: string; subline?: string }> = {
-  'likely legitimate': { title: 'Likely legitimate' },
+  'likely legitimate': { title: 'No red flags found', subline: 'Not proof: a copied registration number on a matching-looking domain would look the same. Confirm through the employer’s own website before you pay or share documents' },
   'insufficient evidence, verify manually': { title: 'Insufficient evidence', subline: 'Verify manually before you proceed' },
   'high risk': { title: 'High risk' },
 }
@@ -177,13 +168,20 @@ function AddEvidence({ result, input, onResult }: { result: AnalyzeResponse; inp
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const fileId = useId()
+  const fileRef = useRef<HTMLInputElement>(null)
   if (!hints.length) return null
   async function recheck(event: FormEvent) {
     event.preventDefault(); setError('')
     if (!extra.trim() && !file) { setError('Add some text or choose a file first.'); return }
     const next = { text: [input.text, extra.trim()].filter(Boolean).join('\n\n'), file: file ?? input.file }
     setBusy(true)
-    try { onResult(await analyze(next.text, next.file), next); window.scrollTo({ top: 0, behavior: 'instant' }) }
+    try {
+      const updated = await analyze(next.text, next.file)
+      setExtra(''); setFile(null)
+      if (fileRef.current) fileRef.current.value = ''
+      onResult(updated, next)
+      window.scrollTo({ top: 0, behavior: 'instant' })
+    }
     catch (err) { setError(err instanceof Error ? err.message : 'The request failed. Try again.') }
     finally { setBusy(false) }
   }
@@ -192,7 +190,7 @@ function AddEvidence({ result, input, onResult }: { result: AnalyzeResponse; inp
     <form onSubmit={recheck}>
       <label className={styles.textWell}><span>More details to add</span><textarea value={extra} onChange={e => setExtra(e.target.value)} disabled={busy} rows={4} placeholder="Paste the sender's address, CIN or GSTIN, or anything else from the offer"/></label>
       <label htmlFor={fileId} className={styles.uploadLabel}>Add a file (original email, screenshot or QR code)</label>
-      <input id={fileId} type="file" accept=".pdf,.png,.jpg,.jpeg,.bmp,.tiff,.eml,.txt" disabled={busy} onChange={e => setFile(e.target.files?.[0] ?? null)}/>
+      <input ref={fileRef} id={fileId} type="file" accept=".pdf,.png,.jpg,.jpeg,.bmp,.tiff,.eml,.txt" disabled={busy} onChange={e => setFile(e.target.files?.[0] ?? null)}/>
       <p className={styles.help}>Only one file is checked at a time; a new file replaces the earlier one. Nothing you add is stored.</p>
       <button type="submit" disabled={busy}>{busy ? 'Checking…' : 'Check again with this'}</button>
       {error && <p className={styles.error} role="alert">{error}</p>}
@@ -231,6 +229,18 @@ function SelfChecks({ checks }: { checks: NonNullable<AnalyzeResponse['self_chec
     </li>)}</ul></section>
 }
 
+function EmployerMessage({ message }: { message: NonNullable<AnalyzeResponse['employer_message']> }) {
+  const [state, setState] = useState<'' | 'copied' | 'failed'>('')
+  async function copy() { try { await navigator.clipboard.writeText(`Subject: ${message.subject}\n\n${message.body}`); setState('copied') } catch { setState('failed') } }
+  return <section className={styles.addEvidence}><h2>{message.title}</h2><p>{message.why}</p>
+    <ol>{message.steps.map((step, i) => <li key={i}>{step}</li>)}</ol>
+    <pre aria-label="Message to send" className={styles.help} style={{ whiteSpace: 'pre-wrap' }}>{`Subject: ${message.subject}\n\n${message.body}`}</pre>
+    <em>{message.caution}</em>
+    <span className={styles.actions}><button type="button" className={styles.secondaryButton} onClick={copy}>{state === 'copied' ? 'Copied' : 'Copy message'}</button></span>
+    {state === 'failed' && <p role="alert" className={styles.error}>Could not copy automatically. Select the message above and copy it yourself.</p>}
+  </section>
+}
+
 function Result({ result, input, onResult, onClear }: { result: AnalyzeResponse; input: Submitted; onResult: (result: AnalyzeResponse, input: Submitted) => void; onClear: () => void }) {
   const [reportOpen, setReportOpen] = useState(false)
   const band = result.risk_band
@@ -240,10 +250,10 @@ function Result({ result, input, onResult, onClear }: { result: AnalyzeResponse;
     <div className={styles.resultSide}>{band && verdict && <div className={`${styles.verdict} ${bandClass(band)}`}><h1>{verdict.title}</h1>{verdict.subline && <p className={styles.verdictSubline}>{verdict.subline}</p>}<p className={styles.score}><span>{Number.isInteger(result.overall_risk_score) ? result.overall_risk_score : result.overall_risk_score.toFixed(1)}</span> / 100</p><p className={styles.completeness}>{result.completeness_percentage}% information completeness</p></div>}
       {result.company_name?.trim() && <p className={styles.checkedCompany}>Checked: {result.company_name.trim()}</p>}
       {result.next_steps?.length > 0 && <section className={styles.guidance}><h2>What to do next</h2><ul>{result.next_steps.map((step, i) => <li key={i}>{step}</li>)}</ul>{(band === 'high risk' || band === 'insufficient evidence, verify manually') && <p className={styles.portalNote}>You can report this sender on the government's <a href="https://cybercrime.gov.in/" target="_blank" rel="noopener noreferrer">National Cyber Crime Reporting Portal</a>. If you have already paid, call 1930 first.</p>}</section>}
-      <div className={styles.actions}>{canReport && <button onClick={() => setReportOpen(true)}>Report this scam</button>}<button type="button" className={styles.secondaryButton} onClick={() => downloadReport(result)}>Download full report</button><button className={styles.secondaryButton} onClick={onClear}>Check another offer</button></div>
+      <div className={styles.actions}>{canReport && <button onClick={() => setReportOpen(true)}>Share a suspected scam</button>}<button type="button" className={styles.secondaryButton} onClick={() => downloadReport(result)}>Download full report</button><button className={styles.secondaryButton} onClick={onClear}>Check another offer</button></div>
       {result.complaint_summary?.trim() && <Complaint summary={result.complaint_summary}/>}
     </div>
-    <div className={styles.evidenceSide}><SafetyActions actions={result.safety_actions ?? []}/><WhyList result={result}/><EvidenceLedger checks={result.checks ?? []} meta={result.evidence_meta ?? []}/><SelfChecks checks={result.self_checks ?? []}/><AddEvidence result={result} input={input} onResult={onResult}/></div>
+    <div className={styles.evidenceSide}><SafetyActions actions={result.safety_actions ?? []}/><WhyList result={result}/><EvidenceLedger checks={result.checks ?? []} meta={result.evidence_meta ?? []}/><SelfChecks checks={result.self_checks ?? []}/>{result.employer_message && <EmployerMessage message={result.employer_message}/>}<AddEvidence result={result} input={input} onResult={onResult}/></div>
     {reportOpen && canReport && result.report_token && <ReportDialog token={result.report_token} indicators={result.reportable_indicators ?? []} onClose={() => setReportOpen(false)}/>}
   </section>
 }
@@ -252,6 +262,14 @@ function WithdrawPage() {
   const [code, setCode] = useState(''); const [message, setMessage] = useState(''); const [error, setError] = useState(''); const [busy, setBusy] = useState(false)
   async function send(event: FormEvent) { event.preventDefault(); setBusy(true); setError(''); setMessage(''); try { await withdrawReport({ code }); setMessage('Withdrawn. Your report no longer counts towards any warning.') } catch (err) { setError(err instanceof Error ? err.message : 'The code could not be accepted. Check it and try again.') } finally { setBusy(false) } }
   return <section className={styles.formPage}><h1>Withdraw a report</h1><p>Enter the one-time code you saved when submitting the report.</p><form onSubmit={send}><label>Withdrawal code<input value={code} onChange={e => setCode(e.target.value)} required autoComplete="off"/></label><button disabled={busy || !code.trim()}>{busy ? 'Withdrawing…' : 'Withdraw report'}</button></form>{message && <p role="status">{message}</p>}{error && <p role="alert" className={styles.error}>{error}</p>}</section>
+}
+
+function VerifyDisputePage() {
+  // The code travels in the #fragment, which the browser never sends to a server; it is posted in a request body.
+  const token = new URLSearchParams(window.location.hash.replace(/^#/, '')).get('token') ?? ''
+  const [message, setMessage] = useState(''); const [error, setError] = useState(''); const [busy, setBusy] = useState(false)
+  async function confirm() { setBusy(true); setError(''); setMessage(''); try { const r = await verifyDispute(token); setMessage(r.message); window.history.replaceState({}, '', '/verify-dispute') } catch (err) { setError(err instanceof Error ? err.message : 'That link is invalid or has expired.') } finally { setBusy(false) } }
+  return <section className={styles.formPage}><h1>Confirm your dispute</h1>{token ? <><p>Confirm that you control this domain. The link works once and expires after 24 hours.</p><button onClick={confirm} disabled={busy || !!message}>{busy ? 'Confirming…' : 'Confirm domain'}</button></> : !message && <p>This page needs the link from the verification email.</p>}{message && <p role="status">{message}</p>}{error && <p role="alert" className={styles.error}>{error}</p>}</section>
 }
 
 function DisputePage() {
@@ -276,10 +294,10 @@ function SendersTable({ dashboard }: { dashboard: InstitutionDashboard }) {
   const senders = dashboard.top_senders ?? []
   return <section className={styles.sendersSection} aria-labelledby="senders-title">
     <div className={styles.sendersHead}><h2 id="senders-title">Reported senders</h2><a className={styles.exportLink} href={SENDERS_CSV_URL} download>Export warning list</a></div>
-    <p className={styles.help}>Shown only after {dashboard.sender_threshold ?? 3} or more people report the same sender.</p>
+    <p className={styles.help}>Shown only after {dashboard.sender_threshold ?? 3} or more separate reports name the same sender, made on at least two different days.</p>
     {senders.length ? <div className={styles.ledgerWrap}><table className={styles.ledger} aria-label="Reported senders"><thead><tr><th scope="col">Sender</th><th scope="col">Type</th><th scope="col" className={styles.numeric}>Reports</th><th scope="col">Seen</th><th scope="col">Most common</th><th scope="col">Status</th></tr></thead><tbody>{senders.map(s => <tr className={styles.ledgerRow} key={`${s.indicator_type}:${s.indicator}`}>
       <th scope="row">{s.indicator}</th><td>{senderTypeLabels[s.indicator_type] ?? s.indicator_type}</td><td className={styles.numeric}>{s.reports}</td><td>{s.first_week === s.last_week ? s.first_week : `${s.first_week} – ${s.last_week}`}</td><td>{categoryLabels[s.most_common_category] ?? s.most_common_category}</td><td>{s.dispute_status ? <span className={styles.disputed}>Disputed by the company, under review</span> : '—'}</td>
-    </tr>)}</tbody></table></div> : <p className={styles.emptyNote}>No sender has been reported by {dashboard.sender_threshold ?? 3} or more people yet.</p>}
+    </tr>)}</tbody></table></div> : <p className={styles.emptyNote}>No sender has {dashboard.sender_threshold ?? 3} or more separate reports yet.</p>}
   </section>
 }
 
@@ -296,17 +314,18 @@ function CategorySummary({ dashboard }: { dashboard: InstitutionDashboard }) {
 }
 
 function DashboardPage() {
-  const [dashboard, setDashboard] = useState<InstitutionDashboard | null>(null); const [error, setError] = useState('')
+  const [dashboard, setDashboard] = useState<InstitutionDashboard | null>(null); const [error, setError] = useState(''); const [attempt, setAttempt] = useState(0)
   useEffect(() => {
     let active = true
+    setError('')
     loadDashboard().then(data => { if (active) setDashboard(data) })
       .catch(err => { if (active) setError(err instanceof Error ? err.message : 'The dashboard could not be loaded.') })
     return () => { active = false }
-  }, [])
-  return <section className={styles.dashboardPage}><h1>Scam trends</h1><p>Weekly results, scam categories and reported senders from checks on this site. Counts are checks, not verified unique people.</p>{!dashboard && !error && <p className={styles.help} role="status">Loading…</p>}{error && <p role="alert" className={styles.error}>{error}</p>}{dashboard && <div className={styles.dashboardResults}><SendersTable dashboard={dashboard}/><h2>Results by week</h2><TrendChart dashboard={dashboard}/><CategorySummary dashboard={dashboard}/></div>}</section>
+  }, [attempt])
+  return <section className={styles.dashboardPage}><h1>Scam trends</h1><p>Weekly results, scam categories and reported senders from checks on this site. Counts are checks, not verified unique people.</p>{!dashboard && !error && <p className={styles.help} role="status">Loading…</p>}{error && <><p role="alert" className={styles.error}>{error}</p><button type="button" className={styles.secondaryButton} onClick={() => setAttempt(n => n + 1)}>Try again</button></>}{dashboard && <div className={styles.dashboardResults}><SendersTable dashboard={dashboard}/><h2>Results by week</h2><TrendChart dashboard={dashboard}/><CategorySummary dashboard={dashboard}/></div>}</section>
 }
 
-const sourceStatusText: Record<string, string> = { current: 'Up to date', stale: 'Out of date', demo: 'Demo data', unknown: 'Date unknown' }
+const sourceStatusText: Record<string, string> = { current: 'Up to date', stale: 'Out of date', unknown: 'Date unknown' }
 
 function SourcesPanel() {
   const [data, setData] = useState<Awaited<ReturnType<typeof loadSources>> | null>(null)
@@ -319,18 +338,18 @@ function SourcesPanel() {
     <p>Rules version {data.scoring_model}. Dates show when each source was last refreshed; an old source can miss recent changes.</p>
     <ul>{data.sources.map(s => <li key={s.id}><strong>{s.name}:</strong> {sourceStatusText[s.status] ?? s.status}{s.updated ? `, refreshed ${s.updated} (${s.age_days} days ago)` : ''}. {s.detail}</li>)}</ul>
     <p>{on} optional online lookup{on === 1 ? ' is' : 's are'} switched on for this service.</p>
-    {data.request_budgets.map(b => <p key={b.id}>Daily limit for the {b.id.replace('_', ' ')} lookup: {b.used_today} of {b.daily_limit} used today.</p>)}
+    {data.request_budgets.map(b => <p key={b.id}>The {b.id.replace('_', ' ')} lookup is {b.status === 'paused' ? 'paused for today (daily allowance used up)' : 'available'}.</p>)}
   </section>
 }
 
 function HowPage() {
   return <article className={styles.howPage}><h1>What this checks</h1><p className={styles.lede}>An automated review of specific signals in an offer. It helps you decide what to verify; it cannot prove who wrote a message or whether a job is real.</p>
-    <section><h2>Who sent it</h2><p>For an original .eml, the service reads the recipient provider’s topmost Authentication-Results, DMARC, SPF and aligned DKIM, plus sender details. This verifies sender authentication as recorded by that mail provider, not message authorship. Pasted text and documents show only the domain claimed in the content.</p></section>
-    <section><h2>Email domain</h2><p>Checks domain availability, age, mailbox type and lookalike signals. A passing result means those domain rules passed; it does not verify company identity. Demo fixture responses are labelled and are not live checks.</p></section>
-    <section><h2>Company registration</h2><p>Checks GSTIN structure, and we check the CIN against company registry records. A registry match means the CIN belongs to an active company with the same name; a different company name or an inactive status is flagged. GSTIN and CIN state codes are informational.</p></section>
+    <section><h2>Who sent it</h2><p>For an uploaded .eml file, the service reads the sender details and the authentication results written in the file. A file can be edited, so these are unverified claims: a recorded “pass” is never counted as proof of who sent the message, and only a recorded failure adds risk. Pasted text and documents show only the domain claimed in the content.</p></section>
+    <section><h2>Email domain</h2><p>Checks domain availability, age, mailbox type and lookalike signals. A passing result means those domain rules passed; it does not verify company identity.</p></section>
+    <section><h2>Company registration</h2><p>Checks GSTIN structure, and checks the CIN against a periodic local copy of public company records (not a live registry, and it can be out of date). A match means the CIN belongs to a company with the same name in that copy, which helps only when the contact domain also fits that company; a different company name or an inactive status is flagged. GSTIN and CIN state codes are informational.</p></section>
     <section><h2>Payment request</h2><p>Looks for fee and deposit demands, nearby UPI details, and relevant urgency. A detected phrase does not prove that money changed hands. Salary, stipend and reimbursement context is excluded from standalone payment-demand detection.</p></section>
     <section><h2>Reports from other job seekers</h2><p>With consent, selected scammer-role indicators and a redacted wording fingerprint can be matched against reports. Evidence is bucketed, correlated evidence is capped, and community evidence alone cannot cause a high-risk verdict. Reports are not independently verified.</p></section>
-    <section><h2>How to read the result</h2><p>Likely legitimate requires a passing domain, present non-failing registration and an external verification signal. Otherwise structural checks alone cannot establish legitimacy. A payment demand forces high risk. These are rules, not a trained model.</p></section>
+    <section><h2>How to read the result</h2><p>“No red flags found” (called “likely legitimate” in the data the service returns) requires a passing domain, present non-failing registration and an external verification signal. It is never proof: the tool cannot tell who controls a domain. Otherwise structural checks alone cannot establish legitimacy. A payment demand forces high risk. These are rules, not a trained model.</p></section>
     <section><h2>Planned and unavailable checks</h2><p>No additional future check is claimed in the current capability statements. Company registry records are looked up locally; this service does not query a registry over the network. Sender authentication is available for .eml uploads only. Other input types cannot authenticate the sender.</p></section>
     <SourcesPanel/>
     <section><h2>Privacy and limits</h2><p>The offer text and file aren’t stored. Analysis results are retained. Every check adds one anonymous count (week, result and scam category only; no text, contact details, file name or IP address) to the public Scam trends page, where any count below five is shown as &lt;5. These counts are kept for 24 months. Counts represent checks, not verified unique people.</p><p><a href="https://github.com/sohamsarode2007-lab/offer-internship-verification-shield/blob/main/docs/PRIVACY_DESIGN.md">Read the privacy design</a>. <a href="https://github.com/sohamsarode2007-lab/offer-internship-verification-shield/blob/main/CLAIMS.md">Read current capability claims</a>.</p></section>
@@ -345,9 +364,10 @@ export default function App() {
   let page: React.ReactNode
   if (path === '/withdraw') page = <WithdrawPage/>
   else if (path === '/dispute') page = <DisputePage/>
+  else if (path === '/verify-dispute') page = <VerifyDisputePage/>
   else if (path === '/dashboard') page = <DashboardPage/>
   else if (path === '/how-it-works') page = <HowPage/>
-  else if (result && path === '/') page = <Result result={result} input={input} onResult={show} onClear={() => { setResult(null); window.location.reload() }}/>
+  else if (result && path === '/') page = <Result result={result} input={input} onResult={show} onClear={() => { setResult(null); setInput({ text: '', file: null }) }}/>
   else page = <Home onResult={show}/>
   return <Shell>{page}</Shell>
 }

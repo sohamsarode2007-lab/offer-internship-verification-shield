@@ -24,38 +24,14 @@ been verified in this workspace.
   are marked `synthetic=true`; the free-mailbox/GSTIN-format examples use
   fictional `.example` domains and checksum-generated GSTINs.
 
-## Demo mode
+## Company-master lookup
 
-- The demo uses `DEMO_MODE` fixtures for two fictional domains:
-  `emberlakeanalytics.example` and `brightpathedtech.example`. Fixture results are
-  labelled in the output as `[DEMO FIXTURE — not a live DNS result]`; they are not
-  live DNS or company registry results.
-- The government-scheme document is also fictional and is labelled as a sample
-  scam pattern in its source text.
-- **The demo company registry is synthetic.** `fixtures/demo/synthetic_mca_master.csv`
-  lists 13 fictional companies (invented names, made-up CINs in the real CIN format;
-  active, struck-off, dissolved and under-liquidation statuses). Loaded with
-  `scripts/load_mca_master.py --synthetic`, the database records `source=SYNTHETIC`
-  and the app consults it only when `DEMO_MODE=1`; outside demo mode it behaves as if
-  no registry is loaded. This demonstrates the full pipeline (CSV → loader → SQLite →
-  CIN lookup → scoring) with fictional data only.
-- In demo mode, synthetic registry results are displayed like any registry result,
-  **without a synthetic label on the website**: the details read
-  `Company registry match: <name>; Active; incorporated <date>.` for an active,
-  name-matched company; failures lead with the problem: `Company is <status> in
-  company registry records: <name>; incorporated <date>.` or `CIN belongs to a
-  different company in company registry records: ...`. The same wording is used for
-  real company-master data. No UI
-  text, API detail or page describes this data as official, live, MCA data or from
-  data.gov.in. Every such response carries the non-displayed API field
-  `registry_source: "synthetic"`, so a result can always be traced to the synthetic
-  snapshot. Presenters should state in the demo that the companies are fictional.
 - No company-master data is included in this repository. Two optional sources can
   answer a CIN lookup, and each response carries the non-displayed field
   `registry_source`: `mca_csv` (a CSV the operator loaded locally with
   `scripts/load_mca_master.py`) or `ogd` (one lookup by CIN against the
   data.gov.in "RoC-wise Company Master Data" resource, made only when the operator
-  sets `DATA_GOV_IN_API_KEY` and DEMO_MODE is off). That resource is a periodically
+  sets `DATA_GOV_IN_API_KEY`). That resource is a periodically
   refreshed snapshot published under the Government Open Data License - India
   (attribution: Ministry of Corporate Affairs, data.gov.in), not a live registry;
   a company may have changed status since. If the API times out, is blocked or
@@ -65,6 +41,11 @@ been verified in this workspace.
   read; addresses, capital and industry fields are discarded. The registry
   industry-classification column is not used because a sample row for a large
   IT-services company carried an unrelated manufacturing classification.
+- Registry results read
+  `Company registry match: <name>; Active; incorporated <date>.` for an active,
+  name-matched company; failures lead with the problem: `Company is <status> in
+  company registry records: <name>; incorporated <date>.` or `CIN belongs to a
+  different company in company registry records: ...`.
 - Company-name comparison expands legal suffixes (`Pvt.`/`Ltd.` to `Private`/
   `Limited`) before matching, and registry statuses meaning not operating
   (strike off, dissolved, liquidation, amalgamated) fail the check; `Dormant` does not.
@@ -148,18 +129,18 @@ been verified in this workspace.
   that a real offer deadline is fraudulent.
 - The low-risk band requires a passing domain, a present non-failing identifier,
   and an externally verified signal. The available live external signal is an
-  active, name-matched CIN from the locally loaded MCA SQLite master data, or a
-  sender authenticated from an original `.eml` by DMARC pass and aligned DKIM.
-  The latter verifies the sender as recorded by the recipient's mail provider;
-  it does not establish who authored the message. Structural domain/GSTIN checks
-  alone are capped at manual review. The demo registry fixture is an explicit
-  demo-only exception for illustrating that path; it is not external verification.
+  active, name-matched CIN from the locally loaded MCA SQLite master data whose
+  registered company name also matches the contact domain (`app/services/identity_tie.py`),
+  because a company number can be copied onto any offer. Email authentication results in
+  an uploaded `.eml` are shown but never counted as a signal or as a score reduction:
+  every header in an uploaded file is written by whoever made the file. A failed result
+  still counts against the sender, because forging a failure only hurts the forger. Structural domain/GSTIN checks
+  alone are capped at manual review.
 - `scripts/load_mca_master.py` imports a company-master CSV into local SQLite and
-  records its source (`MCA_CSV`, or `SYNTHETIC` with `--synthetic`). Rows marked
-  `Synthetic=true` are refused without `--synthetic`, and the two sources are never
-  mixed in one database. This workspace does not include official MCA data (future
-  scope, eKYC required); lookup behaviour is tested with temporary database rows
-  and the synthetic demo snapshot.
+  records its source (`MCA_CSV`). Rows marked
+  `Synthetic=true` are refused so test-only rows cannot enter a runtime registry
+  database. This workspace does not include official MCA data (future
+  scope, eKYC required); lookup behaviour is tested with temporary database rows.
 - `/analyze` returns `next_steps` and `complaint_summary` based on its rule
   results. These are automated guidance, not an official complaint filing.
   High-risk results tell people who already paid to call the National Cyber
@@ -179,25 +160,30 @@ been verified in this workspace.
   is the highest indicator bucket plus template evidence, capped at +40 total;
   several identifiers do not stack. Community evidence alone cannot produce
   high risk: if it alone crosses 60, the score is capped at manual review with
-  an explicit factor. Details disclose buckets only. Withdrawals delete a
+  an explicit factor. Details disclose buckets only (“3+ separate reports”, never “people”; reports are not verified unique people). Reports for one indicator count, and appear on the public trends page, only if they were made on at least two different days. Withdrawals delete a
   report's contributions. Reports are not
   independently verified and do not count as external verification. Disputed
   indicators keep scoring during review; only a same-domain email-verified
-  domain dispute is temporarily suppressed. Inactive indicators expire after
+  domain dispute is temporarily suppressed. Unresolved disputes lapse after 90 days. Inactive indicators expire after
   24 months. Digests/signatures are pseudonymised, not anonymous; legal review
   under the DPDP Act, 2023 and its Rules is required, including third-party
-  sender data. Demo rows count only in `DEMO_MODE=1`.
+  sender data. Rows flagged `is_demo` from older builds never count.
+- Employer confirmation message: a fixed-wording message the person can copy and send to contact details they find
+  themselves. The only offer-derived value is the company name (already shown on the result, never stored). It never
+  claims a verified contact, is not sent by the tool, and is not offered when a payment demand was found.
+- Deployment hardening: with `ENVIRONMENT=production` the app refuses to start on an unsafe configuration (short
+  or missing pepper, localhost/`*` origins, SQLite, rate limiting off); responses carry nosniff, frame-deny,
+  no-referrer and a Content-Security-Policy; access logs are off by default; stored analysis results are deleted
+  after 365 days. The Docker build and the CSP were not exercised in a real browser or container from the
+  build environment.
 - The model is `rule_based_v2`; it is a fixed rule table, not a trained ML model.
-  GSTIN checks are structural. CIN lookup uses a local company-master SQLite copy;
-  it does not contact a live service. An opted-in synthetic CIN fixture is
-  available only in demo mode and is labelled in output. A synthetic company-master
-  snapshot is also demo-only; its results are traceable via `registry_source`.
+  GSTIN checks are structural. CIN lookup uses a local company-master SQLite copy
+  or an opted-in data.gov.in CIN lookup (`DATA_GOV_IN_API_KEY`).
 
 ## OCR and rate limiting
 
 - **OCR was verified in CI** by successful run `43403402979` on 2026-11-13 UTC (commit `51c6c2357ddf93566249e2287913d36a9b674263`). The log shows Tesseract and Poppler installed and the suite finished `143 passed` with no skipped tests or pytest warnings. This includes degraded-image robustness cases for the three demo PDFs across clean, 3° rotation, blur, and JPEG quality 30 variants. No band flips occurred; therefore there is no flip-causing extracted text to report. Passing cases do not print their OCR text. This verifies the CI environment, not the previously blocked local Windows Tesseract install.
-- `RATE_LIMIT` controls requests per IP. The default is `10/minute`; with
-  `DEMO_MODE=1` and `RATE_LIMIT` unset, the default is `100/minute`.
+- `RATE_LIMIT` controls requests per IP. The default is `10/minute`.
 
 ## Public scam-trends page
 
@@ -214,10 +200,6 @@ been verified in this workspace.
   Checks are not deduplicated by person, so counts
   are checks, not verified unique people. The senders table comes from consented
   community reports.
-- With `DEMO_MODE=1`, `run_demo.bat` seeds 45 simulated reports (senders table)
-  and 484 simulated checks (the same three fields) so the 12-week chart and
-  category summary are populated; checks made in demo mode are also demo-flagged.
-  Demo rows count only in demo mode. Two chart cells are deliberately below five.
 - `GET /trends/dashboard` returns week-by-band and week-by-category
   counts for 12 ISO weeks and replaces cells below five with `"<5"`, a
   `category_summary` (per category: 12-week total, last 4 weeks, previous 8
@@ -285,15 +267,35 @@ been verified in this workspace.
 - Possible findings, all informational with no score effect: "threat-listed" by Web Risk, a redirect to a different
   site, 3+ redirects, a certificate that does not verify, or one issued under 14 days ago. Everything else is
   "unknown": a link that is not flagged is never described as safe, and an unreachable service adds nothing.
+- Outbound safety: the server resolves a link's name once, refuses the link unless every address is public, and
+  connects to that same checked address (so a name that changes its answer cannot redirect the request to an internal
+  address). Redirects are followed one hop at a time with each hop checked the same way. All link checks for one
+  analysis share an 8 second deadline and run in parallel. Each connection gets 5 link-checked analyses per hour
+  (`LINK_CHECKS_PER_HOUR`); beyond that the result says link checks were skipped. The same pinned client is used for
+  the optional careers-page lookup. `/sources` shows each lookup only as available or paused, not exact usage.
 - Only a minimised address is sent (no query, fragment or login part); nothing is stored or logged. See
   docs/PRIVACY_DESIGN.md. Tests use mocked responses: the Web Risk request shape follows Google's published
   Lookup API documentation but was not run against the live service from the build environment.
 - VirusTotal is not used: its free API is capped at 500 requests a day and barred from commercial products.
 
+## Upload limits
+
+- A request body over 52 MB on `/analyze` (256 KB elsewhere) is refused with 413 as soon as the size is known,
+  from `Content-Length` or by counting streamed bytes, before the upload is parsed. A reverse proxy limit should
+  sit in front of this as well; this is the second line, not a replacement.
+- Per file: 10 MB, up to 5 files, text extracted capped at 50,000 characters. Text-layer PDFs over 60 pages are
+  refused; text collection stops at a character budget. Scanned PDFs: at most 10 pages, rendered and read one page
+  at a time, 30 s per page render, 20 s per OCR call and 90 s for the whole document. A `.eml` may have at most 60
+  parts and 400 headers, keeps at most 5 PDF/image attachments, and refuses an attachment over 10 MB (20 MB total).
+- At most 4 analyses run at once per server process; a request that cannot get a slot within 3 s gets 503.
+- The optional EasyOCR and PaddleOCR engines cannot be interrupted once started, so they are off unless the operator
+  sets `HEAVY_OCR=1`; by default only Tesseract (hard 20 s limit per call) reads images. Do not enable them on a
+  public deployment. A Tesseract timeout stops the job rather than falling through to another engine.
+
 ## Data sources panel and request budget
 
 - The "How it works" page shows each source with the date it was last refreshed and its age: the local company
-  registry snapshot (flagged out of date after 90 days, labelled demo when it is the fictional snapshot) and the
+  registry snapshot (flagged out of date after 90 days; a snapshot marked synthetic is ignored and reported as date unknown) and the
   hand-read employer advisories (out of date after 180 days, measured from the oldest page read). A source with no
   date is shown as "date unknown", never as current. It also shows the rules version and how many optional online
   lookups are switched on. No secrets and no offer data are involved.
@@ -353,7 +355,7 @@ been verified in this workspace.
 
 
 - **Evidence source line.** Each check in the result shows its source (offer text, email headers, DNS lookup, local company
-  snapshot, community reports or demo fixture), whether it affects the score, forces high risk or has no effect, and a
+  snapshot or community reports), whether it affects the score, forces high risk or has no effect, and a
   confidence. A check that could not tell (unknown or not applicable) shows "not enough to tell", never a pass. The
   record holds no offer text or identifiers.
 
@@ -370,3 +372,19 @@ been verified in this workspace.
 - **Several files in one check.** Up to five files (PDF, image, `.txt`) can be sent together with pasted text; their text
   is joined and scored as one offer, and nothing is stored. An `.eml` must be sent on its own so its sender checks run.
   A note appears when two files contain almost the same wording; it adds no score.
+
+- **Request for bank details or documents.** If the text asks the candidate to send bank details (+20) or identity
+  documents such as Aadhaar, PAN, passport or original certificates (+10), the "Why" list says so. The two are not
+  added together, and a request placed after joining or negated ("do not send ...") is ignored. It is a pattern match on
+  wording, not proof of a scam: some genuine employers ask for these before the start date. It can never produce high
+  risk on its own; only a payment demand does that. Nothing from the text is stored.
+
+- **What it cannot catch (stated plainly).** A scam that copies a real company's registration number and uses a contact
+  domain that is exactly that company's name, with a clean domain history, looks the same as a genuine offer to
+  everything this tool can see, and can be rated "likely legitimate". The tool cannot tell who controls a domain. A
+  "likely legitimate" result is therefore never proof: the result page is headed "No red flags found", says "Not proof"
+  and tells people to confirm through the employer's own website. The evaluation fails on any other scam rated that way. This case is kept in the evaluation set (EC41) as a known miss and is not hidden or tuned away.
+
+- **Request for a password, PIN or OTP.** If the text asks the candidate to share a password, PIN, OTP or card security code
+  (+40), the "Why" list says no genuine employer needs these. Unlike bank details and documents, "after joining" wording
+  never cancels this warning; only a negation ("never share your OTP") does. It is a wording match, not proof.

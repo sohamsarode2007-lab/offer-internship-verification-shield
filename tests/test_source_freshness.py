@@ -17,10 +17,14 @@ def _clean(monkeypatch):
 
 
 def make_db(path, loaded, source="MCA_CSV"):
-    with sqlite3.connect(path) as db:
-        db.execute("CREATE TABLE registry_metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
-        db.executemany("INSERT INTO registry_metadata VALUES (?, ?)",
-                       [("source", source), ("loaded_at", loaded), ("row_count", "5")])
+    db = sqlite3.connect(path)
+    try:
+        with db:
+            db.execute("CREATE TABLE registry_metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
+            db.executemany("INSERT INTO registry_metadata VALUES (?, ?)",
+                           [("source", source), ("loaded_at", loaded), ("row_count", "5")])
+    finally:
+        db.close()
 
 
 def registry(monkeypatch, tmp_path, loaded, source="MCA_CSV"):
@@ -46,9 +50,9 @@ def test_old_snapshot_is_stale_at_91_days_not_90(monkeypatch, tmp_path):
     assert registry(monkeypatch, tmp_path, "2026-08-22T00:00:00+00:00")["status"] == "stale"    # 91 days
 
 
-def test_synthetic_snapshot_is_labelled_demo(monkeypatch, tmp_path):
+def test_made_up_snapshot_is_flagged_and_ignored(monkeypatch, tmp_path):
     r = registry(monkeypatch, tmp_path, "2026-11-20T00:00:00+00:00", "SYNTHETIC")
-    assert r["status"] == "demo" and "not real company records" in r["detail"]
+    assert r["status"] == "unknown" and "ignored" in r["detail"]
 
 
 def test_snapshot_without_metadata_is_unknown(monkeypatch, tmp_path):
@@ -94,3 +98,5 @@ def test_sources_endpoint(api_client):
     assert body["scoring_model"] == "rule_based_v2"
     assert {s["id"] for s in body["sources"]} == {"company_registry", "employer_advisories"}
     assert body["request_budgets"][0]["id"] == "web_risk"
+    assert body["request_budgets"][0]["status"] == "available"
+    assert "used_today" not in body["request_budgets"][0] and "daily_limit" not in body["request_budgets"][0]

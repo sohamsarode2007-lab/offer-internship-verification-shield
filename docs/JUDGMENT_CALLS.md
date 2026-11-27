@@ -326,3 +326,175 @@ Status: **open** = not reviewed yet.
       several workers each get their own). Only Web Risk is budgeted; the live registry lookup already has a 0.5 s throttle.
     - **Public endpoint:** `/sources` is unauthenticated and shows which optional lookups are on and the Web Risk
       usage count. It shows no keys. Say if you would rather hide the counts.
+
+39. **Trust fixes after the external review (2026-11-24) (open).**
+    - **Uploaded email headers are never proof.** A reported DMARC/DKIM pass is shown, never counted, and no longer
+      lowers the score or supplies the external signal. Failures still count. Cost: a genuinely authenticated
+      `.eml` (EC11) now lands in manual review instead of "likely legitimate". That is the intended trade: a forger
+      can type a pass, so a pass cannot be evidence. EC11's expected band was re-derived by hand from the updated
+      `risk_scoring.py` docstring, not edited to hide a failure; the old expectation is recorded in its basis text.
+    - **A registry match needs a matching domain** (`identity_tie.py`: whole name, first distinctive word of 4+
+      letters, or initials of 3+ words). Strict on purpose: real companies on unrelated or abbreviated domains
+      (for example hcltech for "HCL Technologies") now get "verify manually". EC51 covers the caught case.
+    - **EC41 stays a documented dangerous miss.** A scammer who registers a domain equal to the company's name
+      passes this test. Closing that needs something we cannot check from text (who controls the domain).
+    - **Seven existing tests or helpers were edited** because they encoded the old rule or built checks without a
+      domain/company name: three about uploaded headers (test_audit_regressions, test_demo_documents,
+      test_email_auth), one message string (test_community_reports), and three fixtures that now carry a matching
+      domain and company (test_audit_regressions, test_scam_text, test_result_wording). No assertion about payment
+      demands or wording was loosened; the only band changes are the two header cases above.
+
+40. **Upload and request limits (open).**
+    - **Numbers are my choices:** 52 MB request cap (5 x 10 MB plus form overhead), 60 native PDF pages, 90 s OCR
+      deadline, 4 concurrent analyses, 3 s wait for a slot. Change them in `ingestion.py`, `email_auth.py` and the
+      `MAX_REQUEST_BYTES` / `ANALYZE_CONCURRENCY` settings if your host is bigger or smaller.
+    - **In-process limits are not isolation:** a worker process or container with a memory limit is still the
+      right defence against a crafted file; these limits reduce the damage a single file can do.
+    - **Concurrency is per process:** with N workers the real limit is N x 4.
+
+41. **Outbound hardening (open).**
+    - **My choices:** 8 s overall deadline for link checks, 5 link-checked analyses per connection per hour, a shared
+      daily visit budget of 6000 (`LINK_VISIT_DAILY_BUDGET`). Change `LINK_CHECKS_PER_HOUR` if your users share an address
+      (campus or office NAT would share one allowance).
+    - **Per-process again:** budgets and allowances reset on restart and are per worker.
+    - **Behind a proxy** the connection address seen by the app may be the proxy's; configure the host so the real
+      client address reaches the app, or this cap applies to everyone together.
+    - **Not run against real sites:** the pinned client is tested with mocked DNS and sockets only.
+
+42. **Community reports and disputes hardening (open).**
+    - **No true independence check exists.** Reporters are anonymous by design, so the gate is only "reports span 2
+      different UTC days" (`MIN_DISTINCT_DAYS`). It stops a one-sitting burst, not a patient attacker. A real moderation
+      queue would need a person doing the reviewing; I did not invent one.
+    - **Template-wording matches are not gated** by the two-day rule (a single matching report still adds +25, as
+      before). It can never produce high risk on its own, but one false report can flag lookalike letters.
+    - **Numbers are my choices:** disputes active 90 days, deleted at 180; 3 open per address, 5 per indicator;
+      `/indicators/stats` 30 per minute and `/disputes/verify` 10 per hour per address.
+    - **Verification link changed:** emails now link to `/verify-dispute#token=...`; the old `GET /disputes/verify?token=`
+      is gone. Links already emailed under the old format stop working (they expire in 24 h anyway).
+    - **Test setup changed, assertions did not:** report fixtures now alternate today/yesterday so they meet the
+      two-day gate; new tests cover the one-day burst (no points, not shown) and the two-day case.
+
+43. **Privacy operations, deployment and dependencies (open).**
+    - **Not run here:** the multi-stage Dockerfile (no container runtime in my environment), the Vercel headers, and the
+      CSP in a real browser. Build the image once and click through every page before relying on them.
+    - **CSP choices:** `style-src` keeps `'unsafe-inline'` (the page uses inline style attributes); scripts are `'self'`
+      only. The Vercel copy allows `connect-src https:` because the backend address is not known to this repo;
+      tighten it to the backend's address.
+    - **HSTS** is opt-in (`HSTS_ENABLED=1`) on the app and always on in `vercel.json` (Vercel is https-only).
+    - **Retention:** analysis rows 365 days (my choice; `ANALYSIS_RETENTION_DAYS`). Reverse-proxy logs are outside this repo.
+    - **Dependencies:** `requirements.txt` keeps minimums (raised for python-multipart, pillow, pypdf, which I tested at
+      the lock versions and the newest, not at the new floors); `requirements.lock` is exact and hashed for Python 3.11
+      on Linux. Regenerate it with the command in its header; it does not cover Windows.
+    - **CI:** read-only token, timeouts, run cancellation, and a second audit of the lock. I did not pin GitHub Actions
+      to commit hashes.
+    - **Downloads** now revoke the temporary link after 10 seconds instead of immediately.
+
+44. **Copy and wording fixes (open).**
+    - "Report this scam" is now "Share a suspected scam"; the .eml help no longer says we "verify who actually sent it"
+      (a pass in an uploaded file is never counted). The mixed-.eml error now shows the server's own wording.
+    - The upload label says "up to 5 files (PDF, image or .txt), or one .eml"; picking more than 5, or an .eml with other
+      files, shows a note instead of silently dropping files.
+    - **Left alone:** the `VITE_DEMO` sample buttons and "demo fixture" labels are off by default and point at files
+      that no longer exist; I did not remove them because the frontend redesign will replace that screen.
+
+45. **End-to-end tests rewritten (open).** The old browser test depended on demo samples, a synthetic company register
+    and seeded reports, all removed on this branch, so it could not start. The new `frontend/playwright/app.spec.ts`
+    uses no seeded data: it pastes a fictional fee-demanding offer (expects "High risk"), reports it, withdraws it,
+    files a dispute, checks the trends and how-it-works pages, the .eml-with-other-files notice and the security
+    headers, at desktop and phone width. It no longer takes screenshots into `docs/screenshots`, and it does not test the
+    registry-match, struck-off or shared-sender cases (those are covered by backend tests and the eval).
+
+46. **Community reporting stays on (decided by you).** There is no switch for it in the code; reporting is enabled
+    whenever `INDICATOR_PEPPER` is set (without it, matching reports as "unavailable" and nothing is recorded). I did not add
+    an off switch because you decided to keep it on; say if you want one as an emergency kill switch.
+
+47. **Code-quality changes (open).**
+    - The analysis pipeline moved out of the route into `app/services/offer_analysis.py` (read submission, run checks,
+      store verdict) with a typed `CheckDict`; the route now only validates the request and maps errors to HTTP. Behaviour
+      is unchanged (same tests, same eval).
+    - Community lookup now loads each match's report in the same query (was one extra query per match) and fetches
+      disputes in one query per indicator.
+    - **One test assertion changed, on purpose:** `test_database_contains_no_raw_indicator_or_offer_text` asserted the
+      digits "5000" were absent from stored rows, which fails by chance when those digits appear inside a timestamp or
+      hash (about 1 run in 100). It now looks for "5000" as a whole word, which still catches any leaked amount.
+    - **Not done:** the rest of the "typed evidence" idea (typing every check's extra keys) and dashboard-query tuning;
+      not needed for correctness and I did not want to churn the scoring code before you review it.
+
+48. **Rate limits behind a host (open).** Production start-up now requires `FORWARDED_ALLOW_IPS`, and the Docker command
+    passes `--proxy-headers`, so visitors are told apart by their real address. Trusting `*` is only safe where the
+    app cannot be reached except through the host's proxy; otherwise anyone could fake the header and dodge limits.
+    Counters are still per process unless `RATE_LIMIT_STORAGE_URI` points at a shared store (Redis); the link-check
+    allowance and daily budgets in `request_budget.py` stay per process (not moved to the shared store). Not tried against a real proxy.
+    **Azure translation is not built:** it would send offer text to a third party, against the privacy rules, and the
+    Hindi/Hinglish rules are written as native-language patterns instead.
+
+49. **Review of Gemini's 20 audit commits (open).** Merged on top of my work; all tests, eval and end-to-end pass.
+    - **Changes I accept:** GSTIN age claim limited to business-age wording; sentence split after "Ltd."/"Inc." before a
+      capital letter; fee-suppression window narrowed to about 80 characters and "provide" removed; short offers no
+      longer share one empty template signature; link-check TLS and landing-host fixes; IPv6 zone IDs and socket cleanup;
+      one shared OCR deadline per submission; script/style text ignored in .eml HTML; batched community queries;
+      rate limit checked before taking a worker slot; request-path purge throttled to once per 15 minutes per process
+      (the hourly worker still runs); dead demo UI, unused scrapers and unused schemas removed.
+    - **Behaviour change to know about:** in an uploaded .eml, a domain that appears only in a link in the letter (not a
+      claimed sender email) no longer triggers the +15 "body domain differs from the From domain" signal. This avoids false
+      alarms on Zoom or form links, but a letter that names only a website and no email address is no longer compared.
+    - **A gap that survived the narrowing, now closed:** a stipend or salary mentioned within 80 characters still cancelled
+      a fee ("stipend of 15000 and a laptop; you pay the BGV charges of 2000 rupees" passed). A nearby stipend no longer
+      cancels a fee when the same stretch tells the candidate to pay; tests added for both directions.
+    - **Deleted:** `scrape_reddit.py`, `scraper.py` and two collection scripts (hardcoded personal paths, unused by the
+      app). They remain in git history if you want them back.
+    - **Not changed (your call from Gemini's plan):** `community_alone_crossed_high` still caps community-only evidence at
+      60 even when scam-chat wording also matched; I left that rule as written because the project rule says community
+      evidence alone can never produce high risk and the scam-wording case needs a decision from you.
+50. **Request for bank details or identity documents (open).** New check `personal_data_request`.
+    - **Weights:** +20 when the text asks the candidate to send bank details (account number, IFSC, cancelled cheque,
+      card or net-banking details); +10 when it asks for identity documents or certificates (Aadhaar, PAN, passport,
+      voter ID, licence, photo, marksheets, original documents). Not added together: bank wins. Nothing here can reach
+      high risk alone (the most it adds is 20); a payment demand still forces high risk.
+    - **Always applied:** it does not depend on a payment demand, because scammers often collect documents first.
+    - **Suppressions:** a request that is negated ("do not send ..."), or placed after joining ("bring originals on the
+      day of joining"), does not count.
+    - **False-positive risk, please review:** genuine HR letters sometimes ask for Aadhaar/PAN or bank details before
+      the start date for payroll. That is why the weights are small and the wording says "usually ask only after an
+      offer is accepted".
+    - **Hindi/Hinglish patterns are narrow and need a native speaker to review.**
+    - **Privacy:** the details name the families only (bank, documents); no offer text is echoed or stored.
+    - Eval EC52 added; expected band (60, manual review) derived by hand before running.
+51. **EasyOCR and PaddleOCR are now opt-in (open).** They cannot be interrupted once started, so a scanned image could hold
+    a worker for as long as they like. They now run only with `HEAVY_OCR=1`; by default Tesseract (20 s hard limit per
+    call, 90 s per submission) is the only image reader. Trade-off: if Tesseract is missing on a host and `HEAVY_OCR` is
+    not set, image uploads return the existing "could not read" 422 instead of falling back. Production uses Tesseract
+    (installed in CI and the Docker image), so nothing changes there. Tests cover off-by-default and opt-in.
+52. **Credential requests are a third, stronger tier (open).** Passwords, PINs, OTPs, CVV and net-banking logins score +40 and are
+    never cancelled by joining/onboarding wording (an earlier review showed "send your net-banking password after joining"
+    produced no warning). Net-banking login moved out of the bank tier into this one. Asking verbs here exclude "enter" and
+    "need", and "PIN code" (postal) is excluded, so a genuine portal message like "enter the OTP sent to your email" or an
+    address request does not fire. Choice for you: this adds 40 but does not force high risk by itself; a payment demand
+    still does that. If you want a credential request to force high risk too, it is a one-line change plus a rule in
+    AGENTS.md. Eval EC53 added (80, high risk; derived by hand before running).
+53. **Redis is now installable; two counters stay per process (open).** `redis` is in requirements.txt and the hashed lock
+    (7.4.1; `limits` requires <8), and CI starts a Redis service for `tests/test_shared_rate_limit.py`, which proves two
+    limiter instances share one count (skipped, not passed, when `REDIS_TEST_URL` is unset). The Web Risk daily budget
+    and the per-client link-check allowance are still in memory per process; sharing them needs new code, so this is
+    documented in the README rather than claimed fixed. Not yet checked: the Docker image with Redis on a real host.
+54. **Per-check explanation text is no longer stored (open).** `check_results.details` now stays empty: those sentences can
+    quote a submitted domain or registration number, which conflicted with a blanket "no identifiers stored" promise.
+    The person still sees the full explanations in the response. Migration 011 clears the column for older rows. Nothing
+    read that column back, so no feature is lost. Request-path purging (at most once per 15 minutes per process) is kept
+    for now and is a candidate to remove when the hourly worker is the only purger, preparing for larger traffic.
+55. **"Likely legitimate" is no longer the headline, and the evaluation rejects new dangerous misses (open, needs your call).**
+    A review pointed out that a name-matching domain does not prove who owns it (EC41), so a green-sounding headline
+    misleads. I chose the smaller of two fixes: the result page now says "No red flags found" with "Not proof: a copied
+    registration number on a matching-looking domain would look the same. Confirm through the employer's own website
+    before you pay or share documents". The returned band value stays "likely legitimate" so the API, eval and stored data
+    do not change. `eval/run_eval.py` now exits 1 for any scam rated likely legitimate except EC41 (listed in
+    `KNOWN_DANGEROUS_MISSES`). The stricter alternative (never produce this band without independent proof of domain
+    ownership) has no independent source in this pipeline, so it would end the band entirely: 11 of the 19 legitimate eval
+    cases would move to manual review. Frontend tests that asserted the old headline were changed to the new one on purpose.
+56. **CodeQL alerts (open until merged).** The 8 alerts in the screenshot are on `main`. The two "workflow does not contain
+    permissions" ones are already fixed on this branch (read-only `permissions:` at the top of ci.yml). The five
+    polynomial-regex ones are fixed here: the account-number rule really did hang on a long run of spaces (checked: it timed
+    out on 40,000 spaces), and the amount and abbreviation rules were rewritten to the same language without overlapping
+    `\s*` groups (120,000 random strings gave identical matches before and after). The test-file alert was a set
+    membership test flagged as a substring test; it now says so. CodeQL itself cannot run here, so confirm the alerts
+    close after the merge and the next scan; new ones on other regexes are possible.

@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup } from '@testing-library/react'
@@ -12,7 +12,7 @@ import styles from './App.module.css'
 
 vi.mock('./api/client', async importOriginal => {
   const actual = await importOriginal<typeof import('./api/client')>()
-  return { ...actual, analyze: vi.fn(), submitReport: vi.fn(), withdrawReport: vi.fn(), submitDispute: vi.fn(), loadDashboard: vi.fn(), loadConfig: vi.fn(), loadSources: vi.fn() }
+  return { ...actual, analyze: vi.fn(), submitReport: vi.fn(), withdrawReport: vi.fn(), submitDispute: vi.fn(), verifyDispute: vi.fn(), loadDashboard: vi.fn(), loadConfig: vi.fn(), loadSources: vi.fn() }
 })
 
 const indicators: ReportableIndicator[] = [
@@ -41,7 +41,7 @@ describe('data sources panel', () => {
   const data = { scoring_model: 'rule_based_v2', optional_lookups: { link_lookups: false, careers_page: true },
     sources: [{ id: 'company_registry', name: 'Company registry snapshot (local copy)', updated: '2026-08-01', age_days: 112, status: 'stale' as const, detail: 'Source label MCA_CSV.' },
               { id: 'employer_advisories', name: 'Employer fraud advisories (read by hand)', updated: null, age_days: null, status: 'unknown' as const, detail: '0 employers.' }],
-    request_budgets: [{ id: 'web_risk', used_today: 3, daily_limit: 3000 }] }
+    request_budgets: [{ id: 'web_risk', status: 'available' as const }] }
   it('shows each source with its age and status, never calling an undated one fresh', async () => {
     window.history.replaceState({}, '', '/how-it-works')
     vi.mocked(api.loadSources).mockResolvedValueOnce(data)
@@ -49,13 +49,25 @@ describe('data sources panel', () => {
     expect(await screen.findByText(/Out of date, refreshed 2026-08-01 \(112 days ago\)/)).toBeTruthy()
     expect(screen.getByText(/Date unknown/)).toBeTruthy()
     expect(screen.getByText(/1 optional online lookup is switched on/)).toBeTruthy()
-    expect(screen.getByText(/3 of 3000 used today/)).toBeTruthy()
+    expect(screen.getByText(/web risk lookup is available/)).toBeTruthy()
+    expect(screen.queryByText(/3000/)).toBeNull()
   })
   it('says so when the details cannot be loaded', async () => {
     window.history.replaceState({}, '', '/how-it-works')
     vi.mocked(api.loadSources).mockRejectedValueOnce(new Error('x'))
     render(<App />)
     expect(await screen.findByText(/could not be loaded right now/)).toBeTruthy()
+  })
+})
+
+describe('how it works wording', () => {
+  it('calls uploaded email authentication unverified and the registry a local, possibly old copy', async () => {
+    window.history.replaceState({}, '', '/how-it-works')
+    vi.mocked(api.loadSources).mockRejectedValueOnce(new Error('x'))
+    render(<App />)
+    expect(await screen.findByText(/unverified claims: a recorded “pass” is never counted as proof/)).toBeTruthy()
+    expect(screen.getByText(/not a live registry, and it can be out of date/)).toBeTruthy()
+    expect(screen.queryByText(/verifies sender authentication/)).toBeNull()
   })
 })
 
@@ -91,7 +103,7 @@ describe('analysis result', () => {
   it.each([
     { band: 'high risk', title: 'High risk', className: styles.highRisk },
     { band: 'insufficient evidence, verify manually', title: 'Insufficient evidence', className: styles.manual },
-    { band: 'likely legitimate', title: 'Likely legitimate', className: styles.likely },
+    { band: 'likely legitimate', title: 'No red flags found', className: styles.likely },
   ])('renders the verdict plate in sentence case ($title)', async ({ band, title, className }) => {
     await showResult(payload({ risk_band: band }))
     const heading = screen.getByRole('heading', { name: title })
@@ -110,9 +122,9 @@ describe('analysis result', () => {
     { band: 'high risk', shown: true },
     { band: 'insufficient evidence, verify manually', shown: true },
     { band: 'likely legitimate', shown: false },
-  ])('offers "Report this scam" only for high risk or insufficient evidence ($band)', async ({ band, shown }) => {
+  ])('offers "Share a suspected scam" only for high risk or insufficient evidence ($band)', async ({ band, shown }) => {
     await showResult(payload({ risk_band: band, report_token: 'signed-report-token-is-long-enough', reportable_indicators: indicators }))
-    expect(Boolean(screen.queryByRole('button', { name: 'Report this scam' }))).toBe(shown)
+    expect(Boolean(screen.queryByRole('button', { name: 'Share a suspected scam' }))).toBe(shown)
   })
 
   it('lists plain-language reasons with the score impact in a right-aligned column', async () => {
@@ -130,14 +142,6 @@ describe('analysis result', () => {
     const css = readFileSync(resolve(__dirname, 'App.module.css'), 'utf8')
     expect(css).toMatch(/\.whyTable td\.impact \{[^}]*text-align: right/)
     for (const engineWord of ['offset', 'score floor', "'likely legitimate'"]) expect(why.textContent).not.toContain(engineWord)
-  })
-
-  it('shows the demo-fixture note as small steel text', async () => {
-    await showResult(payload({ checks: [{ check_name: 'domain_verification', status: 'pass', details: '[DEMO FIXTURE — not a live DNS result] x.example.' }] }))
-    const note = screen.getByText('Demo fixture, not a live check')
-    expect(note.tagName).toBe('SPAN')
-    const css = readFileSync(resolve(__dirname, 'App.module.css'), 'utf8')
-    expect(css).toMatch(/\.demoNote \{[^}]*color: var\(--steel\)[^}]*font-size: 12px/)
   })
 
   it('renders ledger names, status glyphs and details in API order', async () => {
@@ -161,10 +165,17 @@ describe('analysis result', () => {
     await showResult(payload({ risk_band: 'likely legitimate', company_name: 'Quillmere Software Private Limited' }))
     const line = screen.getByText('Checked: Quillmere Software Private Limited')
     expect(line).toHaveClass(styles.checkedCompany)
-    const plate = screen.getByRole('heading', { name: 'Likely legitimate' }).parentElement!
+    const plate = screen.getByRole('heading', { name: 'No red flags found' }).parentElement!
     expect(plate.nextElementSibling).toBe(line)
     const css = readFileSync(resolve(__dirname, 'App.module.css'), 'utf8')
     expect(css).toMatch(/\.checkedCompany \{[^}]*color: var\(--steel\)/)
+  })
+
+  it('does not headline a likely-legitimate result as legitimate, says it is not proof and points to the employer’s own website', async () => {
+    await showResult(payload({ risk_band: 'likely legitimate' }))
+    expect(screen.getByText('No red flags found')).toBeInTheDocument()
+    expect(screen.queryByText('Likely legitimate')).toBeNull()
+    expect(screen.getByText(/Not proof: a copied registration number.*Confirm through the employer’s own website/)).toBeInTheDocument()
   })
 
   it.each([null, undefined, '', '   '])('hides the company line when no name was extracted (%j)', async name => {
@@ -198,17 +209,12 @@ describe('analysis result', () => {
     expect(section.querySelector('ul')).toHaveClass(styles.safetyCards)
   })
 
-  it('labels demo fixture evidence', async () => {
-    await showResult(payload({ checks: [{ check_name: 'domain_verification', status: 'pass', details: '[DEMO FIXTURE — not a live DNS result] emberlakeanalytics.example.' }] }))
-    expect(screen.getByText('Demo fixture, not a live check')).toBeInTheDocument()
-  })
-
   it('hides Why, complaint summary and report controls when their fields are absent', async () => {
     await showResult(payload({ risk_band: null, risk_factors: [], next_steps: [], complaint_summary: '', report_token: null }))
     expect(screen.queryByRole('heading', { name: 'Why' })).not.toBeInTheDocument()
     expect(screen.queryByText('/ 100')).not.toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: 'Report it to the police' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Report this scam' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Share a suspected scam' })).not.toBeInTheDocument()
   })
 })
 
@@ -249,7 +255,7 @@ describe('Scam trends page', () => {
     const senders = await screen.findByRole('heading', { name: 'Reported senders' })
     const chart = screen.getByRole('heading', { name: 'Results by week' })
     expect(senders.compareDocumentPosition(chart) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    expect(screen.getByText('Shown only after 3 or more people report the same sender.')).toBeInTheDocument()
+    expect(screen.getByText('Shown only after 3 or more separate reports name the same sender, made on at least two different days.')).toBeInTheDocument()
     const table = screen.getByRole('table', { name: 'Reported senders' })
     expect(within(table).getByText('pl•••@gmail.com')).toBeInTheDocument()
     expect(within(table).getByText('12')).toBeInTheDocument()
@@ -294,7 +300,7 @@ describe('community report consent', () => {
   it('allows a wording-only report when every detail is unticked', async () => {
     vi.mocked(api.submitReport).mockResolvedValueOnce({ status: 'reported', withdrawal_code: 'wording-only-code-1234567890' })
     const user = await showResult(payload({ report_token: 'signed-report-token-is-long-enough', reportable_indicators: indicators }))
-    await user.click(screen.getByRole('button', { name: 'Report this scam' }))
+    await user.click(screen.getByRole('button', { name: 'Share a suspected scam' }))
     for (const box of screen.getAllByRole('checkbox')) await user.click(box)
     await user.click(screen.getByRole('button', { name: 'Continue' }))
     expect(screen.getByRole('button', { name: 'Report scam' })).toBeDisabled()
@@ -307,7 +313,7 @@ describe('community report consent', () => {
   it('allows deselection, requires consent and does not store the withdrawal code', async () => {
     vi.mocked(api.submitReport).mockResolvedValueOnce({ status: 'reported', withdrawal_code: 'once-only-secret-code-123456' })
     const user = await showResult(payload({ report_token: 'signed-report-token-is-long-enough', reportable_indicators: indicators }))
-    await user.click(screen.getByRole('button', { name: 'Report this scam' }))
+    await user.click(screen.getByRole('button', { name: 'Share a suspected scam' }))
     const firstIndicator = screen.getByRole('checkbox', { name: /Payment UPI ID/ })
     await user.click(firstIndicator)
     await user.click(screen.getByRole('button', { name: 'Continue' }))
@@ -342,7 +348,16 @@ describe('add evidence and check again', () => {
     const [text, file] = vi.mocked(api.analyze).mock.calls[1]
     expect(text).toBe('Test offer text\n\nCIN: U74999DL2016PTC298345')
     expect(file).toBeNull()
-    expect(await screen.findByText('Likely legitimate')).toBeTruthy()
+    expect(await screen.findByText('No red flags found')).toBeTruthy()
+  })
+
+  it('clears the add-evidence box after a successful re-check when hints remain', async () => {
+    const user = await showResult(payload({ evidence_hints: hints, overall_risk_score: 40 }))
+    vi.mocked(api.analyze).mockResolvedValueOnce(payload({ evidence_hints: hints, overall_risk_score: 35 }))
+    const box = await screen.findByLabelText('More details to add') as HTMLTextAreaElement
+    await user.type(box, 'CIN: U74999DL2016PTC298345')
+    await user.click(screen.getByRole('button', { name: 'Check again with this' }))
+    await waitFor(() => expect(box.value).toBe(''))
   })
 
   it('asks for something to add instead of sending an empty re-check', async () => {
@@ -394,6 +409,9 @@ describe('add evidence and check again', () => {
       await user.click(screen.getByRole('button', { name: 'Download full report' }))
       expect(create).toHaveBeenCalledTimes(1)
       expect(click).toHaveBeenCalled()
+      expect(revoke).not.toHaveBeenCalled()      // revoking straight away cancels the download in Safari and Firefox
+      await new Promise(resolve => setTimeout(resolve, 0))
+      expect(revoke).not.toHaveBeenCalled()
       click.mockRestore()
     })
   })
@@ -416,3 +434,91 @@ describe('add evidence and check again', () => {
   })
 })
 
+
+describe('dispute verification page', () => {
+  it('posts the code from the fragment in a request body and removes it from the address bar', async () => {
+    window.history.replaceState({}, '', '/verify-dispute#token=abcdefghijklmnopqrstuvwxyz')
+    vi.mocked(api.verifyDispute).mockResolvedValueOnce({ status: 'domain_verified', message: 'Domain is suppressed while the dispute is under review.' })
+    render(<App />)
+    expect(vi.mocked(api.verifyDispute)).not.toHaveBeenCalled()       // nothing is sent until the person confirms
+    await userEvent.click(screen.getByRole('button', { name: 'Confirm domain' }))
+    expect(vi.mocked(api.verifyDispute)).toHaveBeenCalledWith('abcdefghijklmnopqrstuvwxyz')
+    expect(await screen.findByText(/Domain is suppressed/)).toBeInTheDocument()
+    expect(screen.queryByText(/needs the link from the verification email/)).toBeNull()
+    expect(window.location.hash).toBe('')
+  })
+  it('asks for the email link when there is no code', () => {
+    window.history.replaceState({}, '', '/verify-dispute')
+    render(<App />)
+    expect(screen.getByText(/needs the link from the verification email/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Confirm domain' })).toBeNull()
+  })
+})
+
+describe('upload and copy feedback', () => {
+  it('states the .eml rule up front and warns when .eml is mixed with other files', async () => {
+    const user = userEvent.setup(); render(<App />)
+    expect(screen.getByText(/Choose up to 5 files \(PDF, image or .txt\), or one .eml/)).toBeInTheDocument()
+    expect(screen.getByText(/a pass is never counted as proof/)).toBeInTheDocument()
+    expect(screen.queryByText(/who actually sent it/)).toBeNull()
+    await user.upload(screen.getByLabelText(/Choose up to 5 files/), [new File(['a'], 'a.eml'), new File(['b'], 'b.txt')])
+    expect(await screen.findByText(/must be uploaded on its own/)).toBeInTheDocument()
+  })
+  it('says when more than 5 files were picked', async () => {
+    const user = userEvent.setup(); render(<App />)
+    await user.upload(screen.getByLabelText(/Choose up to 5 files/), Array.from({ length: 7 }, (_, i) => new File(['x'], `f${i}.txt`)))
+    expect(await screen.findByText('Only the first 5 of 7 files were kept.')).toBeInTheDocument()
+  })
+  it('confirms a copy, and says so when copying is blocked', async () => {
+    const user = userEvent.setup()
+    await showResult(payload({ risk_band: 'High', complaint_summary: 'Summary text' }))
+    const write = vi.fn().mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('blocked'))
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText: write }, configurable: true })
+    await user.click(screen.getByRole('button', { name: 'Copy summary' }))
+    expect(await screen.findByRole('button', { name: 'Copied' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Copied' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Could not copy automatically')
+  })
+  it('shows copy feedback and error state when copying withdrawal code', async () => {
+    vi.mocked(api.submitReport).mockResolvedValueOnce({ status: 'reported', withdrawal_code: 'withdraw-code-12345' })
+    const user = await showResult(payload({ report_token: 'signed-report-token-is-long-enough', reportable_indicators: [] }))
+    const write = vi.fn().mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('blocked'))
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText: write }, configurable: true })
+    await user.click(screen.getByRole('button', { name: 'Share a suspected scam' }))
+    await user.click(screen.getByRole('button', { name: 'Continue' }))
+    await user.click(screen.getByLabelText(CONSENT_TEXT))
+    await user.click(screen.getByRole('button', { name: 'Report scam' }))
+    await user.click(await screen.findByRole('button', { name: 'Copy code' }))
+    expect(await screen.findByRole('button', { name: 'Copied' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Copied' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Could not copy automatically')
+  })
+  it('lets the dashboard be retried after a failed load', async () => {
+    vi.mocked(api.loadDashboard).mockRejectedValueOnce(new Error('The dashboard could not be loaded.'))
+      .mockResolvedValueOnce({ institution: 'Public', sender_threshold: 3, weeks: [], by_week_band: [], by_week_category: [], category_summary: [], top_senders: [] } as never)
+    window.history.replaceState({}, '', '/dashboard')
+    const user = userEvent.setup(); render(<App />)
+    expect(await screen.findByRole('alert')).toHaveTextContent('could not be loaded')
+    await user.click(screen.getByRole('button', { name: 'Try again' }))
+    await waitFor(() => expect(screen.queryByRole('alert')).toBeNull())
+    expect(vi.mocked(api.loadDashboard)).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('employer confirmation message', () => {
+  const employer_message = { title: 'Ask the company to confirm this offer', why: 'The surest check is to ask the employer directly.', steps: ['Find the company website yourself.'], subject: 'Please confirm an offer made in your company\'s name', body: 'Hello,\n\nI have received an offer that names Acme.', caution: 'A reply from the same address as the offer proves nothing.' }
+  it('shows the message and copies subject and body together', async () => {
+    const user = userEvent.setup()
+    await showResult(payload({ employer_message }))
+    const write = vi.fn().mockResolvedValue(undefined)
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText: write }, configurable: true })
+    expect(screen.getByRole('heading', { name: 'Ask the company to confirm this offer' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Copy message' }))
+    expect(write).toHaveBeenCalledWith(expect.stringContaining('Subject: Please confirm an offer'))
+    expect(await screen.findByRole('button', { name: 'Copied' })).toBeInTheDocument()
+  })
+  it('is absent when the server sent none', async () => {
+    await showResult(payload({ employer_message: null }))
+    expect(screen.queryByRole('heading', { name: 'Ask the company to confirm this offer' })).toBeNull()
+  })
+})

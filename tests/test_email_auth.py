@@ -11,10 +11,12 @@ def parsed(name):
     return email_auth.parse_eml((FIXTURES / name).read_bytes())
 
 
-def test_authenticated_sender_pass_and_authserv_id_internal_only():
+def test_uploaded_pass_is_reported_but_never_counted_as_proof():
     message = parsed("authenticated_legit.eml")
     check = email_auth.verify_sender_authentication(message, extract_facts(message["body_text"]))
-    assert check["status"] == "pass"
+    assert check["status"] == "insufficient_information"
+    assert check["risk_points"] == 0
+    assert "not counted as proof" in check["details"]
     assert check["authserv_id"] == "mx.receiver.example"
     assert check["dkim_aligned"] is True
     assert check["sender_domain"] == "acme.example"
@@ -106,3 +108,38 @@ def test_body_domain_uses_co_in_registrable_suffix_rules():
         {"sender_domain": {"value": "careers.acme.co.in"}},
     )
     assert check["risk_points"] == 0
+
+
+def test_a_forged_pass_header_never_produces_pass_whatever_it_says():
+    for header in ("mx.example; dmarc=pass header.from=acme.example; dkim=pass header.d=acme.example",
+                   "mx.example; spf=pass; dkim=pass header.d=acme.example; dmarc=pass"):
+        message = {"sender_domain": "acme.example", "authserv_id": "mx.example", "auth_headers": [header]}
+        assert email_auth.verify_sender_authentication(message, {})["status"] != "pass"
+
+
+def test_forged_pass_does_not_hide_other_sender_findings():
+    message = {"sender_domain": "acme.example", "reply_domain": "gmail.com", "authserv_id": "mx.example",
+               "auth_headers": ["mx.example; dmarc=pass header.from=acme.example; dkim=pass header.d=acme.example"]}
+    check = email_auth.verify_sender_authentication(message, {})
+    assert check["status"] == "fail" and check["risk_points"] == 25
+
+
+def test_html_body_skips_script_and_style_blocks():
+    raw = (b"From: HR <hr@acme.example>\r\nContent-Type: text/html; charset=utf-8\r\n\r\n"
+           b"<html><head><style>.hidden{display:none}</style></head>"
+           b"<body><script>var secret='pay 9999';</script><p>Offer for Acme</p></body></html>")
+    message = email_auth.parse_eml(raw)
+    assert "Offer for Acme" in message["body_text"]
+    assert "display:none" not in message["body_text"]
+    assert "pay 9999" not in message["body_text"]
+
+
+def test_body_url_without_claimed_email_does_not_trigger_domain_mismatch():
+    body_facts = extract_facts("Join the interview on https://zoom.example/j/12345 today.")
+    check = email_auth.verify_sender_authentication(
+        {"sender_domain": "acme.example", "auth_headers": []},
+        body_facts,
+    )
+    assert check["risk_points"] == 0
+    assert "differs from the authenticated From domain" not in check["details"]
+

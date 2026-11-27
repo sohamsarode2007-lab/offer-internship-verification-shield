@@ -86,39 +86,16 @@ def test_rejected_requests_add_no_row(api_client):
     gen.close()
 
 
-def test_checks_in_demo_mode_are_demo_flagged(api_client, monkeypatch):
-    monkeypatch.setenv("DEMO_MODE", "1")
+def test_checks_are_never_demo_flagged(api_client, monkeypatch):
+    monkeypatch.setenv("DEMO_MODE", "1")  # the removed demo switch has no effect
     gen, db = _db()
     before_ids = {r.id for r in _rows(db)}
     gen.close()
     api_client.post("/analyze", data={"text": "A remote internship offer with no details."})
     gen, db = _db()
     new = [r for r in _rows(db) if r.id not in before_ids]
-    assert len(new) == 1 and new[0].is_demo is True and new[0].is_simulated is False
+    assert len(new) == 1 and new[0].is_demo is False and new[0].is_simulated is False
     gen.close()
-
-
-def test_demo_mode_check_before_seeding_does_not_block_the_check_seeder(api_client, monkeypatch, tmp_path):
-    # Regression: real demo-mode rows must not be mistaken for already-seeded simulated checks.
-    from sqlalchemy import create_engine
-    from sqlalchemy.orm import sessionmaker
-    from app.db.database import Base
-    from app.models.models import InstitutionObservation
-    from app.services import demo_seed, institution_dashboard
-    monkeypatch.setenv("DEMO_MODE", "1")
-    engine = create_engine(f"sqlite:///{(tmp_path / 'fresh.db').as_posix()}")
-    Base.metadata.create_all(engine)
-    db = sessionmaker(bind=engine)()
-    try:
-        institution_dashboard.record_check_observation(db, "high risk", "other", "2026-W46", is_demo=True)
-        db.commit()
-        added = demo_seed.seed_vit_checks(db)
-        assert added == sum(sum(sum(c.values()) for c in demo_seed._weekly_check_plan(w).values()) for w in range(12))
-        assert db.query(InstitutionObservation).filter_by(is_simulated=True).count() == added
-        assert demo_seed.seed_vit_checks(db) == 0
-    finally:
-        db.close()
-        engine.dispose()
 
 
 def test_rows_older_than_24_months_are_purged(api_client):

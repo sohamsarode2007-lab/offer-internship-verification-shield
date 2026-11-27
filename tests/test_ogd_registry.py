@@ -93,11 +93,11 @@ def test_no_key_means_no_network_call(monkeypatch, ogd):
     assert ogd.calls == []
 
 
-def test_demo_mode_never_calls_live_api(monkeypatch, ogd):
+def test_removed_demo_switch_does_not_disable_live_lookup(monkeypatch, ogd):
     monkeypatch.setenv("DEMO_MODE", "1")
     ogd({"records": [row()]})
     verify()
-    assert ogd.calls == []
+    assert len(ogd.calls) == 1
 
 
 @pytest.mark.parametrize("bad", ["", "short", "u74999dl2016ptc29834", CIN + "X", "U74999DL2016PTC298345&x=1"])

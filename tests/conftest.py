@@ -19,9 +19,35 @@ import pytest  # noqa: E402
 
 from app.services import domain_verification as dv  # noqa: E402
 
-DEMO_DIR = Path(__file__).resolve().parent.parent / "fixtures" / "demo"
+# Made-up example offers used ONLY by tests (fictional companies, .example domains).
+DEMO_DIR = Path(__file__).resolve().parent / "fixtures" / "offers"
 DEMO_FIXTURE_DOMAINS = ("emberlakeanalytics.example,brightpathedtech.example,quillmeresoftware.example,"
                         "tarnwicklogistics.example,halvornfintech.example")
+
+
+class _Txt:
+    def __init__(self, value: str):
+        self.strings = [value.encode()]
+
+
+def make_fixture_dns(domains):
+    """Mocked DNS: the given domains publish MX, SPF and DMARC; everything else is NXDOMAIN."""
+    allowed = {d.strip().lower() for d in (domains.split(",") if isinstance(domains, str) else domains)}
+
+    def resolve(name, rtype):
+        host = str(name).lower().rstrip(".")
+        base = host[len("_dmarc."):] if host.startswith("_dmarc.") else host
+        if base not in allowed:
+            raise dns.resolver.NXDOMAIN()
+        if rtype == "MX" and base == host:
+            return [object()]
+        if rtype == "TXT":
+            return [_Txt("v=DMARC1; p=reject" if host.startswith("_dmarc.") else "v=spf1 -all")]
+        raise dns.resolver.NoAnswer()
+    return resolve
+
+
+fixture_dns = make_fixture_dns(DEMO_FIXTURE_DOMAINS)
 DEMO_LETTERS = ["legit_emberlake", "legit_brightpath_young_startup", "scam_fake_govt_scheme_fee",
                 "registry_name_match_quillmere", "registry_struck_off_tarnwick", "registry_cin_mismatch_halvorn",
                 "scam_shared_upi_corvane"]
@@ -79,17 +105,16 @@ def api_client(monkeypatch):
 
 @pytest.fixture(scope="session")
 def synthetic_registry_db(tmp_path_factory):
-    """The synthetic company master loaded once per session (fictional companies only)."""
+    """The test-only company list (fictional companies) loaded once per session."""
     from scripts.load_mca_master import load_csv
-    db = tmp_path_factory.mktemp("registry") / "synthetic.sqlite3"
-    load_csv(DEMO_DIR / "synthetic_mca_master.csv", db, synthetic=True)
+    db = tmp_path_factory.mktemp("registry") / "test-registry.sqlite3"
+    load_csv(DEMO_DIR / "company_registry.csv", db)
     return db
 
 
 @pytest.fixture
 def demo_client(api_client, synthetic_registry_db, monkeypatch):
-    """api_client in DEMO_MODE: fixture domains for the demo companies plus the synthetic registry."""
-    monkeypatch.setenv("DEMO_MODE", "1")
-    monkeypatch.setenv("DEMO_FIXTURE_DOMAINS", DEMO_FIXTURE_DOMAINS)
+    """api_client where the test companies' domains resolve and the test company list is loaded."""
+    monkeypatch.setattr(dv._resolver, "resolve", fixture_dns)
     monkeypatch.setenv("MCA_DB_PATH", str(synthetic_registry_db))
     return api_client

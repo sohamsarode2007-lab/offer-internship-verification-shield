@@ -4,11 +4,6 @@ import pytest
 from app.services import careers_page as cp
 
 
-@pytest.fixture(autouse=True)
-def _public(monkeypatch):
-    monkeypatch.setattr(cp, "_all_public", lambda host: True)
-
-
 def test_off_by_default(monkeypatch):
     monkeypatch.delenv("CAREERS_PAGE_LOOKUPS", raising=False)
     monkeypatch.setattr(cp, "_open", lambda url: pytest.fail("must not fetch"))
@@ -35,20 +30,10 @@ def test_errors_and_redirects_fail_closed(monkeypatch):
     assert cp.careers_page_found("quillmere.example") is False
 
 
-def test_non_public_address_is_never_fetched(monkeypatch):
+def test_non_public_address_is_never_contacted(monkeypatch):
+    """The real _open runs; the pinned client refuses before any connection is made."""
+    from app.services import safe_fetch
     monkeypatch.setenv("CAREERS_PAGE_LOOKUPS", "1")
-    monkeypatch.setattr(cp, "_all_public", lambda host: False)
-    monkeypatch.setattr(cp, "_open", lambda url: pytest.fail("must not fetch"))
+    monkeypatch.setattr(safe_fetch.socket, "getaddrinfo", lambda *a, **k: [(2, 1, 6, "", ("10.0.0.5", 443))])
+    monkeypatch.setattr(safe_fetch, "_connect", lambda *a, **k: pytest.fail("must not connect"))
     assert cp.careers_page_found("internal.example") is False
-
-
-def test_private_ip_check_is_real():
-    import socket
-    real = socket.getaddrinfo
-    try:
-        socket.getaddrinfo = lambda *a, **k: [(2, 1, 6, "", ("127.0.0.1", 443))]
-        from importlib import reload
-        reload(cp)
-        assert cp._all_public("x.example") is False
-    finally:
-        socket.getaddrinfo = real

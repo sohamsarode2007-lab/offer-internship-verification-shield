@@ -127,3 +127,38 @@ def test_gstin_cin_location_note_is_informational(mca_db):
     assert "GSTIN state: Delhi (07); CIN RoC location: Delhi (DL)" in result["details"]
     assert "informational only" in result["details"]
 
+
+@pytest.mark.parametrize("phrase", ["2 years of experience", "1 year bond", "3 years degree"])
+def test_job_duration_years_not_treated_as_company_age(mca_db, phrase):
+    _, db_path = mca_db
+    _set_incorporation_date(db_path, "15/03/2025")
+    result = gv.verify_gstin(facts(f"{NAME} requires {phrase}\nCIN: {CIN}\nGSTIN: {GSTIN}"))
+    assert result["consistency_risk_points"] == 0
+    assert "no founding-year/age claim" in result["details"]
+
+
+def test_company_age_in_business_contradiction_adds_fifteen(mca_db):
+    _, db_path = mca_db
+    _set_incorporation_date(db_path, "15/03/2025")
+    result = gv.verify_gstin(facts(f"{NAME}, 10+ years in business\nCIN: {CIN}\nGSTIN: {GSTIN}"))
+    assert result["consistency_risk_points"] == 15
+    assert "age claim 10 years" in result["details"]
+
+
+def test_gstin_failure_with_pan_mismatch_does_not_duplicate_failure_text_in_factors():
+    prefix = list(GSTIN[:14])
+    prefix[6] = "B"
+    mismatched = "".join(prefix) + gv.gstin_check_char("".join(prefix))
+    res = gv.verify_gstin(facts(f"{NAME}\nContact: hr@gmail.com\nGSTIN: {mismatched}"))
+    assert res["status"] == "fail" and res["consistency_risk_points"] == 10
+    scored = risk_scoring.calculate_risk_score([
+        {"check_name": "domain_verification", "status": "fail"},
+        res,
+        {"check_name": "payment_detection", "status": "pass"},
+    ])
+    pan_factors = [f for f in scored["risk_factors"] if "PAN name-initial" in f]
+    assert len(pan_factors) == 2  # once in Registration check failed summary, once as the +10 consistency note
+    assert not any(f.startswith("A registration number is quoted") for f in scored["risk_factors"])
+
+
+

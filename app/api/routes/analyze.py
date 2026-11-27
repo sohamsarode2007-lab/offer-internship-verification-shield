@@ -1,38 +1,36 @@
+import contextlib
 import logging
 import os
 from typing import List, Optional
 
+from app.api.request_limits import analyze_slot
 from fastapi import APIRouter, Depends, File, Form, Request, UploadFile, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.api.limiter import limiter, RATE_LIMIT
 from app.db.database import get_db
 from app.utils.field_utils import get_field_value
-from app.models.models import Offer, VerificationResult, CheckResult
-from app.schemas.schemas import AnalyzeResponse, CheckResultSchema, CheckStatus
+from app.schemas.schemas import AnalyzeResponse
 from app.services import (
-    ingestion,
-    fact_extraction,
-    domain_verification,
-    gstin_verification,
-    payment_detection,
-    scam_text,
-    email_auth,
     evidence_hints,
     self_checks,
     safety_playbook,
     link_lookup,
+    request_budget,
     multi_file,
     evidence_meta,
     plausibility,
-    risk_scoring,
     community_reports,
     institution_dashboard,
+    offer_analysis,
+    employer_message,
 )
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="", tags=["analyze"])
+
+LINK_CHECKS_PER_HOUR = int(os.getenv("LINK_CHECKS_PER_HOUR", "5"))
 
 
 BAND_LABELS = {
@@ -71,7 +69,7 @@ def build_user_guidance(risk_band: str, checks: list[dict], reasons: list[dict])
                 if concerns else "No rule-based warning was detected; independently verify the offer."))
     return next_steps, summary
 
-MAX_TEXT_CHARS = 50_000
+MAX_TEXT_CHARS = offer_analysis.MAX_TEXT_CHARS
 MAX_FILE_BYTES = 10 * 1024 * 1024
 ALLOWED_EXTENSIONS = {"pdf", "png", "jpg", "jpeg", "bmp", "tiff", "txt", "eml"}
 
@@ -96,12 +94,24 @@ def analyze_offer(
     Privacy (DPDP): the offer text and file name are NOT stored; only the verdict
     and per-check results are persisted.
     """
+    with contextlib.contextmanager(analyze_slot)():
+        return _analyze_offer_impl(request, text, file, files, link_lookups, db)
+
+
+def _analyze_offer_impl(
+    request: Request,
+    text: Optional[str],
+    file: Optional[UploadFile],
+    files: List[UploadFile],
+    link_lookups: bool,
+    db: Session,
+):
     uploads = [u for u in ([file] if file is not None else []) + list(files or []) if u.filename]
     if not text and not uploads:
         raise HTTPException(status.HTTP_400_BAD_REQUEST,
                             "Either 'text' form field or 'file' upload must be provided.")
 
-    community_reports.purge_expired(db)
+    community_reports.purge_if_due(db)
 
     if text and len(text) > MAX_TEXT_CHARS:
         raise HTTPException(status.HTTP_413_CONTENT_TOO_LARGE,
@@ -124,137 +134,45 @@ def analyze_offer(
     if len(loaded) > 1 and any(n.lower().endswith(".eml") for n, _ in loaded):
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT,
                             "Send an .eml on its own so its sender checks can run; other files can be checked separately.")
-    file_bytes, filename = (loaded[0][1], loaded[0][0]) if loaded else (None, None)
-    file_texts: List[str] = []
-
-    # Step 1: Ingestion. Parse .eml headers only in memory; only extracted body and
-    # supported PDF/image attachments enter the existing check pipeline.
-    email_result = None
     try:
-        if filename and filename.lower().endswith(".eml"):
-            parsed_email = email_auth.parse_eml(file_bytes or b"")
-            body_text, _ = ingestion.ingest_offer(text=parsed_email["body_text"])
-            parts = [body_text] if body_text else []
-            for attachment in parsed_email["attachments"]:
-                extracted, _ = ingestion.ingest_offer(
-                    file_bytes=attachment["data"], filename=attachment["filename"]
-                )
-                if extracted:
-                    parts.append(extracted)
-            if text:
-                parts.insert(0, text)
-            raw_text = "\n".join(parts).strip()
-            if len(raw_text) > MAX_TEXT_CHARS:
-                raise HTTPException(status.HTTP_413_CONTENT_TOO_LARGE,
-                                    f"Extracted email text is longer than {MAX_TEXT_CHARS:,} characters.")
-            email_result = parsed_email
-        elif len(loaded) > 1:
-            parts = [text] if text else []
-            for name, data in loaded:
-                extracted, _ = ingestion.ingest_offer(file_bytes=data, filename=name)
-                if extracted:
-                    parts.append(extracted)
-                    file_texts.append(extracted)
-            raw_text = "\n".join(parts).strip()
-        else:
-            raw_text, _ = ingestion.ingest_offer(text=text, file_bytes=file_bytes, filename=filename)
-    except ValueError as e:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, f"Could not read the document: {e}")
-    if not raw_text or not raw_text.strip():
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT,
-                            "No text could be extracted from the submission.")
-    # One limit for every path: pasted text, extracted PDF/image/.txt text, and all parts combined.
-    if len(raw_text) > MAX_TEXT_CHARS:
-        raise HTTPException(status.HTTP_413_CONTENT_TOO_LARGE,
-                            f"The text in your submission is longer than {MAX_TEXT_CHARS:,} characters.")
+        submission = offer_analysis.read_submission(text, loaded)
+    except offer_analysis.SubmissionError as e:
+        raise HTTPException(e.status_code, e.detail)
+    raw_text, email_result = submission.raw_text, submission.email_result
 
-    # Steps 2-5: extraction and checks
-    facts = fact_extraction.extract_facts(raw_text)
-    if email_result:
-        body_domain = facts.get("sender_domain", {}).get("value")
-        auth_facts = dict(facts)
-        auth_facts["sender_domain"] = {"value": email_result.get("sender_domain")}
-        auth_facts["sender_email"] = {"value": None}
-        domain_check = domain_verification.verify_domain(auth_facts)
-        if body_domain:
-            domain_check["details"] += f" Body-claimed domain: '{body_domain}'."
-            domain_check["explanation"] = domain_check["details"]
-        auth_check = email_auth.verify_sender_authentication(email_result, facts)
-    else:
-        domain_check = domain_verification.verify_domain(facts)
-        auth_check = email_auth.not_applicable()
-    gstin_check = gstin_verification.verify_gstin(facts)
-    payment_check = payment_detection.detect_payment_demand(facts)
-    scam_text_check = scam_text.detect_scam_text(facts)
-    report_indicators = community_reports.extract_indicators(raw_text, email_result, payment_check)
-    signature = community_reports.minhash_signature(raw_text) if os.getenv("INDICATOR_PEPPER") else []
-    community_check = community_reports.lookup_community(db, report_indicators, signature)
-    check_dicts = [domain_check, gstin_check, payment_check, auth_check, scam_text_check, community_check]
-
-    # Step 6: scoring
-    scoring_res = risk_scoring.calculate_risk_score(check_dicts, facts=facts)
+    analysis = offer_analysis.run_checks(db, submission)
+    facts, check_dicts, scoring_res = analysis.facts, analysis.check_dicts, analysis.scoring
+    report_indicators, signature, gstin_check = analysis.report_indicators, analysis.signature, analysis.gstin_check
     overall_risk_score = scoring_res["overall_risk_score"]
     completeness_percentage = scoring_res["completeness_percentage"]
     risk_band = scoring_res["risk_band"]
     # Informational notes (no score impact); never include submitted values.
     notes = plausibility.collect_notes(raw_text, None)
-    for name, data in loaded:
-        if name.lower().endswith(".pdf"):
-            notes += plausibility.collect_notes("", data)  # file-level notes for each PDF
-    link_result = link_lookup.build_link_checks(raw_text, link_lookups)
+    pdf_sources = [data for name, data in loaded if name.lower().endswith(".pdf")]
+    if email_result:
+        pdf_sources.extend(
+            att["data"] for att in email_result.get("attachments", []) if att["filename"].lower().endswith(".pdf")
+        )
+    for data in pdf_sources:
+        notes += plausibility.collect_notes("", data)  # file-level notes for each PDF
+    # Per-client hourly allowance for outbound link checks (the key is held in memory only, never stored or logged).
+    client_key = request.client.host if request.client else "unknown"
+    allow_links = link_lookups and request_budget.try_spend_keyed("link", client_key, LINK_CHECKS_PER_HOUR)
+    link_result = link_lookup.build_link_checks(raw_text, allow_links)
+    if link_lookups and not allow_links:
+        link_result["notes"].append("Link checks were skipped because this connection has used its hourly allowance. The rest of the check is unaffected.")
     notes += link_result["notes"]
-    duplicate = multi_file.duplicate_note(file_texts)
+    duplicate = multi_file.duplicate_note(submission.file_texts)
     if duplicate:
         notes.append(duplicate)
     scoring_res["reasons"] = list(scoring_res["reasons"]) + [
         {"text": note, "impact": None} for note in dict.fromkeys(notes)]
 
-    check_schemas = [
-        CheckResultSchema(
-            check_name=c["check_name"],
-            status=CheckStatus(c["status"]),
-            score=c.get("score"),
-            details=c.get("details") or c.get("explanation"),
-        )
-        for c in check_dicts
-    ]
-
+    check_schemas = offer_analysis.to_check_schemas(check_dicts)
     # Rule-based scam category, computed in memory (the text is not stored).
     scam_category = institution_dashboard.classify_scam(check_dicts, raw_text)
-
-    # Persistence: verdict + check results only. raw_text / file_path / names are not stored.
-    try:
-        db_offer = Offer(title=None, company_name=None, raw_text=None, file_path=None)
-        db.add(db_offer)
-        db.flush()
-
-        db_verification = VerificationResult(
-            offer_id=db_offer.id,
-            overall_risk_score=overall_risk_score,
-            completeness_percentage=completeness_percentage,
-        )
-        db.add(db_verification)
-        db.flush()
-
-        for c_schema in check_schemas:
-            db.add(CheckResult(
-                verification_id=db_verification.id,
-                check_name=c_schema.check_name,
-                status=c_schema.status.value,
-                score=c_schema.score,
-                details=c_schema.details,
-            ))
-        # One anonymous public trend row per check: ISO week, band, category only
-        # (no text, identifiers, file name, IP or link to this analysis). See PRIVACY_DESIGN.md.
-        institution_dashboard.record_check_observation(
-            db, risk_band, scam_category, institution_dashboard.current_iso_week(),
-            is_demo=os.getenv("DEMO_MODE") == "1")
-        db.commit()
-        offer_id = db_offer.id
-    except Exception as e:
-        db.rollback()
-        logger.error("[ANALYZE] Could not persist verification result: %s", type(e).__name__)
-        offer_id = None
+    offer_id = offer_analysis.store_result(db, check_schemas, overall_risk_score, completeness_percentage,
+                                           risk_band, scam_category)
 
     summary_msg = (
         f"Analysis completed. Risk Score: {overall_risk_score}/100 ({risk_band.upper()}). "
@@ -298,9 +216,14 @@ def analyze_offer(
         # Returned for display only; never persisted (Offer.company_name stays NULL).
         company_name=get_field_value(facts, "company_name", "company_name_legacy"),
         self_checks=self_checks.build_self_checks(facts, check_dicts),
+        employer_message=employer_message.build_employer_message(facts, check_dicts),
         safety_actions=safety_playbook.build_safety_actions(check_dicts, raw_text, risk_band, link_result["threat_listed"]),
         evidence_meta=evidence_meta.build_evidence_meta(check_dicts),
         evidence_hints=evidence_hints.build_evidence_hints(
             check_dicts, had_file=bool(email_result),
-            had_image=bool(filename and filename.lower().rsplit(".", 1)[-1] in {"png", "jpg", "jpeg", "bmp", "tiff"})),
+            had_image=any(
+                "." in n and n.lower().rsplit(".", 1)[-1] in {"png", "jpg", "jpeg", "bmp", "tiff"}
+                for n in [name for name, _ in loaded]
+                + ([att["filename"] for att in email_result.get("attachments", [])] if email_result else [])
+            )),
     )

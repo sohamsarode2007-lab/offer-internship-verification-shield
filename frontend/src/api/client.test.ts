@@ -20,6 +20,12 @@ describe('backend error translation', () => {
     await expect(analyze('offer', null)).rejects.toThrow(message)
   })
 
+  it('keeps the server wording when an .eml was sent with other files', async () => {
+    const detail = 'Send an .eml on its own so its sender checks can run; other files can be checked separately.'
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response(422, detail)))
+    await expect(analyze('offer', null)).rejects.toThrow(detail)
+  })
+
   it.each([
     ['/report', 'report token expired or already used', 'This report token expired or was already used. Check the offer again to create a new report.'],
     ['/report', 'current consent is required', 'Consent is required. Review and select the consent checkbox before submitting the report.'],

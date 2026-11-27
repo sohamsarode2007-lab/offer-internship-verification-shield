@@ -3,6 +3,7 @@ import hashlib
 import os
 import secrets
 import smtplib
+import ssl
 from datetime import timedelta
 from email.message import EmailMessage
 
@@ -10,6 +11,7 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.api.limiter import limiter
@@ -34,6 +36,10 @@ class WithdrawRequest(BaseModel):
 DisputeReason = Literal["our_business_detail", "reported_in_error", "someone_else_misused_it", "other"]
 
 
+class VerifyRequest(BaseModel):
+    token: str = Field(min_length=20, max_length=200)
+
+
 class DisputeRequest(BaseModel):
     indicator_type: str
     value: str = Field(min_length=3, max_length=320)
@@ -51,9 +57,10 @@ def _send_verification(email: str, token: str, domain: str):
     message["Subject"] = "Verify company-domain dispute"
     message["From"] = os.getenv("SMTP_FROM", "no-reply@localhost")
     message["To"] = email
-    message.set_content(f"Verify this domain dispute for {domain}: {base_url.rstrip('/')}/disputes/verify?token={token}\nThis link expires in 24 hours.")
+    message.set_content(f"Verify this domain dispute for {domain}: {base_url.rstrip('/')}/verify-dispute#token={token}\nThis link expires in 24 hours.")
     with smtplib.SMTP(host, int(os.getenv("SMTP_PORT", "587")), timeout=10) as smtp:
-        smtp.starttls()
+        # create_default_context() verifies the server certificate and host name; smtplib's own default does not.
+        smtp.starttls(context=ssl.create_default_context())
         username = os.getenv("SMTP_USERNAME")
         if username:
             smtp.login(username, os.getenv("SMTP_PASSWORD", ""))
@@ -64,7 +71,7 @@ def _send_verification(email: str, token: str, domain: str):
 @router.post("/report")
 @limiter.limit("5/hour")
 def report(request: Request, payload: ReportRequest, db: Session = Depends(get_db)):
-    cr.purge_expired(db)
+    cr.purge_if_due(db)
     try:
         result = cr.accept_report(db, payload.report_token, payload.selected_indicators,
                                   payload.consent, payload.consent_version)
@@ -86,7 +93,7 @@ def withdraw(request: Request, payload: WithdrawRequest, db: Session = Depends(g
 @router.post("/disputes")
 @limiter.limit("3/hour")
 def dispute(request: Request, payload: DisputeRequest, db: Session = Depends(get_db)):
-    cr.purge_expired(db)
+    cr.purge_if_due(db)
     kind = payload.indicator_type.lower()
     if kind not in {"upi", "bank", "phone", "email", "domain"}:
         raise HTTPException(400, "unsupported indicator type")
@@ -101,6 +108,14 @@ def dispute(request: Request, payload: DisputeRequest, db: Session = Depends(get
     except ValueError:
         raise HTTPException(400, "value does not match the indicator type (a bank value looks like account|IFSC)")
     digest = cr._digest(kind, normalized, pepper)
+    # Caps on open disputes: one address or one indicator cannot hold the review queue or hide a warning indefinitely.
+    open_rows = db.query(CommunityDispute).filter(CommunityDispute.resolved_at.is_(None),
+        CommunityDispute.created_at > cr.active_dispute_cutoff())
+    email_key = payload.contact_email.strip().casefold()
+    if open_rows.filter(func.lower(CommunityDispute.contact_email) == email_key).count() >= cr.MAX_ACTIVE_DISPUTES_PER_EMAIL:
+        raise HTTPException(429, "this address already has the maximum number of open disputes")
+    if open_rows.filter_by(indicator_type=kind, digest=digest).count() >= cr.MAX_ACTIVE_DISPUTES_PER_INDICATOR:
+        raise HTTPException(429, "this indicator already has the maximum number of open disputes")
     same_domain = (kind == "domain" and
                    payload.contact_email.rsplit("@", 1)[1].casefold().rstrip(".") == normalized)
     raw_token = secrets.token_urlsafe(32) if same_domain else None
@@ -120,9 +135,11 @@ def dispute(request: Request, payload: DisputeRequest, db: Session = Depends(get
     return {"status": "under_review", "message": "Dispute recorded; scoring continues while it is under review."}
 
 
-@router.get("/disputes/verify")
-def verify_dispute(token: str, db: Session = Depends(get_db)):
-    token_hash = hashlib.sha256(token.encode()).hexdigest()
+@router.post("/disputes/verify")
+@limiter.limit("10/hour")
+def verify_dispute(request: Request, payload: VerifyRequest, db: Session = Depends(get_db)):
+    """POST with the code in the body: a code in a URL would end up in access logs and browser history."""
+    token_hash = hashlib.sha256(payload.token.encode()).hexdigest()
     row = db.query(CommunityDispute).filter_by(verification_token_hash=token_hash,
         domain_verified=False).filter(CommunityDispute.verification_expires_at > cr._utcnow()).first()
     if not row:
@@ -135,6 +152,7 @@ def verify_dispute(token: str, db: Session = Depends(get_db)):
 
 
 @router.get("/indicators/stats")
+@limiter.limit("30/minute")
 def indicator_stats(request: Request, db: Session = Depends(get_db)):
-    cr.purge_expired(db)
+    cr.purge_if_due(db)
     return cr.stats(db)
