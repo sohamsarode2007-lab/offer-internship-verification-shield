@@ -103,7 +103,7 @@ describe('analysis result', () => {
   it.each([
     { band: 'high risk', title: 'High risk', className: styles.highRisk },
     { band: 'insufficient evidence, verify manually', title: 'Insufficient evidence', className: styles.manual },
-    { band: 'likely legitimate', title: 'Likely legitimate', className: styles.likely },
+    { band: 'likely legitimate', title: 'No red flags found', className: styles.likely },
   ])('renders the verdict plate in sentence case ($title)', async ({ band, title, className }) => {
     await showResult(payload({ risk_band: band }))
     const heading = screen.getByRole('heading', { name: title })
@@ -165,15 +165,17 @@ describe('analysis result', () => {
     await showResult(payload({ risk_band: 'likely legitimate', company_name: 'Quillmere Software Private Limited' }))
     const line = screen.getByText('Checked: Quillmere Software Private Limited')
     expect(line).toHaveClass(styles.checkedCompany)
-    const plate = screen.getByRole('heading', { name: 'Likely legitimate' }).parentElement!
+    const plate = screen.getByRole('heading', { name: 'No red flags found' }).parentElement!
     expect(plate.nextElementSibling).toBe(line)
     const css = readFileSync(resolve(__dirname, 'App.module.css'), 'utf8')
     expect(css).toMatch(/\.checkedCompany \{[^}]*color: var\(--steel\)/)
   })
 
-  it('says a likely-legitimate result is not proof and points to the employer’s own website', async () => {
+  it('does not headline a likely-legitimate result as legitimate, says it is not proof and points to the employer’s own website', async () => {
     await showResult(payload({ risk_band: 'likely legitimate' }))
-    expect(screen.getByText(/Not proof\. Confirm through the employer’s own website/)).toBeInTheDocument()
+    expect(screen.getByText('No red flags found')).toBeInTheDocument()
+    expect(screen.queryByText('Likely legitimate')).toBeNull()
+    expect(screen.getByText(/Not proof: a copied registration number.*Confirm through the employer’s own website/)).toBeInTheDocument()
   })
 
   it.each([null, undefined, '', '   '])('hides the company line when no name was extracted (%j)', async name => {
@@ -346,7 +348,7 @@ describe('add evidence and check again', () => {
     const [text, file] = vi.mocked(api.analyze).mock.calls[1]
     expect(text).toBe('Test offer text\n\nCIN: U74999DL2016PTC298345')
     expect(file).toBeNull()
-    expect(await screen.findByText('Likely legitimate')).toBeTruthy()
+    expect(await screen.findByText('No red flags found')).toBeTruthy()
   })
 
   it('clears the add-evidence box after a successful re-check when hints remain', async () => {

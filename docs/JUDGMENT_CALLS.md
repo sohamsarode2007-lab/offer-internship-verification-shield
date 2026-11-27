@@ -482,3 +482,12 @@ Status: **open** = not reviewed yet.
     The person still sees the full explanations in the response. Migration 011 clears the column for older rows. Nothing
     read that column back, so no feature is lost. Request-path purging (at most once per 15 minutes per process) is kept
     for now and is a candidate to remove when the hourly worker is the only purger, preparing for larger traffic.
+55. **"Likely legitimate" is no longer the headline, and the evaluation rejects new dangerous misses (open, needs your call).**
+    A review pointed out that a name-matching domain does not prove who owns it (EC41), so a green-sounding headline
+    misleads. I chose the smaller of two fixes: the result page now says "No red flags found" with "Not proof: a copied
+    registration number on a matching-looking domain would look the same. Confirm through the employer's own website
+    before you pay or share documents". The returned band value stays "likely legitimate" so the API, eval and stored data
+    do not change. `eval/run_eval.py` now exits 1 for any scam rated likely legitimate except EC41 (listed in
+    `KNOWN_DANGEROUS_MISSES`). The stricter alternative (never produce this band without independent proof of domain
+    ownership) has no independent source in this pipeline, so it would end the band entirely: 11 of the 19 legitimate eval
+    cases would move to manual review. Frontend tests that asserted the old headline were changed to the new one on purpose.

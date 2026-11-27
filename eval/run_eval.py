@@ -291,7 +291,16 @@ def report(results):
         expected_status = "PASS" if row["predicted_band"] == row["expected_band"] else "MISMATCH"
         label_status = label_band_status(row["truth"], row["predicted_band"])
         print(f"{row['case_id']:<9} {row['truth']:<12} {row['predicted_band']:<39} {label_status:<20} {row['expected_band']:<39} {expected_status}")
-    return exact == len(results)
+    unknown = [c for c in dangerous if c not in KNOWN_DANGEROUS_MISSES]
+    if unknown:
+        print("\nFAIL: new dangerous miss(es) (a scam rated likely legitimate): " + ", ".join(unknown)
+              + ". Fix the rule; do not add to KNOWN_DANGEROUS_MISSES to make this pass.")
+    return exact == len(results) and not unknown
+
+
+# Documented limit, kept visible on purpose (CLAIMS.md, 'What it cannot catch'). Any other scam rated likely legitimate
+# fails the run.
+KNOWN_DANGEROUS_MISSES = {"EC41"}
 
 
 def main():

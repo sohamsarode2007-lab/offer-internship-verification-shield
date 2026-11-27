@@ -382,8 +382,8 @@ been verified in this workspace.
 - **What it cannot catch (stated plainly).** A scam that copies a real company's registration number and uses a contact
   domain that is exactly that company's name, with a clean domain history, looks the same as a genuine offer to
   everything this tool can see, and can be rated "likely legitimate". The tool cannot tell who controls a domain. A
-  "likely legitimate" result is therefore never proof: the result page says "Not proof" and tells people to confirm
-  through the employer's own website. This case is kept in the evaluation set (EC41) as a known miss and is not hidden or tuned away.
+  "likely legitimate" result is therefore never proof: the result page is headed "No red flags found", says "Not proof"
+  and tells people to confirm through the employer's own website. The evaluation fails on any other scam rated that way. This case is kept in the evaluation set (EC41) as a known miss and is not hidden or tuned away.
 
 - **Request for a password, PIN or OTP.** If the text asks the candidate to share a password, PIN, OTP or card security code
   (+40), the "Why" list says no genuine employer needs these. Unlike bank details and documents, "after joining" wording
