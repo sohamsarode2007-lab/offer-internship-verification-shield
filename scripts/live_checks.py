@@ -18,7 +18,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-from app.services import careers_page, link_lookup, ogd_registry, safe_fetch
+from app.services import careers_page, link_lookup, ogd_registry, rdap, safe_fetch
 
 REQUIRED_FIELDS = {"CIN", "CompanyName", "CompanyStatus"}
 WEB_RISK_TEST_URL = "http://testsafebrowsing.appspot.com/s/malware.html"   # Google's documented test page
@@ -102,6 +102,18 @@ def check_redirects_and_tls() -> None:
         record("PASS", "private address refused", "localhost is refused before any connection")
 
 
+def check_rdap() -> None:
+    name = "RDAP registration date"
+    rdap._bootstrap, rdap._cache = (0.0, {}), {}
+    for domain in ("example.com", "example.org", "nixi.in", "google.co.in"):
+        created = rdap.creation_date(domain)
+        if created:
+            record("PASS", f"{name}: {domain}", f"registered {created.date()}")
+        else:
+            record("FAIL", f"{name}: {domain}", "no date (TLD without an RDAP server in the IANA list, registry unreachable or "
+                   "rate-limiting, or network blocked); the app then falls back to WHOIS, then 'age unknown'")
+
+
 def check_careers(domain: str | None) -> None:
     name = "careers page lookup"
     if not domain:
@@ -116,7 +128,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--careers-domain")
     args = parser.parse_args()
-    check_ogd(); check_web_risk(); check_redirects_and_tls(); check_careers(args.careers_domain)
+    check_ogd(); check_web_risk(); check_rdap(); check_redirects_and_tls(); check_careers(args.careers_domain)
     failed = sum(1 for s, _, _ in results if s == "FAIL")
     print(f"\n{sum(1 for s, _, _ in results if s == 'PASS')} passed, {failed} failed, "
           f"{sum(1 for s, _, _ in results if s == 'SKIP')} skipped")

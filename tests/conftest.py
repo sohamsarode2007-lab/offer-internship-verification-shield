@@ -56,6 +56,7 @@ DEMO_LETTERS = ["legit_emberlake", "legit_brightpath_young_startup", "scam_fake_
 @pytest.fixture(autouse=True)
 def no_live_whois(monkeypatch):
     monkeypatch.setattr(dv, "_whois_creation_date", lambda domain: None)
+    monkeypatch.setattr(dv, "_rdap_creation_date", lambda domain: None)
 
 
 @pytest.fixture(autouse=True)

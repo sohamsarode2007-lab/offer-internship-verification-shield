@@ -94,9 +94,20 @@ been verified in this workspace.
   no points (a payment demand already forces high risk) and never repeats the IFSC. The code list
   is short and from general knowledge of RBI bank codes, not an RBI download.
 
+## Domain registration date (RDAP, then WHOIS)
+
+- The domain check asks the registry that runs the domain's TLD for its registration date over RDAP
+  (server list from IANA's published bootstrap file), and falls back to WHOIS. A domain registered less
+  than 30 days ago fails the domain check, as before. Only the domain is sent, never offer text.
+  Any failure (no server for that TLD, timeout, rate limit, blocked network) means "age unknown", which
+  is never counted as a pass. Results are cached in memory for 24 hours (15 minutes for failures);
+  `RDAP_LOOKUPS=0` turns it off. An old domain adds no points and no trust: aged domains can be bought.
+  The RDAP path has not been run against the live registries from the build environment (network access
+  was blocked); tests use mocked responses and `scripts/live_checks.py` checks it on your machine.
+
 ## Internet Archive first-seen note
 
-- With `INFRA_AGE_LOOKUPS=1` (off by default) and only when WHOIS gave no usable domain age, the
+- With `INFRA_AGE_LOOKUPS=1` (off by default) and only when neither RDAP nor WHOIS gave a usable domain age, the
   domain check adds one informational sentence with the month of the earliest successful capture in
   the Internet Archive's public CDX index. It never changes the status or the score: an archived copy
   does not show who sent an offer, and a missing copy proves nothing. Lookup failures add nothing.

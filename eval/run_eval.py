@@ -79,6 +79,7 @@ def _mock_dns(domains):
 
     dv._resolver.resolve = resolve
     dv._whois_creation_date = lambda domain: None
+    dv._rdap_creation_date = lambda domain: None
 
 
 def local_band(case):

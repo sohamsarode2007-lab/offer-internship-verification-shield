@@ -498,3 +498,11 @@ Status: **open** = not reviewed yet.
     `\s*` groups (120,000 random strings gave identical matches before and after). The test-file alert was a set
     membership test flagged as a substring test; it now says so. CodeQL itself cannot run here, so confirm the alerts
     close after the merge and the next scan; new ones on other regexes are possible.
+
+57. **Domain age now tries RDAP before WHOIS (open).** A domain-age check already existed (WHOIS, under 30 days fails), so
+    this does not add a weight or change the score rules; it only improves how often a date is found. RDAP asks the
+    registry's own server (found through IANA's bootstrap list) rather than a third-party redirector, so the domain is not
+    handed to an extra company. Not added: any credit for an old domain, because a scammer can buy an aged domain.
+    Unverified: coverage and rate limits of real registries (including .in); the sandbox had no network, so run
+    `python -m scripts.live_checks` and tell me which of the four sample domains return a date. The in-memory cache is per
+    process, like the other counters. Evaluation and tests disable RDAP so they stay offline.
