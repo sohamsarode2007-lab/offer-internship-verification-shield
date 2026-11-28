@@ -417,3 +417,10 @@ been verified in this workspace.
   from an `@handle` on a line that names Telegram. Email local parts, unlabelled `@names` and group-invite links are ignored.
 - It adds no points by itself; it takes part in the existing 3+/10+ report counts and the linked-reports rule.
 
+## Waived fees and probe cases EC54-EC62
+
+- A fee that the same sentence says is waived, exempted, free of cost or paid by the company is not a payment demand, unless
+  the sentence also tells the candidate to pay. Before this fix "training fee of Rs 5,000 is fully waived" was rated high
+  risk (found by case EC60).
+- The nine probe cases are fictional and written with the rules in mind; they check behaviour and are not an accuracy sample.
+

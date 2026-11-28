@@ -78,6 +78,10 @@ _COMPANY_BEARS_RE = re.compile(
     re.IGNORECASE,
 )
 
+_WAIVER_RE = re.compile(
+    r"\b(?:waived|waiver|exempt(?:ed)?|free\s+of\s+cost|at\s+no\s+(?:extra\s+)?cost|"
+    r"paid\s+by\s+the\s+company|borne\s+by\s+the\s+company)\b", re.IGNORECASE)
+
 # An instruction aimed at the candidate. Mentioning a stipend or salary nearby does not cancel a fee when the same
 # stretch of text tells the candidate to pay it ("stipend of 15000 and a laptop; you pay the BGV charges").
 _YOU_PAY_RE = re.compile(
@@ -170,8 +174,11 @@ def _is_negated(text: str, sent_start: int, phrase_start: int) -> bool:
 def _find_phrase_demands(text: str, spans) -> List[Dict[str, Any]]:
     demands = []
     for m in _SCAM_RE.finditer(text):
-        s, _ = _sentence_of(spans, m.start())
+        s, e = _sentence_of(spans, m.start())
         if _is_negated(text, s, m.start()):
+            continue
+        local = text[max(s, m.start() - 80):min(e, m.end() + 80)]
+        if _WAIVER_RE.search(local) and not _YOU_PAY_RE.search(local):
             continue
         demands.append({"kind": "phrase", "match": re.sub(r"\s+", " ", m.group(0).strip()),
                         "start": m.start(), "end": m.end()})

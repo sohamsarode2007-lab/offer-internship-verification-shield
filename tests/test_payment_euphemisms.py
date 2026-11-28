@@ -70,3 +70,14 @@ def test_disguised_fee_is_a_demand(text):
 @pytest.mark.parametrize("text", NOT_DEMANDS)
 def test_legitimate_or_negated_mention_is_not_a_demand(text):
     assert _status(text) == "pass", text
+
+
+def test_waived_fee_with_an_amount_is_not_a_demand():
+    assert _status("The training fee of Rs 5,000 is fully waived for selected candidates.") == "pass"
+    assert _status("Registration fee of Rs 1,000 stands exempted for all selected students.") == "pass"
+
+
+def test_waiver_does_not_cancel_a_fee_the_candidate_is_told_to_pay():
+    assert _status("The registration fee is waived only if you pay Rs 500 today.") == "fail"
+    assert _status("Your training fee of Rs 5,000 is due. Kindly pay it before joining.") == "fail"
+    assert _status("Training fee of Rs 5,000 is payable by you.") == "fail"
