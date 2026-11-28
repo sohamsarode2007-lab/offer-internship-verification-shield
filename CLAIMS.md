@@ -399,3 +399,14 @@ been verified in this workspace.
 - **Request for a password, PIN or OTP.** If the text asks the candidate to share a password, PIN, OTP or card security code
   (+40), the "Why" list says no genuine employer needs these. Unlike bank details and documents, "after joining" wording
   never cancels this warning; only a negation ("never share your OTP") does. It is a wording match, not proof.
+
+## Linked community reports (campaign clustering)
+
+- When an identifier (phone, UPI, email, domain, bank) is in exactly 2 consented reports made on different days, and
+  the other identifiers held by those two reports tie them to at least 4 distinct live reports in total, the result adds
+  +15 and says the item "appears in reports linked to a wider set of reports". It follows one hop only, reads the
+  existing `community_indicators` table, and stores nothing new.
+- It does not add to the 3+ or 10+ report points, ignores withdrawn and demo reports, does not follow an identifier with
+  an open company dispute, and cannot produce high risk on its own (the 60 cap for community-only evidence applies).
+- Not claimed: that the linked reports come from independent people. Two reports can be filed by one person.
+

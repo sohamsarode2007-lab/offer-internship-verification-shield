@@ -26,6 +26,10 @@ MIN_DISTINCT_DAYS = 2
 DISPUTE_ACTIVE_DAYS = 90        # an unresolved dispute affects results for this long, then lapses
 DISPUTE_KEEP_DAYS = 180         # and is deleted (with its contact email) after this long
 ANALYSIS_RETENTION_DAYS = 365   # stored analysis results (and their per-check rows) are deleted after this long
+LINK_MIN_SEED_REPORTS = 2       # an indicator needs this many live reports of its own before a link counts
+LINK_MIN_CLUSTER_REPORTS = 4    # distinct live reports in the seed reports plus the reports sharing one of their other indicators
+LINK_MAX_BRIDGES = 30           # other indicators followed from the seed reports (one hop only)
+LINKED_POINTS = 15
 MAX_ACTIVE_DISPUTES_PER_EMAIL = 3
 MAX_ACTIVE_DISPUTES_PER_INDICATOR = 5
 MINHASH_SIZE = 128
@@ -313,6 +317,35 @@ def withdraw_report(db: Session, code: str):
     return {"status": "withdrawn"}
 
 
+def _campaign_linked(db: Session, seed_reports: set, seed_type: str, seed_digests: list, now: datetime) -> bool:
+    """True when the seed reports, plus the live reports sharing any other indicator they hold, reach
+    LINK_MIN_CLUSTER_REPORTS distinct reports across at least MIN_DISTINCT_DAYS days. One hop; reads existing
+    columns only."""
+    bridges = db.query(CommunityIndicator.indicator_type, CommunityIndicator.digest, CommunityIndicator.key_version).filter(
+        CommunityIndicator.report_id.in_(seed_reports)).distinct().all()
+    bridges = [b for b in bridges if not (b.indicator_type == seed_type and b.digest in seed_digests)]
+    if not bridges or len(bridges) > LINK_MAX_BRIDGES:
+        return False
+    disputed = {(d.indicator_type, d.digest, d.key_version) for d in db.query(CommunityDispute).filter(
+        CommunityDispute.digest.in_([b.digest for b in bridges]),
+        CommunityDispute.resolved_at.is_(None),
+        CommunityDispute.created_at > active_dispute_cutoff(now)).all()}
+    bridges = [b for b in bridges if (b.indicator_type, b.digest, b.key_version) not in disputed]
+    if not bridges:
+        return False
+    rows = db.query(CommunityIndicator.report_id, CommunityReport.created_at).join(CommunityReport).filter(
+        CommunityReport.withdrawn.is_(False), CommunityReport.is_demo.is_(False),
+        or_(*[and_(CommunityIndicator.indicator_type == b.indicator_type, CommunityIndicator.digest == b.digest,
+                   CommunityIndicator.key_version == b.key_version) for b in bridges])).all()
+    cluster = {report_id: created for report_id, created in rows}
+    for report_id in seed_reports:
+        cluster.setdefault(report_id, None)
+    if len(cluster) < LINK_MIN_CLUSTER_REPORTS:
+        return False
+    seed_times = {r.created_at for r in db.query(CommunityReport.created_at).filter(CommunityReport.id.in_(seed_reports)).all()}
+    return spans_enough_days([*cluster.values(), *seed_times])
+
+
 def lookup_community(db: Session, indicators: list[dict], signature: list[int]):
     current, previous = _pepper_config()
     if not current:
@@ -354,6 +387,9 @@ def lookup_community(db: Session, indicators: list[dict], signature: list[int]):
             indicator_bucket_points = max(indicator_bucket_points, 25)
             notes.append(f"This {item['indicator_type']} was reported in 3+ separate reports.")
         digests = [d for _, d in wanted]
+        if LINK_MIN_SEED_REPORTS <= count < 3 and _campaign_linked(db, reports, item["indicator_type"], digests, now):
+            indicator_bucket_points = max(indicator_bucket_points, LINKED_POINTS)
+            notes.append(f"This {item['indicator_type']} appears in reports linked to a wider set of reports.")
         db.query(CommunityReport).filter(CommunityReport.id.in_(reports)).update(
             {"last_seen_at": now}, synchronize_session=False)
         db.query(CommunityIndicator).filter(

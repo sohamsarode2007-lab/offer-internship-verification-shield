@@ -30,9 +30,11 @@ Risk points (added):
        bank/documents requests are ignored when placed after joining, any request when negated
        (app/services/personal_data_request.py)
   +25  Community indicator reported by 3-9 reports; +40 at 10+ reports
+  +15  Community indicator in exactly 2 reports (on different days) whose other indicators tie them to at least 4
+       distinct reports in total (one hop; app/services/community_reports.py); never added to the 3+ or 10+ points
   +25  Community template MinHash similarity >= 0.8
   Community evidence is correlated: highest indicator bucket + template points,
-  capped at +40 total (multiple matching identifiers never stack).
+  capped at +40 total (multiple matching identifiers never stack; linked-report points count as an indicator bucket).
   +20  No registration number (GSTIN/CIN/LLPIN) in the text
   +20  No usable domain AND no registration number
 
@@ -143,6 +145,8 @@ def _community_reason(details: str) -> str:
         parts.append("Reported in 10+ separate reports")
     elif "3+ separate reports" in details:
         parts.append("Reported in 3+ separate reports")
+    elif "linked to a wider set of reports" in details:
+        parts.append("Appears in reports linked to a wider set of reports")
     if "similar to a reported scam template" in details:
         parts.append("the wording matches a scam letter other job seekers reported" if parts
                      else "The wording matches a scam letter other job seekers reported")
