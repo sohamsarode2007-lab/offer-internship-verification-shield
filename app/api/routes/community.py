@@ -44,7 +44,7 @@ class DisputeRequest(BaseModel):
     indicator_type: str
     value: str = Field(min_length=3, max_length=320)
     contact_email: str = Field(min_length=5, max_length=320)
-    # A fixed code, never free text: free text invited offer letters, names and bank details into the database.
+    # A fixed code, never free text.
     reason_code: DisputeReason
 
 

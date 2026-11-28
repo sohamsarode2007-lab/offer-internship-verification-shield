@@ -310,7 +310,7 @@ def _gstin_cin_state_note(gstin: Optional[str], cin: Optional[str]) -> Optional[
 
 INACTIVE_STATUSES = {"struck off", "dissolved", "under liquidation"}  # exact values; see _is_inactive_status
 # Registry status wording varies ("Strike Off", "Under Process of Striking Off", "Liquidated",
-# "Amalgamated"), so match word stems. "Dormant" is deliberately not inactive.
+# "Amalgamated"), so word stems are matched. "Dormant" is not treated as inactive.
 _INACTIVE_STEMS = ("strik", "struck", "dissol", "liquidat", "amalgamat")
 
 

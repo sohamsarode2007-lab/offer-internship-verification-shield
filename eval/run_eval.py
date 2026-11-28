@@ -299,7 +299,7 @@ def report(results):
     return exact == len(results) and not unknown
 
 
-# Documented limit, kept visible on purpose (CLAIMS.md, 'What it cannot catch'). Any other scam rated likely legitimate
+# Documented limit (CLAIMS.md, 'What it cannot catch'). Any other scam rated likely legitimate
 # fails the run.
 KNOWN_DANGEROUS_MISSES = {"EC41"}
 

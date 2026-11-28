@@ -198,8 +198,7 @@ def verify_sender_authentication(parsed: Dict[str, Any], body_facts: Dict[str, A
     elif hard_auth_fail or points > 0:
         status = "fail"
     else:
-        # A pass is never accepted from an uploaded file: every header in it is controlled by whoever made the
-        # file. Only failures count, because forging a failure can only hurt the forger.
+        # A pass in an uploaded file is never counted; only failures count.
         status = "insufficient_information"
     no_header_note = "No Authentication-Results header (forwarded or exported without headers). " if not has_auth_results else ""
     details = no_header_note + f"Sender domain: {domain or 'unknown'}. " + (

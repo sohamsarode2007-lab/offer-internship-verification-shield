@@ -40,9 +40,8 @@ LLPIN_LABELLED_PATTERN = re.compile(
     r"\b(?i:LLPIN)(?:\s*(?i:no\.?|number))?\s*[:#-]?\s*([A-Z]{3}-[0-9]{4})\b"
 )
 
-# PAN and Udyam are accepted only with their label / prefix, and must contain a digit, so that
-# ordinary words after "PAN:" are not read as numbers. Malformed values are captured on purpose
-# so the registration check can report them.
+# PAN and Udyam are accepted only with their label / prefix, and must contain a digit.
+# Malformed values are still captured and passed to the registration check.
 PAN_LABELLED_PATTERN = re.compile(r"\bPAN(?:\s*(?i:no\.?|number|card))?\s*[:#-]\s*(?=[A-Za-z0-9]*\d)([A-Za-z0-9]{8,12})\b", re.I)
 UDYAM_PATTERN = re.compile(r"\bUDYAM[-\s]?[A-Z]{2}[-\s]?\d{1,2}[-\s]?\d{3,8}\b", re.I)
 

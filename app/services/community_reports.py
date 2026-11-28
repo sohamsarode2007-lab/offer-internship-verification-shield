@@ -20,8 +20,7 @@ from app.services import upi_payment
 from app.utils.email_domains import is_free_mailbox, is_upi_handle
 
 CONSENT_VERSION = 4  # v4: details appear in masked form on the public scam-trends page (v3 named one college)
-# Independence is not provable without identifying reporters, so the only gate is a weak one: reports for the same
-# indicator must span at least this many different UTC days before they count (one burst in one sitting never does).
+# Reports for the same indicator must span at least this many different UTC days before they count.
 MIN_DISTINCT_DAYS = 2
 DISPUTE_ACTIVE_DAYS = 90        # an unresolved dispute affects results for this long, then lapses
 DISPUTE_KEEP_DAYS = 180         # and is deleted (with its contact email) after this long

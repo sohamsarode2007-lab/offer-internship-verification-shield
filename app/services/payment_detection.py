@@ -249,8 +249,7 @@ def _urgency_near(text: str, demands: List[Dict[str, Any]]) -> List[str]:
 
 
 # RBI bank codes (first four IFSC characters) of payments banks. A payments bank cannot lend and
-# is not where an employer's treasury collects money; the note is informational and adds no points
-# because a payment demand already forces high risk.
+# is not where an employer's treasury collects money; the note is informational and adds no points.
 PAYMENTS_BANK_CODES = {"AIRP": "Airtel Payments Bank", "PYTM": "Paytm Payments Bank",
                        "FINO": "Fino Payments Bank", "IPOS": "India Post Payments Bank"}
 _IFSC_RE = re.compile(r"\b([A-Z]{4})0[A-Z0-9]{6}\b")
