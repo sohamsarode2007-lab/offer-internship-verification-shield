@@ -386,3 +386,97 @@ def test_short_offers_under_five_words_do_not_collide_on_empty_minhash(db):
     assert cr.lookup_community(db, [], sig_legit)["risk_points"] == 0
     assert cr.issue_report_token(db, [], sig_legit) == (None, [])
 
+
+
+def store_linked(db, items, days_ago):
+    token, _ = cr.issue_report_token(db, items, cr.minhash_signature("Synthetic letter text used only by this test."))
+    selected = [x["indicator_type"] + ":" + x["digest"] for x in items]
+    result = cr.accept_report(db, token, selected, True, cr.CONSENT_VERSION)
+    backdate(db, result, days_ago)
+    return result
+
+
+LINK_SIG = cr.minhash_signature("An unrelated incoming letter about something else entirely.")
+
+
+def campaign(db, extra_reports=2, seed_days=(0, 1)):
+    """Two reports hold phone + upi; `extra_reports` more hold the upi only. Returns (phone, upi)."""
+    phone, upi = candidate("phone", "+919876500001"), candidate("upi", "campaign.one@ybl")
+    for days in seed_days:
+        store_linked(db, [phone, upi], days)
+    for n in range(extra_reports):
+        store_linked(db, [upi], n % 2)
+    return phone, upi
+
+
+def test_two_reports_tied_to_a_wider_cluster_add_linked_points(db):
+    phone, _ = campaign(db, extra_reports=2)
+    match = cr.lookup_community(db, [phone], LINK_SIG)
+    assert match["risk_points"] == 15
+    assert "linked to a wider set of reports" in match["details"]
+
+
+def test_cluster_below_four_reports_adds_nothing(db):
+    phone, _ = campaign(db, extra_reports=1)
+    assert cr.lookup_community(db, [phone], LINK_SIG)["risk_points"] == 0
+
+
+def test_a_single_report_never_links_even_to_a_large_cluster(db):
+    phone, upi = candidate("phone", "+919876500002"), candidate("upi", "campaign.two@ybl")
+    store_linked(db, [phone, upi], 0)
+    for n in range(6):
+        store_linked(db, [upi], n % 2)
+    assert cr.lookup_community(db, [phone], LINK_SIG)["risk_points"] == 0
+
+
+def test_two_seed_reports_from_one_day_do_not_link(db):
+    phone, _ = campaign(db, extra_reports=3, seed_days=(0, 0))
+    assert cr.lookup_community(db, [phone], LINK_SIG)["risk_points"] == 0
+
+
+def test_withdrawn_and_demo_reports_do_not_grow_the_cluster(db):
+    import hashlib
+    phone, upi = campaign(db, extra_reports=1)
+    withdrawn = store_linked(db, [upi], 1)
+    cr.withdraw_report(db, withdrawn["withdrawal_code"])
+    demo = store_linked(db, [upi], 0)
+    db.query(CommunityReport).filter_by(
+        withdrawal_code_hash=hashlib.sha256(demo["withdrawal_code"].encode()).hexdigest()).update({"is_demo": True})
+    db.commit()
+    assert cr.lookup_community(db, [phone], LINK_SIG)["risk_points"] == 0
+
+
+def test_a_disputed_bridge_indicator_is_not_followed(db):
+    phone, upi = campaign(db, extra_reports=2)
+    db.add(CommunityDispute(indicator_type="upi", digest=upi["digest"], key_version=7,
+        contact_email="legal@acme.example", reason="This is our payment address.", domain_verified=False))
+    db.commit()
+    assert cr.lookup_community(db, [phone], LINK_SIG)["risk_points"] == 0
+
+
+def test_linked_points_do_not_stack_with_direct_points(db):
+    phone, upi = candidate("phone", "+919876500003"), candidate("upi", "campaign.three@ybl")
+    for n in range(3):
+        store_linked(db, [phone, upi], n % 2)
+    assert cr.lookup_community(db, [phone], LINK_SIG)["risk_points"] == 25
+
+
+def test_linked_points_alone_never_produce_high_risk():
+    from app.services.risk_scoring import calculate_risk_score
+    result = calculate_risk_score([
+        {"check_name": "domain_verification", "status": "fail"},
+        {"check_name": "gstin_verification", "status": "insufficient_information", "identifier_present": False},
+        {"check_name": "payment_detection", "status": "pass"},
+        {"check_name": "sender_authentication", "status": "not_applicable"},
+        {"check_name": "community_reports", "status": "fail", "risk_points": 15,
+         "details": "This phone appears in reports linked to a wider set of reports."},
+    ])
+    with_community = result["overall_risk_score"]
+    without = calculate_risk_score([
+        {"check_name": "domain_verification", "status": "fail"},
+        {"check_name": "gstin_verification", "status": "insufficient_information", "identifier_present": False},
+        {"check_name": "payment_detection", "status": "pass"},
+        {"check_name": "sender_authentication", "status": "not_applicable"},
+    ])["overall_risk_score"]
+    assert with_community - without == 15
+    assert any("linked to a wider set of reports" in x for x in result["risk_factors"])

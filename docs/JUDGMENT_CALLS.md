@@ -506,3 +506,14 @@ Status: **open** = not reviewed yet.
     Unverified: coverage and rate limits of real registries (including .in); the sandbox had no network, so run
     `python -m scripts.live_checks` and tell me which of the four sample domains return a date. The in-memory cache is per
     process, like the other counters. Evaluation and tests disable RDAP so they stay offline.
+
+58. **Campaign clustering through shared identifiers (open, needs your call).** A plain SQL join on the existing
+    `community_indicators` table links reports that hold the same identifier. I did not add a graph database: this reads
+    the same rows, adds no new personal data and no second purge path. Weight +15, below the +25 direct bucket, applied
+    only when an identifier has exactly 2 reports on different days and the cluster reaches 4 reports. Honest weakness:
+    this makes flagging cheaper for an attacker than the direct rule (2 reports that include a target identifier plus an
+    already-large cluster, versus 3 reports). The damage is bounded: +15 at most, inside the 40 community cap, never high
+    risk alone, and a company can dispute an identifier. One hop and a 30-identifier limit keep the query small. Reports
+    stored under different key versions of the same identifier do not link. Tell me if you want the minimum raised to 3
+    seed reports (which would make the rule inert, since 3 already scores directly).
+
