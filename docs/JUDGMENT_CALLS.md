@@ -517,3 +517,12 @@ Status: **open** = not reviewed yet.
     stored under different key versions of the same identifier do not link. Tell me if you want the minimum raised to 3
     seed reports (which would make the rule inert, since 3 already scores directly).
 
+
+59. **Correlated-signal cap tried and not adopted (open, needs your call).** "No registration number" (+20) and "no usable
+    domain and no registration number" (+20) describe the same gap, so I tried capping the pair at +30. Measured result:
+    EC32, EC46, EC47, EC48 and EC53 (strong task-scam or OTP wording with nothing to verify) fall from high risk to
+    "verify manually", and four tests that pin those scores fail. The expected bands were derived from the scoring rules
+    before the change, so I did not change them; the code change was reverted. The double count is real, but removing it
+    makes the checker less firm on exactly the scams it exists to catch. Options: keep as is (recommended until an
+    independently labelled set exists), or raise the strong-wording weight by the same 10 so those cases keep their band,
+    which is a re-tuning that needs your decision.
