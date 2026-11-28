@@ -19,6 +19,7 @@ It sends only fixed test addresses, never offer text, and never prints a key. A 
 | data.gov.in host, key, field names | the host answers with the key and rows carry CIN, CompanyName, CompanyStatus | read the HTTP code it prints; a moved host can be set with `DATA_GOV_IN_BASE_URL` |
 | data.gov.in `filters[CIN]` | looking up an existing CIN returns that company | the API may ignore the filter; the app already treats unrelated rows as "unavailable", but the live registry lookup then adds nothing |
 | Web Risk: test page and harmless page | Google lists its test page and does not list example.com | 403 usually means the Web Risk API is not enabled for that key; if only the test page is unlisted, confirm Google's current test URL |
+| RDAP registration date | example.com, example.org, nixi.in and google.co.in each return a date | the app falls back to WHOIS, then "age unknown"; tell me which TLDs return nothing |
 | Redirect and TLS | http to https redirect followed; expired and wrong-host certificates reported invalid | "stopped before a verdict" means your network blocked it; try another network |
 | Private address refused | localhost is refused | any FAIL here is a security bug: stop and report |
 | Careers page | a careers page is found on the domain you gave | many sites block automated requests; this one is expected to miss sometimes |

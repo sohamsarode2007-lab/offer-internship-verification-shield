@@ -14,7 +14,7 @@ Checks (in order):
      distance 1 for 5-7 char brands, 1-2 for 8+ char brands)
   5. MX record: NXDOMAIN / no MX            -> HARD FAIL
   6. SPF and DMARC TXT records              -> warning only if missing
-  7. WHOIS creation date < 30 days          -> HARD FAIL; lookup failure = "age unknown"
+  7. Creation date < 30 days (RDAP from the registry, then WHOIS) -> HARD FAIL; lookup failure = "age unknown"
      (not counted as a pass).
 
 Overall: any hard fail -> 'fail'; DNS unavailable -> 'insufficient_information';
@@ -30,7 +30,7 @@ import dns.resolver
 from rapidfuzz.distance import Levenshtein
 
 from app.utils.field_utils import get_field_value
-from app.services import brand_advisories, careers_page, web_archive
+from app.services import brand_advisories, careers_page, rdap, web_archive
 from app.utils.email_domains import is_disposable_mailbox, is_free_mailbox
 
 logger = logging.getLogger(__name__)
@@ -182,8 +182,16 @@ def _whois_creation_date(domain: str) -> Optional[datetime]:
         return None
 
 
+def _creation_date(domain: str) -> Optional[datetime]:
+    return _rdap_creation_date(domain) or _whois_creation_date(domain)
+
+
+def _rdap_creation_date(domain: str) -> Optional[datetime]:
+    return rdap.creation_date(domain)
+
+
 def check_domain_age(domain: str) -> Dict[str, Any]:
-    created = _whois_creation_date(domain)
+    created = _creation_date(domain)
     if created is None:
         return {"check_name": "domain_age", "status": "unknown",
                 "explanation": f"Registration age of '{domain}' is unknown (WHOIS lookup failed or returned no date)."}
