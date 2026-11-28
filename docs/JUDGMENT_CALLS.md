@@ -526,3 +526,9 @@ Status: **open** = not reviewed yet.
     makes the checker less firm on exactly the scams it exists to catch. Options: keep as is (recommended until an
     independently labelled set exists), or raise the strong-wording weight by the same 10 so those cases keep their band,
     which is a re-tuning that needs your decision.
+
+60. **RDAP result for `.in` (reported by the owner, 2026-11-28).** The live check returned creation dates for `nixi.in` and
+    `google.co.in`, so RDAP works for `.in` for at least those two. Two domains are not a coverage measure; other `.in`
+    registrars' domains, rate limits under load and the data.gov.in and Web Risk checks (skipped: no keys) are still
+    untested.
+

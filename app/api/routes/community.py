@@ -95,7 +95,7 @@ def withdraw(request: Request, payload: WithdrawRequest, db: Session = Depends(g
 def dispute(request: Request, payload: DisputeRequest, db: Session = Depends(get_db)):
     cr.purge_if_due(db)
     kind = payload.indicator_type.lower()
-    if kind not in {"upi", "bank", "phone", "email", "domain"}:
+    if kind not in {"upi", "bank", "phone", "email", "domain", "telegram"}:
         raise HTTPException(400, "unsupported indicator type")
     if "@" not in payload.contact_email:
         raise HTTPException(400, "valid contact email required")

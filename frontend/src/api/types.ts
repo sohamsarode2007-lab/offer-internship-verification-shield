@@ -57,7 +57,7 @@ export interface AnalyzeResponse {
 
 export interface ReportableIndicator {
   id: string
-  indicator_type: 'upi' | 'bank' | 'phone' | 'email' | 'domain'
+  indicator_type: 'upi' | 'bank' | 'phone' | 'email' | 'domain' | 'telegram'
   masked: string
 }
 
@@ -71,7 +71,7 @@ export interface ReportRequest {
 export interface ReportResponse { status: 'reported'; withdrawal_code: string }
 export interface WithdrawRequest { code: string }
 export interface WithdrawResponse { status: 'withdrawn' }
-export type DisputeIndicatorType = 'upi' | 'bank' | 'phone' | 'email' | 'domain'
+export type DisputeIndicatorType = 'upi' | 'bank' | 'phone' | 'email' | 'domain' | 'telegram'
 export interface DisputeRequest {
   indicator_type: DisputeIndicatorType
   value: string

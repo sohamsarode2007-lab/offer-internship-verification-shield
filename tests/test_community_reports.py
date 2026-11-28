@@ -480,3 +480,31 @@ def test_linked_points_alone_never_produce_high_risk():
     ])["overall_risk_score"]
     assert with_community - without == 15
     assert any("linked to a wider set of reports" in x for x in result["risk_factors"])
+
+
+def _extract(text):
+    return {(x["indicator_type"], x["normalized_value"]): x["masked"]
+            for x in cr.extract_indicators(text, None, {"status": "pass"})}
+
+
+def test_telegram_link_and_labelled_handle_are_extracted_and_masked(db):
+    found = _extract("Telegram: @Priya_HR_2026\nTo apply, message t.me/Offer_Desk_Team today.")
+    assert found[("telegram", "priya_hr_2026")] == "@Pri•••"
+    assert ("telegram", "offer_desk_team") in found
+
+
+def test_email_local_parts_and_unlabelled_handles_are_not_telegram(db):
+    assert not any(kind == "telegram" for kind, _ in _extract("Contact: hr@acme.example"))
+    assert not any(kind == "telegram" for kind, _ in _extract("Contact us on Instagram @acme_careers"))
+    assert not any(kind == "telegram" for kind, _ in _extract("Join the group: t.me/joinchat/abc12345"))
+    assert not any(kind == "telegram" for kind, _ in _extract("Telegram: @abc"))
+
+
+def test_telegram_handle_links_two_reports_to_a_wider_cluster(db):
+    handle, upi = candidate("telegram", "@Priya_HR_2026"), candidate("upi", "campaign.four@ybl")
+    assert handle["normalized_value"] == "priya_hr_2026"
+    for days in (0, 1):
+        store_linked(db, [handle, upi], days)
+    for n in range(2):
+        store_linked(db, [upi], n % 2)
+    assert cr.lookup_community(db, [handle], LINK_SIG)["risk_points"] == 15

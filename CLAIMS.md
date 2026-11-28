@@ -410,3 +410,10 @@ been verified in this workspace.
   an open company dispute, and cannot produce high risk on its own (the 60 cap for community-only evidence applies).
 - Not claimed: that the linked reports come from independent people. Two reports can be filed by one person.
 
+## Telegram handles as community indicators
+
+- A Telegram handle or `t.me`/`telegram.me` link in the offer can be offered as a reportable identifier, hashed and masked
+  like the others (shown as `@Pri•••`). Handles are read from a `t.me` link on any line that is not about the candidate, or
+  from an `@handle` on a line that names Telegram. Email local parts, unlabelled `@names` and group-invite links are ignored.
+- It adds no points by itself; it takes part in the existing 3+/10+ report counts and the linked-reports rule.
+

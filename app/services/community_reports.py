@@ -33,12 +33,14 @@ MAX_ACTIVE_DISPUTES_PER_EMAIL = 3
 MAX_ACTIVE_DISPUTES_PER_INDICATOR = 5
 MINHASH_SIZE = 128
 BAND_SIZE = 8
+TELEGRAM_LINK_RE = re.compile(r"(?<![\w.-])(?:https?://)?(?:t\.me|telegram\.me)/(?!joinchat\b|\+)([A-Za-z][A-Za-z0-9_]{4,31})\b", re.I)
+TELEGRAM_HANDLE_RE = re.compile(r"(?<![\w@.])@([A-Za-z][A-Za-z0-9_]{4,31})\b")
 PHONE_RE = re.compile(r"(?<!\w)(?:\+?91[\s().-]?)?[6-9]\d{9}(?!\w)")
 VPA_RE = re.compile(r"\b[A-Za-z0-9._-]{2,}@[A-Za-z0-9.-]+\b")
 ACCOUNT_RE = re.compile(r"\b\d{9,18}\b")
 IFSC_RE = re.compile(r"\b[A-Z]{4}0[A-Z0-9]{6}\b", re.I)
 EMAIL_RE = re.compile(r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", re.I)
-CONTACT_RE = re.compile(r"\b(?:call|whats\s?app|contact|reach|hr|phone|mobile|email)\b", re.I)
+CONTACT_RE = re.compile(r"\b(?:call|whats\s?app|telegram|contact|reach|hr|phone|mobile|email)\b", re.I)
 RECIPIENT_RE = re.compile(r"^\s*(?:to|cc|bcc)\s*:|^\s*dear\b", re.I)
 PAYMENT_CONTEXT_RE = re.compile(r"\b(?:pay|payment|transfer|send|deposit|fee|account|upi|remit|beneficiary)\b", re.I)
 
@@ -79,6 +81,8 @@ def normalize(kind: str, value: str) -> str:
     value = value.strip().casefold()
     if kind in {"upi", "email", "domain"}:
         return value.rstrip(".")
+    if kind == "telegram":
+        return value.lstrip("@")
     if kind == "phone":
         digits = re.sub(r"\D", "", value)
         if len(digits) == 10:
@@ -110,15 +114,21 @@ def masked(kind: str, value: str) -> str:
     if kind == "phone":
         digits = re.sub(r"\D", "", value)
         return "+91 ••••••" + digits[-4:]
+    if kind == "telegram":
+        return "@" + _visible_prefix(value.lstrip("@"), 3) + "•••"
     if kind == "bank":
         account, ifsc = value.split("|", 1)
         return "••••" + account[-4:] + " + " + ifsc.upper()
     return value.strip().casefold().rstrip(".")
 
 
+def _about_candidate(line: str) -> bool:
+    return bool(RECIPIENT_RE.search(line)) or bool(re.search(
+        r"\b(?:candidate|applicant|student|my details|your details|personal details)\b", line, re.I))
+
+
 def _contact_line(line: str) -> bool:
-    return bool(CONTACT_RE.search(line)) and not RECIPIENT_RE.search(line) and not re.search(
-        r"\b(?:candidate|applicant|student|my details|your details|personal details)\b", line, re.I)
+    return bool(CONTACT_RE.search(line)) and not _about_candidate(line)
 
 
 def extract_indicators(text: str, parsed_email: dict | None, payment_check: dict) -> list[dict]:
@@ -173,10 +183,16 @@ def extract_indicators(text: str, parsed_email: dict | None, payment_check: dict
                     add("bank", account.group(0) + "|" + matching_ifsc.group(0))
 
     for line in text.splitlines():
+        if not _about_candidate(line):
+            for link in TELEGRAM_LINK_RE.finditer(line):
+                add("telegram", link.group(1))
         if not _contact_line(line):
             continue
         for phone in PHONE_RE.finditer(line):
             add("phone", phone.group(0))
+        if re.search(r"telegram", line, re.I):
+            for handle in TELEGRAM_HANDLE_RE.finditer(line):
+                add("telegram", handle.group(1))
 
     current, _ = _pepper_config()
     if not current:

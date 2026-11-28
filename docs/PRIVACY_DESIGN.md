@@ -46,9 +46,9 @@ For each indicator the student selects in a **consented** report, store exactly:
 
 | Field | Content |
 | --- | --- |
-| type | `email`, `domain`, `upi`, `phone` or `bank` |
+| type | `email`, `domain`, `upi`, `phone`, `telegram` or `bank` |
 | digest | the existing peppered HMAC (with `key_version`) |
-| masked display form | the same masking the student saw in the report flow: email `pl•••@gmail.com` (first 2 characters of the local part), UPI `careerd•••@ybl` (first 7 characters), phone `+91 ••••••1234`, bank `••••1234 + IFSC`; at least one character of a short local part is always hidden, so a full address or UPI ID is never shown. **Only a non-free-mail sender domain is shown in full** (free-mail domains are never extracted as domain indicators). |
+| masked display form | the same masking the student saw in the report flow: email `pl•••@gmail.com` (first 2 characters of the local part), UPI `careerd•••@ybl` (first 7 characters), phone `+91 ••••••1234`, Telegram handle `@Pri•••` (first 3 characters, at least one hidden), bank `••••1234 + IFSC`; at least one character of a short local part is always hidden, so a full address or UPI ID is never shown. **Only a non-free-mail sender domain is shown in full** (free-mail domains are never extracted as domain indicators). |
 | ISO week | `YYYY-Www` of the report |
 | scam category | the rule-based category of the analysed letter |
 

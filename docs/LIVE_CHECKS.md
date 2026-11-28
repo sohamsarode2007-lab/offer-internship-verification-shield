@@ -45,3 +45,11 @@ It sends only fixed test addresses, never offer text, and never prints a key. A 
 - A small **independent test set**: offers collected by someone other than the rule author, kept out of rule writing.
   Until then the evaluation measures the rules against cases the author wrote, which flatters them.
 - A **native-speaker review** of the Hindi and Hinglish scam and personal-data rules.
+
+## Results reported by the owner
+
+- 2026-11-28, `python -m scripts.live_checks`: 8 passed, 0 failed, 3 skipped. RDAP returned a registration date for
+  `nixi.in` (2004-12-16) and `google.co.in` (2003-06-23). The 3 skips were data.gov.in and Web Risk (no API keys set) and
+  the careers lookup (no `--careers-domain`). Not yet run with keys: data.gov.in field names and Web Risk. Rate limits of
+  the `.in` registry are still unknown.
+
