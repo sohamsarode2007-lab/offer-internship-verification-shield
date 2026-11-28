@@ -241,6 +241,14 @@ def label_band_status(truth, band):
     }[band]
 
 
+def _wilson(successes: int, n: int, z: float = 1.96) -> tuple[float, float]:
+    p = successes / n
+    denom = 1 + z * z / n
+    centre = (p + z * z / (2 * n)) / denom
+    half = z * ((p * (1 - p) / n + z * z / (4 * n * n)) ** 0.5) / denom
+    return max(0.0, centre - half), min(1.0, centre + half)
+
+
 def report(results):
     matrix = {truth: Counter() for truth in ("scam", "legitimate")}
     classes = Counter()
@@ -284,6 +292,11 @@ def report(results):
         matches = sum(r["predicted_band"] == r["expected_band"] for r in group)
         print(f"{case_type:<31} {len(group):>3} {counts[BANDS[0]]:>19} {counts[BANDS[1]]:>8} {counts[BANDS[2]]:>10} {matches}/{len(group):>13}")
 
+    scams = classes.get("scam", 0)
+    if scams:
+        low, high = _wilson(scams - len(dangerous), scams)
+        print(f"\nScams not rated likely legitimate: {scams - len(dangerous)}/{scams}; 95% Wilson interval "
+              f"{low:.0%} to {high:.0%}. These are author-written cases, so this is not an accuracy estimate.")
     print(f"\nLabel-vs-band summary: {len(dangerous)} dangerous miss(es); {len(false_alarms)} false alarm(s)")
     print(f"Expected-vs-actual summary: {exact}/{len(results)} expected-band checks pass")
     print("\nPer-case reconciliation (label-vs-band and expected-vs-actual are separate checks)")
